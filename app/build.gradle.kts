@@ -119,6 +119,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     testImplementation("junit:junit:4.13.2")
+    implementation(files("libs/tdlib.jar"))
 }
 
 // -----------------------------------------------------------------------------------------
@@ -142,8 +143,7 @@ dependencies {
 tasks.register("checkTdlibPresent") {
     doFirst {
         val requiredJavaSources = listOf(
-            "src/main/java/org/drinkless/tdlib/Client.java",
-            "src/main/java/org/drinkless/tdlib/TdApi.java"
+            "libs/tdlib.jar"
         )
         val requiredAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
 
