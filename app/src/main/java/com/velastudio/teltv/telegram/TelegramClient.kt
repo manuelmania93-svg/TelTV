@@ -120,8 +120,7 @@ class TelegramClient(private val context: Context) {
      * reading folder info off the `UpdateChatFolders` update instead.
      */
     suspend fun getChatFolders(): List<TdApi.ChatFolderInfo> {
-        val result = send(TdApi.GetChatFolders()) as TdApi.ChatFolders
-        return result.chatFolders.toList()
+        return emptyList()
     }
 
     /**
@@ -183,8 +182,8 @@ class TelegramClient(private val context: Context) {
     suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40): List<MediaItem> {
         val result = send(
             TdApi.SearchChatMessages(
-                chatId, "", null, fromMessageId, 0, limit,
-                TdApi.SearchMessagesFilterVideo(), 0, 0
+                chatId, null, "", null, fromMessageId, 0, limit,
+                TdApi.SearchMessagesFilterVideo()
             )
         ) as TdApi.FoundChatMessages
 
@@ -291,8 +290,8 @@ class TelegramClient(private val context: Context) {
     suspend fun searchChannelVideos(chatId: Long, query: String, limit: Int = 40): List<MediaItem> {
         val result = send(
             TdApi.SearchChatMessages(
-                chatId, query, null, 0, 0, limit,
-                TdApi.SearchMessagesFilterVideo(), 0, 0
+                chatId, null, query, null, 0L, 0, limit,
+                TdApi.SearchMessagesFilterVideo()
             )
         ) as TdApi.FoundChatMessages
 

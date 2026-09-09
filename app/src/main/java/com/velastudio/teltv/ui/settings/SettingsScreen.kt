@@ -19,7 +19,7 @@ import androidx.tv.material3.Text
 @Composable
 fun ClearCacheConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
-        Card {
+        Card(onClick = {}) {
             Column(Modifier.padding(24.dp)) {
                 Text("Clear cache?", style = androidx.tv.material3.MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))

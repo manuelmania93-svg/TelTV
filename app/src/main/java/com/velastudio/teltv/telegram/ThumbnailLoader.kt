@@ -31,7 +31,7 @@ class ThumbnailLoader(
 ) {
     /** fileId -> local file path, bounded so it can't grow unbounded across a long session. */
     private val resolvedPaths = object : LinkedHashMap<Int, String>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.Entry<Int, String>): Boolean =
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, String>?): Boolean =
             size > maxCachedEntries
     }
     private val maxCachedEntries =

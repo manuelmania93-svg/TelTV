@@ -62,6 +62,7 @@ dependencies {
 
     // Compose for TV (leanback-style but modern, D-pad optimized)
     implementation("androidx.tv:tv-material:1.0.0")
+    implementation("androidx.compose.material3:material3")
     // NOTE: tv-foundation was previously listed here too but never actually used anywhere in
     // the codebase -- HomeScreen/BrowseScreen/SearchScreen already use plain
     // androidx.compose.foundation.lazy LazyColumn/LazyRow/LazyVerticalGrid, which is correct:

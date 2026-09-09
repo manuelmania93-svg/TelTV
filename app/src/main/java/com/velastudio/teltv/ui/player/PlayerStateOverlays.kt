@@ -1,3 +1,4 @@
+import androidx.compose.material3.CircularProgressIndicator
 package com.velastudio.teltv.ui.player
 
 import androidx.compose.foundation.background

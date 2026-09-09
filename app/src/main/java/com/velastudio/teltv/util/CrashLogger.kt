@@ -38,7 +38,7 @@ object CrashLogger {
             } finally {
                 // Preserve default behavior (process death, ANR dialogs suppressed correctly,
                 // etc.) instead of swallowing the crash -- we're only observing it here.
-                defaultHandler?.handle(thread, throwable)
+                defaultHandler?.uncaughtException(thread, throwable)
                     ?: run {
                         Runtime.getRuntime().exit(10)
                     }

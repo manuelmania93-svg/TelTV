@@ -1,3 +1,4 @@
+import androidx.compose.material3.LinearProgressIndicator
 package com.velastudio.teltv.ui.player
 
 import androidx.compose.animation.AnimatedVisibility

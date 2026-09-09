@@ -31,7 +31,7 @@ class SmbSourceClient {
         val user = source.username.orEmpty()
         val pass = source.password.orEmpty()
         return if (user.isBlank()) {
-            base.withGuestCrentials()
+            base.withGuestCredentials()
         } else {
             base.withCredentials(NtlmPasswordAuthenticator(source.domain.orEmpty(), user, pass))
         }
