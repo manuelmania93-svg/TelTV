@@ -38,6 +38,7 @@ fun PosterCard(
     thumbnailFileId: Int?,
     thumbnailLoader: ThumbnailLoader?,
     resumeFraction: Float? = null,
+    enableTmdb: Boolean = true,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     contentDescription: String = title
@@ -52,8 +53,8 @@ fun PosterCard(
         onDispose { job?.cancel() }
     }
 
-    LaunchedEffect(title) {
-        tmdbMeta = TmdbMetadataProvider.getMetadata(title)
+    LaunchedEffect(title, enableTmdb) {
+        if (enableTmdb) tmdbMeta = TmdbMetadataProvider.getMetadata(title)
     }
 
     Card(

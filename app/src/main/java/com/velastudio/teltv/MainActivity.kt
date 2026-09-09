@@ -72,7 +72,8 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         var continueWatching by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
                         var pinnedRow by remember { mutableStateOf(HomeRow("Pinned Channels", emptyList())) }
-                        var allChannelsRow by remember { mutableStateOf(HomeRow("All Channels & Groups", emptyList())) }
+                        var allChannelsRow by remember { mutableStateOf(HomeRow("Channels", emptyList())) }
+                        var folderRowsState by remember { mutableStateOf<List<HomeRow>>(emptyList()) }
                         var isLoadingChannels by remember { mutableStateOf(true) }
                         var cacheClearedSignal by remember { mutableStateOf(0) }
 
@@ -87,12 +88,8 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            val all = runCatching { app.telegramClient.getAllChannels() }.getOrDefault(emptyList())
-                            val pinned = all.filter { chat -> chat.positions.any { it.isPinned } }
-                            val others = all.filter { chat -> !chat.positions.any { it.isPinned } }
-
-                            pinnedChatIds = all.map { it.id }
-
+                            // 1. Fetch Pinned Channels (Fast)
+                            val pinned = runCatching { app.telegramClient.getPinnedChannels() }.getOrDefault(emptyList())
                             if (pinned.isNotEmpty()) {
                                 pinnedRow = HomeRow(
                                     "Pinned Channels",
@@ -106,16 +103,39 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            allChannelsRow = HomeRow(
-                                "All Channels & Groups",
-                                (if (pinned.isEmpty()) all else others).map { chat ->
-                                    HomeEntry(
-                                        id = chat.id.toString(),
-                                        name = chat.title,
-                                        thumbnailFileId = chat.photo?.small?.id
-                                    )
-                                }
-                            )
+                            // 2. Fetch Chat Folders (Organized media libraries)
+                            val folderMap = runCatching { app.telegramClient.getChannelsInFolders() }.getOrDefault(emptyMap())
+                            val dynamicFolderRows = folderMap.mapNotNull { (folderInfo, chatList) ->
+                                if (chatList.isEmpty()) null
+                                else HomeRow(
+                                    folderInfo.title,
+                                    chatList.map { chat ->
+                                        HomeEntry(
+                                            id = chat.id.toString(),
+                                            name = chat.title,
+                                            thumbnailFileId = chat.photo?.small?.id
+                                        )
+                                    }
+                                )
+                            }
+
+                            // 3. Fallback: only if both Pinned and Folders are completely empty
+                            if (pinned.isEmpty() && dynamicFolderRows.isEmpty()) {
+                                val topChats = runCatching { app.telegramClient.getAllChannels(limit = 15) }.getOrDefault(emptyList())
+                                allChannelsRow = HomeRow(
+                                    "Channels",
+                                    topChats.map { chat ->
+                                        HomeEntry(
+                                            id = chat.id.toString(),
+                                            name = chat.title,
+                                            thumbnailFileId = chat.photo?.small?.id
+                                        )
+                                    }
+                                )
+                            }
+
+                            folderRowsState = dynamicFolderRows
+                            pinnedChatIds = (pinned.map { it.id } + folderMap.values.flatten().map { it.id }).distinct()
                             isLoadingChannels = false
                         }
 
@@ -133,7 +153,7 @@ class MainActivity : ComponentActivity() {
                             continueWatching = continueWatching,
                             pinned = pinnedRow,
                             allChannels = allChannelsRow,
-                            folderRows = emptyList(),
+                            folderRows = folderRowsState,
                             otherSources = HomeRow("Other sources", emptyList()),
                             isLoading = isLoadingChannels,
                             onOpenEntry = { entry ->

@@ -287,6 +287,7 @@ private fun HomeRowView(row: HomeRow, thumbnailLoader: ThumbnailLoader, onOpenEn
                     subtitle = entry.subtitle,
                     thumbnailFileId = entry.thumbnailFileId,
                     thumbnailLoader = thumbnailLoader,
+                    enableTmdb = false,
                     onClick = { onOpenEntry(entry) }
                 )
             }

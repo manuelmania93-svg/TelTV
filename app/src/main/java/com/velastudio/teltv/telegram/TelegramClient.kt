@@ -256,15 +256,25 @@ class TelegramClient(private val context: Context) {
      * before it resolves -- see `ThumbnailLoader` for the cancellation-aware wrapper.
      */
     suspend fun downloadThumbnail(fileId: Int): String = suspendCancellableCoroutine { cont ->
-        val c = client ?: return@suspendCancellableCoroutine cont.resumeWithException(
-            IllegalStateException("TDLib client not started")
-        )
-        c.send(TdApi.DownloadFile(fileId, 1 /* low priority */, 0, 0, false)) { result ->
-            when (result) {
-                is TdApi.File -> cont.resume(result.local.path)
-                is TdApi.Error -> cont.resumeWithException(RuntimeException(result.message))
-                else -> cont.resumeWithException(IllegalStateException("Unexpected result: $result"))
+        val c = client
+        if (c == null) {
+            if (cont.isActive) cont.resume("")
+            return@suspendCancellableCoroutine
+        }
+        try {
+            c.send(TdApi.DownloadFile(fileId, 1, 0, 0, false)) { result ->
+                if (!cont.isActive) return@send
+                try {
+                    when (result) {
+                        is TdApi.File -> cont.resume(result.local.path ?: "")
+                        else -> cont.resume("")
+                    }
+                } catch (_: Throwable) {
+                    if (cont.isActive) cont.resume("")
+                }
             }
+        } catch (_: Throwable) {
+            if (cont.isActive) cont.resume("")
         }
     }
 
