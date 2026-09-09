@@ -1,6 +1,6 @@
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.unit.dp
 package com.velastudio.teltv.ui.browse
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.CircularProgressIndicator
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells

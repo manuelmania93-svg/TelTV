@@ -1,5 +1,5 @@
-import androidx.compose.material3.OutlinedTextField
 package com.velastudio.teltv.ui.search
+import androidx.compose.material3.OutlinedTextField
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells

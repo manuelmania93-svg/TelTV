@@ -1,5 +1,5 @@
-import androidx.compose.material3.CircularProgressIndicator
 package com.velastudio.teltv.ui.player
+import androidx.compose.material3.CircularProgressIndicator
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
