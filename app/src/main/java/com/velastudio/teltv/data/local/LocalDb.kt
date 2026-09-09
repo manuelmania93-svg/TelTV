@@ -148,6 +148,9 @@ interface VideoIndexDao {
     @Query("SELECT * FROM video_index WHERE chatId = :chatId ORDER BY position ASC")
     fun pagingSource(chatId: Long): PagingSource<Int, VideoIndexEntity>
 
+    @Query("SELECT * FROM video_index WHERE chatId = :chatId ORDER BY position DESC")
+    fun pagingSourceDesc(chatId: Long): PagingSource<Int, VideoIndexEntity>
+
     @Query("SELECT COUNT(*) FROM video_index WHERE chatId = :chatId")
     suspend fun count(chatId: Long): Int
 

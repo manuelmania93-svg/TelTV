@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ fun PlaybackControlsOverlay(
     onSkipBack: () -> Unit,
     onSkipForward: () -> Unit,
     onOpenTracks: () -> Unit,
+    onCycleAspectRatio: () -> Unit,
     onOpenExternal: () -> Unit
 ) {
     val cleanTitle = remember(title) { MediaTitleCleaner.clean(title) }
@@ -67,6 +69,11 @@ fun PlaybackControlsOverlay(
                 ) {
                     Text(cleanTitle, style = MaterialTheme.typography.titleMedium, color = Color.White)
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        ControlButton(
+                            icon = Icons.Filled.AspectRatio,
+                            contentDescription = "Aspect Ratio",
+                            onClick = onCycleAspectRatio
+                        )
                         ControlButton(
                             icon = Icons.Filled.Subtitles,
                             contentDescription = "Audio & Subtitles",

@@ -8,12 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,15 +21,10 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.velastudio.teltv.telegram.ThumbnailLoader
+import com.velastudio.teltv.util.MediaTitleCleaner
+import com.velastudio.teltv.util.TmdbMetadata
+import com.velastudio.teltv.util.TmdbMetadataProvider
 
-/**
- * The one poster-card shape used everywhere media is shown as a tappable tile: Home's
- * Continue Watching/Pinned/folder rows, Browse's grid, and Search's results grid. Before this,
- * each of those three screens had its own card -- different size, different aspect ratio, and
- * only Browse actually showed artwork -- which made Home and Search look unfinished by
- * comparison and meant nothing on Home was visually recognizable from across the room the way
- * a poster is. Same shape, same thumbnail wiring, same resume-progress treatment everywhere now.
- */
 val POSTER_CARD_WIDTH = 180.dp
 val POSTER_CARD_HEIGHT = 240.dp
 private val POSTER_THUMB_HEIGHT = 160.dp
@@ -46,9 +37,11 @@ fun PosterCard(
     thumbnailLoader: ThumbnailLoader?,
     resumeFraction: Float? = null,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     contentDescription: String = title
 ) {
     var localThumbPath by remember(thumbnailFileId) { mutableStateOf<String?>(null) }
+    var tmdbMeta by remember(title) { mutableStateOf<TmdbMetadata?>(null) }
 
     DisposableEffect(thumbnailFileId, thumbnailLoader) {
         val job = if (thumbnailFileId != null && thumbnailLoader != null) {
@@ -57,24 +50,43 @@ fun PosterCard(
         onDispose { job?.cancel() }
     }
 
+    LaunchedEffect(title) {
+        tmdbMeta = TmdbMetadataProvider.getMetadata(title)
+    }
+
     Card(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = Modifier
             .width(POSTER_CARD_WIDTH)
             .height(POSTER_CARD_HEIGHT)
             .semantics { this.contentDescription = contentDescription }
     ) {
         Box(Modifier.fillMaxSize()) {
-            if (localThumbPath != null) {
+            val imageSource = tmdbMeta?.posterUrl ?: localThumbPath
+            if (imageSource != null) {
                 AsyncImage(
-                    model = localThumbPath,
-                    contentDescription = null, // described at the Card level above
+                    model = imageSource,
+                    contentDescription = null,
                     modifier = Modifier.fillMaxWidth().height(POSTER_THUMB_HEIGHT)
                 )
             } else {
                 Box(
                     Modifier.fillMaxWidth().height(POSTER_THUMB_HEIGHT)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            }
+
+            tmdbMeta?.rating?.let { rating ->
+                Text(
+                    text = "★ ${"%.1f".format(rating)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                 )
             }
 
@@ -89,9 +101,11 @@ fun PosterCard(
             }
 
             Column(Modifier.align(Alignment.BottomStart).padding(8.dp)) {
-                Text(title, maxLines = 2, color = Color.White)
-                subtitle?.let {
-                    Text(it, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = Color.White)
+                val clean = remember(title) { MediaTitleCleaner.clean(title) }
+                Text(clean, maxLines = 2, color = Color.White)
+                val subText = subtitle ?: tmdbMeta?.year
+                subText?.let {
+                    Text(it, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
                 }
             }
         }
@@ -108,6 +122,5 @@ fun PosterCardPlaceholder() {
     )
 }
 
-/** Shared "tdlib://thumb/<fileId>" parsing so every screen extracts the file id the same way. */
-fun parseThumbnailFileId(thumbnailUrl: String?): Int? =
-    thumbnailUrl?.removePrefix("tdlib://thumb/")?.toIntOrNull()
+fun parseThumbnailFileId(thumbUrl: String?): Int? =
+    thumbUrl?.removePrefix("tdlib://thumb/")?.toIntOrNull()

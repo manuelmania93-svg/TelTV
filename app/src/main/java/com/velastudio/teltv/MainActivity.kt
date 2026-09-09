@@ -165,9 +165,12 @@ class MainActivity : ComponentActivity() {
                                 .associate { it.mediaId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f) }
                         }
 
+                        var isAscending by remember { mutableStateOf(true) }
                         BrowseScreen(
                             channelTitle = title,
-                            pagingFlow = remember(chatId) { app.channelVideoRepository.videoPager(chatId) },
+                            isAscending = isAscending,
+                            onToggleSort = { isAscending = !isAscending },
+                            pagingFlow = remember(chatId, isAscending) { app.channelVideoRepository.videoPager(chatId, isAscending) },
                             thumbnailLoader = thumbnailLoader,
                             deviceProfile = app.deviceProfile,
                             resumeFractionFor = { mediaId -> resumeFractions[mediaId] },

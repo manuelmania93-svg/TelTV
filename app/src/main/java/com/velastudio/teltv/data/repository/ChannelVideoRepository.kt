@@ -43,7 +43,7 @@ class ChannelVideoRepository(
     }
 
     /** Paged, memory-bounded stream of a channel's videos, newest first. */
-    fun videoPager(chatId: Long): Flow<PagingData<MediaItem>> =
+    fun videoPager(chatId: Long, ascending: Boolean = true): Flow<PagingData<MediaItem>> =
         Pager(
             config = PagingConfig(
                 pageSize = deviceProfile.pageSize,
@@ -51,7 +51,10 @@ class ChannelVideoRepository(
                 enablePlaceholders = true,
                 initialLoadSize = deviceProfile.pageSize
             ),
-            pagingSourceFactory = { videoIndexDao.pagingSource(chatId) }
+            pagingSourceFactory = {
+                if (ascending) videoIndexDao.pagingSource(chatId)
+                else videoIndexDao.pagingSourceDesc(chatId)
+            }
         ).flow.map { pagingData -> pagingData.map { it.toMediaItem() } }
 
     /**

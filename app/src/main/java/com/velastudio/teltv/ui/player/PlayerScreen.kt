@@ -60,6 +60,7 @@ fun PlayerScreen(
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
+    var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
 
     // Seeking feedback state
     var seekingText by remember { mutableStateOf<String?>(null) }
@@ -198,6 +199,16 @@ fun PlayerScreen(
         controlsVisible = true
     }
 
+    fun cycleAspectRatio() {
+        aspectRatioIndex = (aspectRatioIndex + 1) % 3
+        seekingText = when (aspectRatioIndex) {
+            1 -> "Aspect: Zoom to Fill (Crop)"
+            2 -> "Aspect: Stretch"
+            else -> "Aspect: Fit (Original)"
+        }
+        seekingIsForward = true
+    }
+
     fun togglePlayPause() {
         controller?.let { it.playWhenReady = !it.playWhenReady }
         controlsVisible = true
@@ -297,9 +308,29 @@ fun PlayerScreen(
             factory = { ctx: Context ->
                 PlayerView(ctx).apply {
                     useController = false
+                    subtitleView?.apply {
+                        setFractionalTextSize(0.065f) // Large readable subtitles for TV
+                        setStyle(
+                            androidx.media3.ui.CaptionStyleCompat(
+                                android.graphics.Color.WHITE,
+                                android.graphics.Color.parseColor("#80000000"),
+                                android.graphics.Color.TRANSPARENT,
+                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                                android.graphics.Color.BLACK,
+                                android.graphics.Typeface.DEFAULT_BOLD
+                            )
+                        )
+                    }
                 }
             },
-            update = { view -> view.player = controller }
+            update = { view ->
+                view.player = controller
+                view.resizeMode = when (aspectRatioIndex) {
+                    1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+            }
         )
 
         PlaybackControlsOverlay(
@@ -313,6 +344,7 @@ fun PlayerScreen(
             onSkipBack = { seekRelative(forward = false) },
             onSkipForward = { seekRelative(forward = true) },
             onOpenTracks = { showTrackSelector = true },
+            onCycleAspectRatio = ::cycleAspectRatio,
             onOpenExternal = ::openInExternalPlayer
         )
 
