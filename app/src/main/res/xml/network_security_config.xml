@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext (plain HTTP/SMB) is allowed ONLY for private LAN ranges, because SMB and WebDAV
+  media servers on a home network are almost never set up with TLS, and requiring HTTPS there
+  would break the whole "browse my NAS from the living room" use case. There's no top-level
+  base-config element, so anything NOT matched by the domain-config below falls back to the
+  system default, which forbids cleartext, meaning any regular internet API/streaming call
+  this app makes still requires HTTPS.
+
+  IMPORTANT CAVEAT: this file only takes effect on API 24+. On API 21-23 (minSdk is 21, see
+  app/build.gradle.kts), the platform doesn't read networkSecurityConfig at all, so the
+  android:usesCleartextTraffic="true" flag in AndroidManifest.xml is the only thing in force
+  there, and it is NOT scoped to these LAN ranges: it permits cleartext everywhere. That's a
+  known gap for old Android TV boxes/sticks on 5.x/6.x, accepted for now rather than fixed,
+  since narrowing it would require either raising minSdk or a custom TrustManager/OkHttp
+  interceptor to replicate this scoping below API 24.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- RFC1918 private ranges used by home routers/NAS boxes -->
+        <domain includeSubdomains="true">192.168.0.0/16</domain>
+        <domain includeSubdomains="true">10.0.0.0/8</domain>
+    </domain-config>
+</network-security-config>

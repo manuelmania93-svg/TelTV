@@ -1,0 +1,333 @@
+package com.velastudio.teltv
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.*
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.velastudio.teltv.data.local.WatchStateEntity
+import com.velastudio.teltv.data.model.MediaItem
+import com.velastudio.teltv.telegram.ThumbnailLoader
+import com.velastudio.teltv.ui.browse.BrowseScreen
+import com.velastudio.teltv.ui.home.ContinueWatchingEntry
+import com.velastudio.teltv.ui.home.HomeEntry
+import com.velastudio.teltv.ui.home.HomeRow
+import com.velastudio.teltv.ui.home.HomeScreen
+import com.velastudio.teltv.ui.login.LoginScreen
+import com.velastudio.teltv.ui.player.PlayerScreen
+import com.velastudio.teltv.ui.search.SearchScreen
+import com.velastudio.teltv.ui.settings.CacheSettingsSection
+import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
+import com.velastudio.teltv.ui.player.PlaybackPrefs
+import com.velastudio.teltv.ui.theme.TelTvTheme
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.net.URLDecoder
+import java.net.URLEncoder
+
+/**
+ * Single-activity Compose app. Screens:
+ *   login    -> QR code (default) or phone number / code / 2FA, via TdApi.AuthorizationState
+ *               (see LoginScreen). This is the start destination: it's also what actually starts
+ *               the TDLib client (TelegramClient.authorizationFlow()), so it always runs,
+ *               whether or not there's already a saved session -- a returning user just sees it
+ *               flash by briefly.
+ *   home     -> continue watching + pinned channels + folder rows + other sources
+ *   browse   -> paged video grid for a chosen channel (see BrowseScreen)
+ *   player   -> ExoPlayer full-screen playback via TdLibDataSource
+ *   search   -> instant local + debounced cross-channel search
+ *   settings -> cache management (see CacheSettingsSection) + playback + account
+ */
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val app = application as TelTvApp
+
+        setContent {
+            TelTvTheme {
+                val navController = rememberNavController()
+                val scope = rememberCoroutineScope()
+                val thumbnailLoader = remember { ThumbnailLoader(app.telegramClient, scope, app.deviceProfile) }
+
+                // Shared across Home/Search for this session so Search doesn't need to re-fetch
+                // the pinned-channel list from Telegram just to know what to search across.
+                var pinnedChatIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+
+                NavHost(navController = navController, startDestination = "login") {
+                    composable("login") {
+                        LoginScreen(
+                            telegramClient = app.telegramClient,
+                            onReady = {
+                                navController.navigate("home") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+
+                    composable("home") {
+                        var continueWatching by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
+                        var pinnedRow by remember { mutableStateOf(HomeRow("Pinned", emptyList())) }
+                        // Incremented after each quick clear so the LaunchedEffect below re-runs
+                        // and logs the post-clear size.  Gives a feedback loop without needing
+                        // a separate cache-size display on Home.
+                        var cacheClearedSignal by remember { mutableStateOf(0) }
+
+                        LaunchedEffect(Unit) {
+                            val watchStates = app.database.watchStateDao().continueWatching()
+                            continueWatching = watchStates.map {
+                                ContinueWatchingEntry(
+                                    mediaId = it.mediaId,
+                                    title = it.title,
+                                    progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
+                                    thumbnailFileId = it.thumbnailFileId // already stored on WatchStateEntity
+                                )
+                            }
+
+                            val channels = app.telegramClient.getPinnedChannels()
+                            pinnedChatIds = channels.map { it.id }
+                            pinnedRow = HomeRow(
+                                "Pinned",
+                                channels.map { chat ->
+                                    HomeEntry(
+                                        id = chat.id.toString(),
+                                        name = chat.title,
+                                        thumbnailFileId = chat.photo?.small?.id
+                                    )
+                                }
+                            )
+                        }
+
+                        // Re-runs after each quick clear (cacheClearedSignal changes) so we can
+                        // confirm the size actually dropped -- useful for debugging and for a
+                        // future "X MB freed" toast without restructuring the call site.
+                        LaunchedEffect(cacheClearedSignal) {
+                            if (cacheClearedSignal == 0) return@LaunchedEffect
+                            val remaining = runCatching {
+                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).getCurrentSizeBytes()
+                            }.onFailure { Timber.w(it, "Could not read cache size after quick clear") }
+                                .getOrDefault(-1L)
+                            Timber.i("Quick cache clear done; remaining bytes=%d", remaining)
+                        }
+
+                        HomeScreen(
+                            thumbnailLoader = thumbnailLoader,
+                            continueWatching = continueWatching,
+                            pinned = pinnedRow,
+                            folderRows = emptyList(), // populated once folder enumeration is wired, see TelegramClient
+                            otherSources = HomeRow("Other sources", emptyList()),
+                            onOpenEntry = { entry ->
+                                val encodedTitle = URLEncoder.encode(entry.name, "UTF-8")
+                                navController.navigate("browse/${entry.id}/$encodedTitle")
+                            },
+                            onResumeWatching = { mediaId ->
+                                navController.navigate("player/${URLEncoder.encode(mediaId, "UTF-8")}")
+                            },
+                            onOpenSearch = { navController.navigate("search") },
+                            onOpenSettings = { navController.navigate("settings") },
+                            // Quick clear: same CacheManager.clearAllNow() used by Settings,
+                            // triggered from the header button on Home without navigating away.
+                            onQuickClearCache = {
+                                scope.launch {
+                                    runCatching {
+                                        com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).clearAllNow()
+                                    }.onFailure { Timber.e(it, "Quick cache clear failed") }
+                                        .onSuccess { cacheClearedSignal++ }
+                                }
+                            }
+                        )
+                    }
+
+                    composable(
+                        "browse/{chatId}/{title}",
+                        arguments = listOf(
+                            navArgument("chatId") { type = NavType.LongType },
+                            navArgument("title") { type = NavType.StringType }
+                        )
+                    ) { backStackEntry ->
+                        val chatId = backStackEntry.arguments?.getLong("chatId") ?: return@composable
+                        val title = URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
+
+                        var resumeFractions by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+                        LaunchedEffect(chatId) {
+                            // refreshNewest runs first: corrects stale titles on already-cached rows
+                            // (e.g. after the caption-title fix) and prepends any new videos posted
+                            // since the last visit. ensureNextPage then fills the first page if the
+                            // cache was empty. Both are no-ops if nothing has changed.
+                            app.channelVideoRepository.refreshNewest(chatId)
+                            app.channelVideoRepository.ensureNextPage(chatId)
+                            resumeFractions = app.database.watchStateDao().recentlyWatched(limit = 200)
+                                .filter { it.mediaId.startsWith("tg:$chatId:") }
+                                .associate { it.mediaId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f) }
+                        }
+
+                        BrowseScreen(
+                            channelTitle = title,
+                            pagingFlow = remember(chatId) { app.channelVideoRepository.videoPager(chatId) },
+                            thumbnailLoader = thumbnailLoader,
+                            deviceProfile = app.deviceProfile,
+                            resumeFractionFor = { mediaId -> resumeFractions[mediaId] },
+                            onLoadMore = { scope.launch { app.channelVideoRepository.ensureNextPage(chatId) } },
+                            onOpenItem = { media ->
+                                navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}")
+                            }
+                        )
+                    }
+
+                    composable("search") {
+                        var recentQueries by remember { mutableStateOf<List<String>>(emptyList()) }
+                        var localResults by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+                        var remoteResults by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+                        var isSearchingRemote by remember { mutableStateOf(false) }
+
+                        LaunchedEffect(Unit) {
+                            recentQueries = app.database.searchHistoryDao().recent().map { it.query }
+                        }
+
+                        SearchScreen(
+                            deviceProfile = app.deviceProfile,
+                            thumbnailLoader = thumbnailLoader,
+                            recentQueries = recentQueries,
+                            localResults = localResults,
+                            remoteResults = remoteResults,
+                            isSearchingRemote = isSearchingRemote,
+                            onLocalQueryChanged = { q ->
+                                scope.launch {
+                                    localResults = if (q.isBlank()) emptyList()
+                                    else app.database.videoIndexDao().searchLocal(q).map {
+                                        MediaItem(
+                                            id = it.mediaId,
+                                            sourceType = com.velastudio.teltv.data.model.SourceType.TELEGRAM,
+                                            title = it.title,
+                                            subtitle = it.subtitle,
+                                            thumbnailUrl = it.thumbnailFileId?.let { fileId -> "tdlib://thumb/$fileId" },
+                                            streamUrl = it.streamUrl,
+                                            addedAtEpochSec = it.addedAtEpochSec
+                                        )
+                                    }
+                                }
+                            },
+                            onRemoteQueryChanged = { q ->
+                                if (q.isBlank() || pinnedChatIds.isEmpty()) return@SearchScreen
+                                scope.launch {
+                                    isSearchingRemote = true
+                                    remoteResults = runCatching {
+                                        app.telegramClient.searchAcrossChannels(pinnedChatIds, q)
+                                    }.onFailure { Timber.w(it, "Remote search failed for query=%s", q) }
+                                        .getOrDefault(emptyList())
+                                    isSearchingRemote = false
+                                    app.database.searchHistoryDao().upsert(
+                                        com.velastudio.teltv.data.local.SearchHistoryEntity(
+                                            query = q, lastUsedEpochSec = System.currentTimeMillis() / 1000
+                                        )
+                                    )
+                                }
+                            },
+                            onRecentQueryPicked = { },
+                            onOpenItem = { media ->
+                                navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}")
+                            }
+                        )
+                    }
+
+                    composable(
+                        "player/{mediaId}",
+                        arguments = listOf(navArgument("mediaId") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val mediaId = URLDecoder.decode(backStackEntry.arguments?.getString("mediaId") ?: "", "UTF-8")
+                        var resolved by remember { mutableStateOf<WatchStateEntity?>(null) }
+                        var fileId by remember { mutableStateOf<Int?>(null) }
+                        var title by remember { mutableStateOf(mediaId) }
+                        var resumeMs by remember { mutableStateOf(0L) }
+
+                        LaunchedEffect(mediaId) {
+                            val existingState = app.database.watchStateDao().get(mediaId)
+                            resumeMs = existingState?.positionMs ?: 0L
+
+                            // The stream URL ("tdlib://file/<fileId>") lives on the cached video
+                            // index row, not on `mediaId` itself (mediaId is "tg:<chatId>:<msgId>",
+                            // see MediaItem.id) -- so look it up from whichever channel it was
+                            // browsed/searched from.
+                            val cachedEntity = app.database.videoIndexDao().getByMediaId(mediaId)
+                            title = cachedEntity?.title ?: existingState?.title?.ifBlank { null } ?: mediaId
+                            fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
+                        }
+
+                        PlayerScreen(
+                            fileId = fileId,
+                            directUri = null,
+                            title = title,
+                            resumePositionMs = resumeMs,
+                            onPositionUpdate = { positionMs, durationMs ->
+                                scope.launch {
+                                    app.database.watchStateDao().upsert(
+                                        WatchStateEntity(
+                                            mediaId = mediaId,
+                                            positionMs = positionMs,
+                                            durationMs = durationMs,
+                                            lastWatchedEpochSec = System.currentTimeMillis() / 1000,
+                                            title = title,
+                                            finished = durationMs > 0 && positionMs >= durationMs * 0.95
+                                        )
+                                    )
+                                }
+                            },
+                            onPlaybackEnded = { navController.popBackStack() },
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable("settings") {
+                        var cacheSize by remember { mutableStateOf(0L) }
+                        val cachePrefs = remember { com.velastudio.teltv.worker.CachePrefs(app) }
+                        // Both now read from (and, via the callbacks below, write to) the same
+                        // DataStore that CacheTrimWorker reads in the background -- previously
+                        // this was local `remember` state that the worker never saw.
+                        val autoClearEnabled by cachePrefs.autoClearEnabled.collectAsState(initial = true)
+                        val limitBytes by cachePrefs.limitBytes.collectAsState(
+                            initial = com.velastudio.teltv.telegram.CacheManager.DEFAULT_LIMIT_BYTES
+                        )
+                        val limitGb = limitBytes / (1024f * 1024f * 1024f)
+                        val playbackPrefs = remember { PlaybackPrefs(app) }
+                        val skipMs by playbackPrefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
+
+                        LaunchedEffect(Unit) {
+                            cacheSize = runCatching {
+                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).getCurrentSizeBytes()
+                            }.onFailure { Timber.e(it, "Failed to read cache size") }
+                                .getOrDefault(0L)
+                        }
+
+                        androidx.compose.foundation.layout.Column {
+                            CacheSettingsSection(
+                                currentSizeBytes = cacheSize,
+                                autoClearEnabled = autoClearEnabled,
+                                limitGb = limitGb,
+                                onToggleAutoClear = { scope.launch { cachePrefs.setAutoClearEnabled(it) } },
+                                onLimitChanged = { newLimitGb ->
+                                    scope.launch {
+                                        cachePrefs.setLimitBytes((newLimitGb * 1024 * 1024 * 1024).toLong())
+                                    }
+                                },
+                                onClearNow = {
+                                    scope.launch {
+                                        com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).clearAllNow()
+                                        cacheSize = 0L
+                                    }
+                                }
+                            )
+                            PlaybackSettingsSection(
+                                skipIncrementMs = skipMs,
+                                onSkipIncrementChanged = { scope.launch { playbackPrefs.setSkipIncrementMs(it) } }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
