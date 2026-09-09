@@ -31,7 +31,7 @@ class SmbSourceClient {
         val user = source.username.orEmpty()
         val pass = source.password.orEmpty()
         return if (user.isBlank()) {
-            base.withGuestCredentials()
+            base.withCredentials(jcifs.smb.NtlmPasswordAuthenticator())
         } else {
             base.withCredentials(NtlmPasswordAuthenticator(source.domain.orEmpty(), user, pass))
         }
