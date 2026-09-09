@@ -29,7 +29,7 @@
         android:name=".TelTvApp"
         android:allowBackup="true"
         android:banner="@drawable/tv_banner"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.TelTV"
         android:usesCleartextTraffic="true"
