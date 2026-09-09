@@ -7,12 +7,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Forward5
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Replay5
-import androidx.compose.material.icons.filled.Forward5
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,14 +24,9 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.velastudio.teltv.util.MediaTitleCleaner
 import java.util.concurrent.TimeUnit
 
-/**
- * The overlay you'd expect from any decent video player: title, seek bar with elapsed/remaining
- * time, and play/pause + skip-back/skip-forward. Skip amount matches the Settings choice (5s or
- * 10s -- see PlaybackPrefs). Shows on any D-pad/remote input, auto-hides after a few seconds of
- * inactivity during playback.
- */
 @Composable
 fun PlaybackControlsOverlay(
     title: String,
@@ -40,16 +37,20 @@ fun PlaybackControlsOverlay(
     visible: Boolean,
     onPlayPause: () -> Unit,
     onSkipBack: () -> Unit,
-    onSkipForward: () -> Unit
+    onSkipForward: () -> Unit,
+    onOpenTracks: () -> Unit,
+    onOpenExternal: () -> Unit
 ) {
+    val cleanTitle = remember(title) { MediaTitleCleaner.clean(title) }
+
     AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
-                        startY = 0.4f
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
+                        startY = 0.35f
                     )
                 )
         ) {
@@ -59,7 +60,25 @@ fun PlaybackControlsOverlay(
                     .fillMaxWidth()
                     .padding(horizontal = 48.dp, vertical = 28.dp)
             ) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(cleanTitle, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        ControlButton(
+                            icon = Icons.Filled.Subtitles,
+                            contentDescription = "Audio & Subtitles",
+                            onClick = onOpenTracks
+                        )
+                        ControlButton(
+                            icon = Icons.Filled.OpenInNew,
+                            contentDescription = "Open in External Player",
+                            onClick = onOpenExternal
+                        )
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
 
                 val progress = if (durationMs > 0) currentPositionMs.toFloat() / durationMs else 0f
@@ -110,7 +129,7 @@ private fun ControlButton(
     onClick: () -> Unit,
     large: Boolean = false
 ) {
-    val size = if (large) 72.dp else 56.dp
+    val size = if (large) 72.dp else 52.dp
     IconButton(
         onClick = onClick,
         modifier = Modifier

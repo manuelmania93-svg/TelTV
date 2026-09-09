@@ -257,11 +257,27 @@ class MainActivity : ComponentActivity() {
                             fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
                         }
 
+                        var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
+                        LaunchedEffect(mediaId) {
+                            val cur = app.database.videoIndexDao().getByMediaId(mediaId)
+                            if (cur != null) {
+                                nextEntity = app.database.videoIndexDao().getNextInChannel(cur.chatId, cur.position)
+                            }
+                        }
+
                         PlayerScreen(
                             fileId = fileId,
                             directUri = null,
                             title = title,
                             resumePositionMs = resumeMs,
+                            nextTitle = nextEntity?.title,
+                            onPlayNext = nextEntity?.let { next ->
+                                {
+                                    navController.navigate("player/${URLEncoder.encode(next.mediaId, "UTF-8")}") {
+                                        popUpTo("player/{mediaId}") { inclusive = true }
+                                    }
+                                }
+                            },
                             onPositionUpdate = { positionMs, durationMs ->
                                 scope.launch {
                                     app.database.watchStateDao().upsert(

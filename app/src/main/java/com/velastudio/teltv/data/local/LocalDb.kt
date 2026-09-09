@@ -165,6 +165,9 @@ interface VideoIndexDao {
     @Query("SELECT messageId FROM video_index WHERE chatId = :chatId ORDER BY position ASC LIMIT 1")
     suspend fun newestMessageId(chatId: Long): Long?
 
+    @Query("SELECT * FROM video_index WHERE chatId = :chatId AND position > :currentPosition ORDER BY position ASC LIMIT 1")
+    suspend fun getNextInChannel(chatId: Long, currentPosition: Int): VideoIndexEntity?
+
     /** Shifts all existing positions down to make room for new items prepended at the top. */
     @Query("UPDATE video_index SET position = position + :shift WHERE chatId = :chatId")
     suspend fun shiftPositions(chatId: Long, shift: Int)
