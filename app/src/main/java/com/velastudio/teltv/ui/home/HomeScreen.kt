@@ -64,6 +64,15 @@ fun HomeScreen(
     onQuickClearCache: (() -> Unit)? = null
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<com.velastudio.teltv.util.UpdateInfo?>(null) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        updateInfo = com.velastudio.teltv.util.AppUpdater.checkForUpdate()
+    }
 
     LazyColumn(
         // Without this, coming back to Home from Browse/Player/Search always puts focus back
@@ -107,6 +116,24 @@ fun HomeScreen(
         if (otherSources.entries.isNotEmpty()) {
             item { HomeRowView(otherSources, thumbnailLoader, onOpenEntry) }
         }
+    }
+
+    if (updateInfo != null) {
+        UpdateAvailableDialog(
+            updateInfo = updateInfo!!,
+            isDownloading = isDownloading,
+            downloadProgress = downloadProgress,
+            onDownload = {
+                coroutineScope.launch {
+                    isDownloading = true
+                    com.velastudio.teltv.util.AppUpdater.downloadAndInstall(context, updateInfo!!.downloadUrl) { p ->
+                        downloadProgress = p
+                    }
+                    isDownloading = false
+                }
+            },
+            onDismiss = { updateInfo = null }
+        )
     }
 
     if (showClearConfirm && onQuickClearCache != null) {
@@ -156,6 +183,49 @@ private fun HomeRowView(row: HomeRow, thumbnailLoader: ThumbnailLoader, onOpenEn
                     thumbnailLoader = thumbnailLoader,
                     onClick = { onOpenEntry(entry) }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun UpdateAvailableDialog(
+    updateInfo: com.velastudio.teltv.util.UpdateInfo,
+    isDownloading: Boolean,
+    downloadProgress: Float,
+    onDownload: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.85f)),
+        contentAlignment = androidx.compose.ui.Alignment.Center
+    ) {
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier
+                .width(460.dp)
+                .background(androidx.compose.ui.graphics.Color(0xFF222222), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                .padding(28.dp),
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ) {
+            Text("Update Available: v${updateInfo.versionName}", style = androidx.tv.material3.MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
+            Spacer(Modifier.height(12.dp))
+            Text("A new version of TelTV is ready to install.", style = androidx.tv.material3.MaterialTheme.typography.bodyMedium, color = androidx.compose.ui.graphics.Color.LightGray)
+            Spacer(Modifier.height(20.dp))
+
+            if (isDownloading) {
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = downloadProgress,
+                    modifier = Modifier.fillMaxWidth().height(6.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Downloading... ${(downloadProgress * 100).toInt()}%", color = androidx.compose.ui.graphics.Color.White)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Button(onClick = onDownload) { Text("Download & Install") }
+                    androidx.tv.material3.OutlinedButton(onClick = onDismiss) { Text("Later") }
+                }
             }
         }
     }

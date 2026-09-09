@@ -1,12 +1,17 @@
 package com.velastudio.teltv.player
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioCapabilities
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
@@ -28,7 +33,7 @@ class PlaybackService : MediaSessionService() {
         val app = application as TelTvApp
         val dataSourceFactory = TdLibAwareDataSourceFactory(app.telegramClient, this)
 
-        // Low-RAM TV buffer tuning: 35-second lookahead, strict 35MB memory ceiling
+        // Low-RAM TV buffer tuning: 35s lookahead, strict 35MB memory ceiling
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 /* minBufferMs = */ 15_000,
@@ -40,9 +45,32 @@ class PlaybackService : MediaSessionService() {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val trackSelector = DefaultTrackSelector(this)
+        // Audio Passthrough (Bitstream) for Soundbars & AV Receivers
+        val audioCapabilities = AudioCapabilities.getCapabilities(this)
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioCapabilities(audioCapabilities)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+        }.apply {
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        }
 
-        val exoPlayer = ExoPlayer.Builder(this)
+        // Track selector: Never downmix 5.1/7.1 audio to stereo on soundbars
+        val trackSelector = DefaultTrackSelector(this).apply {
+            parameters = buildUponParameters()
+                .setConstrainAudioChannelCountToDeviceCapabilities(false)
+                .build()
+        }
+
+        val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
             .setLoadControl(loadControl)
             .setTrackSelector(trackSelector)
@@ -50,6 +78,8 @@ class PlaybackService : MediaSessionService() {
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .setAllowedCapturePolicy(C.ALLOW_CAPTURE_BY_ALL)
+                    .setSpatializationBehavior(C.SPATIALIZATION_BEHAVIOR_AUTO)
                     .build(),
                 /* handleAudioFocus= */ true
             )

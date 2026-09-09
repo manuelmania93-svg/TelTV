@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,8 +28,22 @@ jobs:
       - name: Build APK with Gradle
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: TelTV-debug
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Publish Rolling Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: rolling-release
+          name: TelTV Continuous Release
+          body: |
+            Automated continuous release from commit ${{ github.sha }}
+            - Soundbar Audio Passthrough (AC3 / DTS Bitstream)
+            - In-App Auto Updater
+          files: app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: false
