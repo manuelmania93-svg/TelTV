@@ -1,51 +1,36 @@
 package com.velastudio.teltv.ui.login
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
-import com.velastudio.teltv.R
-import androidx.compose.material3.OutlinedTextField
 
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.OutlinedTextField
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
+import com.velastudio.teltv.R
 import com.velastudio.teltv.telegram.TelegramClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,25 +38,6 @@ import kotlinx.coroutines.withContext
 import org.drinkless.tdlib.TdApi
 import timber.log.Timber
 
-/**
- * Drives TDLib's QR-code / phone-number / code / 2FA-password authorization flow.
- *
- * This is also what actually starts the TDLib client: [TelegramClient.authorizationFlow] is what
- * calls `Client.create(...)` under the hood, and previously nothing in the app ever collected
- * it -- `client` stayed null forever and every other TDLib call would have failed with
- * "TDLib client not started". [MainActivity]'s NavHost now starts on this route rather than
- * "home" so that always happens, whether or not there's already a saved session.
- *
- * If TDLib already has a valid session on disk, the flow goes almost immediately from whatever
- * intermediate state to [TdApi.AuthorizationStateReady] and this screen is only visible for a
- * moment -- [onReady] is what the caller uses to navigate away once that happens.
- *
- * QR sign-in is the default, since typing a phone number and SMS code with a TV remote is
- * genuinely painful (same reasoning Telegram Desktop/TV clients use). [preferPhone] is
- * screen-local UI state, not TDLib state: TDLib's own [TelegramClient.authState] is still the
- * source of truth for what step we're actually on, `preferPhone` just controls which of the two
- * *presentations* we show for a given state (see the `when` block below).
- */
 @Composable
 fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -88,9 +54,6 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         }
     }
 
-    // Runs [action], clearing/setting isBusy and surfacing any thrown TDLib error (see
-    // TelegramClient.send(), which turns a TdApi.Error into a thrown RuntimeException) --
-    // covers things like "invalid phone number", "wrong code", "flood wait", etc.
     fun runAuthStep(action: suspend () -> Unit) {
         if (isBusy) return
         isBusy = true
@@ -102,12 +65,6 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         }
     }
 
-    // Fires once whenever we land on AuthorizationStateWaitPhoneNumber (a fresh client, or a
-    // logout) with QR still the preferred mode -- kicks off RequestQrCodeAuthentication so the
-    // very first thing the user sees is a scannable code rather than an empty phone field.
-    // Re-keyed on (authState's class, preferPhone) rather than the whole state object, since
-    // some states (e.g. WaitOtherDeviceConfirmation) change their `link` field every ~30s and
-    // we do NOT want to re-fire this for every one of those refreshes.
     LaunchedEffect(authState?.let { it::class }, preferPhone) {
         if (authState is TdApi.AuthorizationStateWaitPhoneNumber && !preferPhone) {
             runCatching { telegramClient.requestQrCodeAuthentication() }
@@ -125,78 +82,114 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 painter = painterResource(R.drawable.brand_poster),
                 contentDescription = "TelTV Poster",
                 modifier = Modifier
-                    .height(420.dp)
+                    .height(440.dp)
                     .clip(RoundedCornerShape(16.dp))
             )
             Spacer(Modifier.width(48.dp))
+
             Column(
                 modifier = Modifier.widthIn(max = 480.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-            Text("Sign in to Telegram", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(24.dp))
+                Text(
+                    text = "Sign in to Telegram",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(16.dp))
 
-            when (val state = authState) {
-                is TdApi.AuthorizationStateWaitPhoneNumber -> if (preferPhone) {
-                    PhoneNumberStep(
-                        isBusy = isBusy,
-                        errorMessage = errorMessage,
-                        onSubmit = { phone -> runAuthStep { telegramClient.setPhoneNumber(phone) } },
-                        onSwitchToQr = { preferPhone = false }
-                    )
-                } else {
-                    // QR request was just fired by the LaunchedEffect above; TDLib hasn't
-                    // replied with AuthorizationStateWaitOtherDeviceConfirmation (and its `link`)
-                    // yet, so there's nothing to render as a code.
-                    Text("Preparing QR code…", style = MaterialTheme.typography.bodyMedium)
+                // Mode switcher tabs (QR vs Phone)
+                val currentState = authState
+                val isPhoneMode = preferPhone || currentState is TdApi.AuthorizationStateWaitCode || currentState is TdApi.AuthorizationStateWaitPassword
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(bottom = 20.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            preferPhone = false
+                            if (currentState is TdApi.AuthorizationStateWaitPhoneNumber) {
+                                scope.launch {
+                                    runCatching { telegramClient.requestQrCodeAuthentication() }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (!isPhoneMode) MaterialTheme.colorScheme.primary else Color.DarkGray
+                        )
+                    ) {
+                        Text(if (!isPhoneMode) "● QR Code" else "QR Code")
+                    }
+                    Button(
+                        onClick = { preferPhone = true },
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (isPhoneMode) MaterialTheme.colorScheme.primary else Color.DarkGray
+                        )
+                    ) {
+                        Text(if (isPhoneMode) "● Phone Number" else "Phone Number")
+                    }
                 }
 
-                is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> if (preferPhone) {
-                    // User backed out of QR mode before finishing it. TDLib allows calling
-                    // SetAuthenticationPhoneNumber directly from this state -- it switches the
-                    // flow to phone-based and moves on to AuthorizationStateWaitCode itself, no
-                    // separate "cancel QR" call needed.
-                    PhoneNumberStep(
+                when (val state = authState) {
+                    is TdApi.AuthorizationStateWaitPhoneNumber -> if (preferPhone) {
+                        PhoneNumberStep(
+                            isBusy = isBusy,
+                            errorMessage = errorMessage,
+                            onSubmit = { phone -> runAuthStep { telegramClient.setPhoneNumber(phone) } }
+                        )
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Preparing QR code…", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                            Spacer(Modifier.height(16.dp))
+                            Button(onClick = { preferPhone = true }) {
+                                Text("Sign in with Phone Number")
+                            }
+                        }
+                    }
+
+                    is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> if (preferPhone) {
+                        PhoneNumberStep(
+                            isBusy = isBusy,
+                            errorMessage = errorMessage,
+                            onSubmit = { phone -> runAuthStep { telegramClient.setPhoneNumber(phone) } }
+                        )
+                    } else {
+                        QrCodeStep(
+                            link = state.link,
+                            onSwitchToPhone = { preferPhone = true },
+                            onRefresh = {
+                                scope.launch {
+                                    runCatching { telegramClient.requestQrCodeAuthentication() }
+                                }
+                            }
+                        )
+                    }
+
+                    is TdApi.AuthorizationStateWaitCode -> CodeStep(
+                        codeInfo = state.codeInfo,
                         isBusy = isBusy,
                         errorMessage = errorMessage,
-                        onSubmit = { phone -> runAuthStep { telegramClient.setPhoneNumber(phone) } },
-                        onSwitchToQr = { preferPhone = false }
+                        onSubmit = { code -> runAuthStep { telegramClient.checkCode(code) } },
+                        onBack = { preferPhone = true }
                     )
-                } else {
-                    QrCodeStep(
-                        link = state.link,
-                        onSwitchToPhone = { preferPhone = true }
+
+                    is TdApi.AuthorizationStateWaitPassword -> PasswordStep(
+                        hint = state.passwordHint,
+                        isBusy = isBusy,
+                        errorMessage = errorMessage,
+                        onSubmit = { password -> runAuthStep { telegramClient.checkPassword(password) } }
                     )
+
+                    is TdApi.AuthorizationStateClosed -> Text(
+                        "The connection to Telegram closed unexpectedly. Restart the app to try again.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White
+                    )
+
+                    else -> Text("Connecting to Telegram…", style = MaterialTheme.typography.bodyMedium, color = Color.White)
                 }
-
-                is TdApi.AuthorizationStateWaitCode -> CodeStep(
-                    codeInfo = state.codeInfo,
-                    isBusy = isBusy,
-                    errorMessage = errorMessage,
-                    onSubmit = { code ->
-                        runAuthStep { telegramClient.checkCode(code) }
-                    }
-                )
-
-                is TdApi.AuthorizationStateWaitPassword -> PasswordStep(
-                    hint = state.passwordHint,
-                    isBusy = isBusy,
-                    errorMessage = errorMessage,
-                    onSubmit = { password ->
-                        runAuthStep { telegramClient.checkPassword(password) }
-                    }
-                )
-
-                is TdApi.AuthorizationStateClosed -> Text(
-                    "The connection to Telegram closed unexpectedly. Restart the app to try again.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                // AuthorizationStateWaitTdlibParameters, AuthorizationStateReady (about to
-                // navigate away via onReady), or null (flow hasn't emitted yet).
-                else -> Text("Connecting to Telegram…", style = MaterialTheme.typography.bodyMedium)
             }
-        }
         }
     }
 }
@@ -204,15 +197,12 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
 @Composable
 private fun QrCodeStep(
     link: String?,
-    onSwitchToPhone: () -> Unit
+    onSwitchToPhone: () -> Unit,
+    onRefresh: () -> Unit
 ) {
-    Text("Scan to sign in", style = MaterialTheme.typography.bodyMedium)
+    Text("Scan with your phone to sign in", style = MaterialTheme.typography.bodyMedium, color = Color.White)
     Spacer(Modifier.height(16.dp))
 
-    // Generated off the main thread (ZXing's matrix walk + per-pixel Bitmap writes are cheap
-    // but there's no reason to risk a frame drop on a TV box for it). Re-runs whenever `link`
-    // changes, which TDLib does on its own roughly every 30s to keep the token from expiring --
-    // so the code on screen always matches what scanning it will actually do.
     val qrBitmap by produceState<Bitmap?>(initialValue = null, link) {
         value = link?.let { l ->
             withContext(Dispatchers.Default) {
@@ -224,7 +214,11 @@ private fun QrCodeStep(
     }
 
     Box(
-        modifier = Modifier.size(240.dp).background(Color.White),
+        modifier = Modifier
+            .size(240.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
         val bmp = qrBitmap
@@ -235,20 +229,23 @@ private fun QrCodeStep(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Text("Generating…", color = Color.Black, style = MaterialTheme.typography.bodySmall)
+            androidx.compose.material3.CircularProgressIndicator(color = Color.Black)
         }
     }
 
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(16.dp))
     Text(
-        "On your phone: Settings → Devices → Link Desktop Device, then point your camera at this code.",
-        style = MaterialTheme.typography.bodySmall
+        "On Phone: Telegram → Settings → Devices → Link Desktop Device",
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.LightGray
     )
-    Spacer(Modifier.height(20.dp))
-    Button(onClick = onSwitchToPhone) { Text("Use phone number instead") }
+    Spacer(Modifier.height(16.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(onClick = onSwitchToPhone) { Text("Use Phone Number") }
+        OutlinedButton(onClick = onRefresh) { Text("Refresh QR") }
+    }
 }
 
-/** Renders [content] (a `tg://login?token=...` URL) as a black-on-white QR bitmap. */
 private fun qrCodeBitmap(content: String, sizePx: Int = 512): Bitmap {
     val matrix: BitMatrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, sizePx, sizePx)
     val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.RGB_565)
@@ -264,14 +261,14 @@ private fun qrCodeBitmap(content: String, sizePx: Int = 512): Bitmap {
 private fun PhoneNumberStep(
     isBusy: Boolean,
     errorMessage: String?,
-    onSubmit: (String) -> Unit,
-    onSwitchToQr: () -> Unit
+    onSubmit: (String) -> Unit
 ) {
     var phone by remember { mutableStateOf("") }
 
     Text(
-        "Enter your phone number, including country code (e.g. +1 555 123 4567).",
-        style = MaterialTheme.typography.bodyMedium
+        "Enter your phone number with country code (e.g. +1 555 123 4567)",
+        style = MaterialTheme.typography.bodyMedium,
+        color = Color.White
     )
     Spacer(Modifier.height(16.dp))
     OutlinedTextField(
@@ -281,7 +278,11 @@ private fun PhoneNumberStep(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { if (phone.isNotBlank()) onSubmit(phone) }),
-        placeholder = { Text("+1 555 123 4567") },
+        placeholder = { Text("+1 555 123 4567", color = Color.Gray) },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White
+        ),
         modifier = Modifier.fillMaxWidth()
     )
     ErrorText(errorMessage)
@@ -289,9 +290,9 @@ private fun PhoneNumberStep(
     Button(
         onClick = { onSubmit(phone) },
         enabled = !isBusy && phone.isNotBlank()
-    ) { Text(if (isBusy) "Sending…" else "Continue") }
-    Spacer(Modifier.height(12.dp))
-    Button(onClick = onSwitchToQr, enabled = !isBusy) { Text("Use QR code instead") }
+    ) {
+        Text(if (isBusy) "Sending Code…" else "Send Login Code")
+    }
 }
 
 @Composable
@@ -299,11 +300,12 @@ private fun CodeStep(
     codeInfo: TdApi.AuthenticationCodeInfo?,
     isBusy: Boolean,
     errorMessage: String?,
-    onSubmit: (String) -> Unit
+    onSubmit: (String) -> Unit,
+    onBack: () -> Unit
 ) {
     var code by remember { mutableStateOf("") }
 
-    Text(codeDeliveryDescription(codeInfo), style = MaterialTheme.typography.bodyMedium)
+    Text(codeDeliveryDescription(codeInfo), style = MaterialTheme.typography.bodyMedium, color = Color.White)
     Spacer(Modifier.height(16.dp))
     OutlinedTextField(
         value = code,
@@ -312,15 +314,26 @@ private fun CodeStep(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { if (code.isNotBlank()) onSubmit(code) }),
-        placeholder = { Text("12345") },
+        placeholder = { Text("12345", color = Color.Gray) },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White
+        ),
         modifier = Modifier.fillMaxWidth()
     )
     ErrorText(errorMessage)
     Spacer(Modifier.height(20.dp))
-    Button(
-        onClick = { onSubmit(code) },
-        enabled = !isBusy && code.isNotBlank()
-    ) { Text(if (isBusy) "Verifying…" else "Verify") }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(
+            onClick = { onSubmit(code) },
+            enabled = !isBusy && code.isNotBlank()
+        ) {
+            Text(if (isBusy) "Verifying…" else "Verify Code")
+        }
+        OutlinedButton(onClick = onBack) {
+            Text("Back")
+        }
+    }
 }
 
 @Composable
@@ -333,12 +346,13 @@ private fun PasswordStep(
     var password by remember { mutableStateOf("") }
 
     Text(
-        "Two-step verification is on for this account. Enter your password to continue.",
-        style = MaterialTheme.typography.bodyMedium
+        "Two-Step Verification (2FA) is on. Enter your password to continue.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = Color.White
     )
     if (!hint.isNullOrBlank()) {
         Spacer(Modifier.height(8.dp))
-        Text("Hint: $hint", style = MaterialTheme.typography.bodySmall)
+        Text("Hint: $hint", style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
     }
     Spacer(Modifier.height(16.dp))
     OutlinedTextField(
@@ -349,6 +363,10 @@ private fun PasswordStep(
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { if (password.isNotBlank()) onSubmit(password) }),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White
+        ),
         modifier = Modifier.fillMaxWidth()
     )
     ErrorText(errorMessage)
@@ -356,7 +374,9 @@ private fun PasswordStep(
     Button(
         onClick = { onSubmit(password) },
         enabled = !isBusy && password.isNotBlank()
-    ) { Text(if (isBusy) "Checking…" else "Log in") }
+    ) {
+        Text(if (isBusy) "Checking Password…" else "Log in")
+    }
 }
 
 @Composable
@@ -367,15 +387,14 @@ private fun ErrorText(message: String?) {
     }
 }
 
-/** Friendly description of how the login code was sent, for the small set of common cases. */
 private fun codeDeliveryDescription(codeInfo: TdApi.AuthenticationCodeInfo?): String {
     val base = "Enter the code"
     return when (codeInfo?.type) {
         is TdApi.AuthenticationCodeTypeTelegramMessage -> "$base sent to your Telegram app on another device."
         is TdApi.AuthenticationCodeTypeSms -> "$base sent to you by SMS."
-        is TdApi.AuthenticationCodeTypeCall -> "$base you'll receive in a phone call."
-        is TdApi.AuthenticationCodeTypeFlashCall -> "$base that appears as the incoming caller ID on the call you're about to receive."
-        is TdApi.AuthenticationCodeTypeMissedCall -> "$base: the last digits of the number that just called you."
+        is TdApi.AuthenticationCodeTypeCall -> "$base you will receive in a phone call."
+        is TdApi.AuthenticationCodeTypeFlashCall -> "$base that appears as the incoming caller ID."
+        is TdApi.AuthenticationCodeTypeMissedCall -> "$base: the last digits of the calling number."
         else -> "$base you received."
     }
 }
