@@ -305,7 +305,7 @@ fun UpdateAvailableDialog(
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Card(onClick = {}) {
             Column(Modifier.padding(24.dp)) {
-                Text("Update Available (v${updateInfo.version})", style = MaterialTheme.typography.titleLarge)
+                Text("Update Available (v${updateInfo.versionName})", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(updateInfo.changelog)
                 Spacer(Modifier.height(16.dp))
