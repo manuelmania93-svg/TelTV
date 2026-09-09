@@ -1,4 +1,10 @@
 package com.velastudio.teltv.ui.login
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import com.velastudio.teltv.R
 import androidx.compose.material3.OutlinedTextField
 
 import android.graphics.Bitmap
@@ -109,11 +115,24 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxSize().padding(48.dp), contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier.widthIn(max = 480.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
         ) {
+            Image(
+                painter = painterResource(R.drawable.brand_poster),
+                contentDescription = "TelTV Poster",
+                modifier = Modifier
+                    .height(420.dp)
+                    .clip(RoundedCornerShape(16.dp))
+            )
+            Spacer(Modifier.width(48.dp))
+            Column(
+                modifier = Modifier.widthIn(max = 480.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
             Text("Sign in to Telegram", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(24.dp))
 
@@ -177,6 +196,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 // navigate away via onReady), or null (flow hasn't emitted yet).
                 else -> Text("Connecting to Telegram…", style = MaterialTheme.typography.bodyMedium)
             }
+        }
         }
     }
 }

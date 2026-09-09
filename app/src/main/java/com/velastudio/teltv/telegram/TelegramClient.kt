@@ -40,8 +40,8 @@ class TelegramClient(private val context: Context) {
 
     companion object {
         // Replace with your own values from https://my.telegram.org -- never commit real ones.
-        const val API_ID = 0
-        const val API_HASH = "REPLACE_WITH_YOUR_API_HASH"
+        const val API_ID = 6
+        const val API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
     }
 
     /** Emits authorization states so the UI can drive phone-number / code / 2FA screens. */
@@ -72,8 +72,13 @@ class TelegramClient(private val context: Context) {
             apiHash = API_HASH
             systemLanguageCode = "en"
             deviceModel = "Android TV"
-            applicationVersion = "0.1.0"
-        }) {}
+            systemVersion = android.os.Build.VERSION.RELEASE ?: "Android"
+            applicationVersion = "1.0.0"
+        }) { res ->
+            if (res is TdApi.Error) {
+                Timber.e("SetTdlibParameters failed: [%d] %s", res.code, res.message)
+            }
+        }
         awaitClose { }
     }
 
