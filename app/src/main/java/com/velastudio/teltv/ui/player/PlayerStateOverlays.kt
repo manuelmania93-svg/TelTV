@@ -1,5 +1,4 @@
 package com.velastudio.teltv.ui.player
-import androidx.compose.material3.CircularProgressIndicator
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -28,7 +27,7 @@ import androidx.tv.material3.Text
 @Composable
 fun BufferingIndicator() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = Color.White)
+        androidx.compose.material3.CircularProgressIndicator(color = Color.White)
     }
 }
 

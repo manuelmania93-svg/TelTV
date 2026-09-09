@@ -1,5 +1,4 @@
 package com.velastudio.teltv.ui.player
-import androidx.compose.material3.LinearProgressIndicator
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -65,7 +64,7 @@ fun PlaybackControlsOverlay(
                 Spacer(Modifier.height(12.dp))
 
                 val progress = if (durationMs > 0) currentPositionMs.toFloat() / durationMs else 0f
-                LinearProgressIndicator(
+                androidx.compose.material3.LinearProgressIndicator(
                     progress = progress,
                     modifier = Modifier.fillMaxWidth().height(4.dp)
                 )

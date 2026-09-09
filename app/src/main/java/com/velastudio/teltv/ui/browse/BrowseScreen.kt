@@ -1,6 +1,5 @@
 package com.velastudio.teltv.ui.browse
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.CircularProgressIndicator
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -73,7 +72,7 @@ fun BrowseScreen(
         when {
             items.itemCount == 0 && refreshState is androidx.paging.LoadState.Loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    androidx.compose.material3.CircularProgressIndicator()
                 }
                 return@Column
             }
@@ -127,7 +126,7 @@ fun BrowseScreen(
             if (appendState is androidx.paging.LoadState.Loading) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        androidx.compose.material3.CircularProgressIndicator()
                     }
                 }
             }
