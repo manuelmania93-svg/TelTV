@@ -1,5 +1,8 @@
 package com.velastudio.teltv.ui.home
 
+import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
