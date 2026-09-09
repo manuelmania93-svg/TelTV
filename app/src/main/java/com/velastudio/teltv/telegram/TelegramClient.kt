@@ -136,6 +136,34 @@ class TelegramClient(private val context: Context) {
      * "Home appears in half a second" and "Home spins for several seconds every cold start",
      * which matters even more on a TV box where that spinner is the first thing you see.
      */
+    
+    /**
+     * Fetches all channels and video supergroups available in the account,
+     * sorted so pinned chats come first, followed by active channels.
+     */
+    suspend fun getAllChannels(): List<TdApi.Chat> = coroutineScope {
+        send(TdApi.LoadChats(TdApi.ChatListMain(), 200))
+        val chats = send(TdApi.GetChats(TdApi.ChatListMain(), 200)) as TdApi.Chats
+
+        val concurrencyLimit = Semaphore(8)
+        chats.chatIds
+            .map { id ->
+                async {
+                    concurrencyLimit.withPermit { send(TdApi.GetChat(id)) as TdApi.Chat }
+                }
+            }
+            .map { it.await() }
+            .filter { chat ->
+                (chat.type as? TdApi.ChatTypeSupergroup)?.isChannel == true ||
+                chat.type is TdApi.ChatTypeSupergroup ||
+                chat.type is TdApi.ChatTypeBasicGroup
+            }
+            .sortedWith(
+                compareByDescending<TdApi.Chat> { chat -> chat.positions.any { it.isPinned } }
+                    .thenByDescending { it.lastMessage?.date ?: 0 }
+            )
+    }
+
     suspend fun getPinnedChannels(): List<TdApi.Chat> = coroutineScope {
         send(TdApi.LoadChats(TdApi.ChatListMain(), 200))
         val chats = send(TdApi.GetChats(TdApi.ChatListMain(), 200)) as TdApi.Chats

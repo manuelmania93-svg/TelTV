@@ -71,10 +71,9 @@ class MainActivity : ComponentActivity() {
 
                     composable("home") {
                         var continueWatching by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
-                        var pinnedRow by remember { mutableStateOf(HomeRow("Pinned", emptyList())) }
-                        // Incremented after each quick clear so the LaunchedEffect below re-runs
-                        // and logs the post-clear size.  Gives a feedback loop without needing
-                        // a separate cache-size display on Home.
+                        var pinnedRow by remember { mutableStateOf(HomeRow("Pinned Channels", emptyList())) }
+                        var allChannelsRow by remember { mutableStateOf(HomeRow("All Channels & Groups", emptyList())) }
+                        var isLoadingChannels by remember { mutableStateOf(true) }
                         var cacheClearedSignal by remember { mutableStateOf(0) }
 
                         LaunchedEffect(Unit) {
@@ -84,15 +83,32 @@ class MainActivity : ComponentActivity() {
                                     mediaId = it.mediaId,
                                     title = it.title,
                                     progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                    thumbnailFileId = it.thumbnailFileId // already stored on WatchStateEntity
+                                    thumbnailFileId = it.thumbnailFileId
                                 )
                             }
 
-                            val channels = app.telegramClient.getPinnedChannels()
-                            pinnedChatIds = channels.map { it.id }
-                            pinnedRow = HomeRow(
-                                "Pinned",
-                                channels.map { chat ->
+                            val all = runCatching { app.telegramClient.getAllChannels() }.getOrDefault(emptyList())
+                            val pinned = all.filter { chat -> chat.positions.any { it.isPinned } }
+                            val others = all.filter { chat -> !chat.positions.any { it.isPinned } }
+
+                            pinnedChatIds = all.map { it.id }
+
+                            if (pinned.isNotEmpty()) {
+                                pinnedRow = HomeRow(
+                                    "Pinned Channels",
+                                    pinned.map { chat ->
+                                        HomeEntry(
+                                            id = chat.id.toString(),
+                                            name = chat.title,
+                                            thumbnailFileId = chat.photo?.small?.id
+                                        )
+                                    }
+                                )
+                            }
+
+                            allChannelsRow = HomeRow(
+                                "All Channels & Groups",
+                                (if (pinned.isEmpty()) all else others).map { chat ->
                                     HomeEntry(
                                         id = chat.id.toString(),
                                         name = chat.title,
@@ -100,11 +116,9 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             )
+                            isLoadingChannels = false
                         }
 
-                        // Re-runs after each quick clear (cacheClearedSignal changes) so we can
-                        // confirm the size actually dropped -- useful for debugging and for a
-                        // future "X MB freed" toast without restructuring the call site.
                         LaunchedEffect(cacheClearedSignal) {
                             if (cacheClearedSignal == 0) return@LaunchedEffect
                             val remaining = runCatching {
@@ -118,8 +132,10 @@ class MainActivity : ComponentActivity() {
                             thumbnailLoader = thumbnailLoader,
                             continueWatching = continueWatching,
                             pinned = pinnedRow,
-                            folderRows = emptyList(), // populated once folder enumeration is wired, see TelegramClient
+                            allChannels = allChannelsRow,
+                            folderRows = emptyList(),
                             otherSources = HomeRow("Other sources", emptyList()),
+                            isLoading = isLoadingChannels,
                             onOpenEntry = { entry ->
                                 val encodedTitle = URLEncoder.encode(entry.name, "UTF-8")
                                 navController.navigate("browse/${entry.id}/$encodedTitle")
@@ -129,8 +145,6 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenSearch = { navController.navigate("search") },
                             onOpenSettings = { navController.navigate("settings") },
-                            // Quick clear: same CacheManager.clearAllNow() used by Settings,
-                            // triggered from the header button on Home without navigating away.
                             onQuickClearCache = {
                                 scope.launch {
                                     runCatching {
