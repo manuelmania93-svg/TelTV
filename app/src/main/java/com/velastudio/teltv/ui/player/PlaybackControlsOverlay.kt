@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
-import androidx.tv.material3.LinearProgressIndicator
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import java.util.concurrent.TimeUnit
