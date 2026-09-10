@@ -71,7 +71,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
     }
 
     // While TDLib is initializing or confirming session: show clean Splash screen (no QR flashing)
-    if (authState == null || authState is TdApi.AuthorizationStateReady) {
+    if (authState == null || authState is TdApi.AuthorizationStateWaitTdlibParameters || authState is TdApi.AuthorizationStateReady) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

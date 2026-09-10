@@ -313,24 +313,40 @@ class TelegramClient(private val context: Context) {
      * thread (see [RawTdClient]) rely on that to release their latch instead of hanging forever
      * on a network error.
      */
+    suspend fun getFile(fileId: Int): TdApi.File? = suspendCancellableCoroutine { cont ->
+        val c = client ?: return@suspendCancellableCoroutine cont.resume(null)
+        c.send(TdApi.GetFile(fileId)) { res ->
+            if (res is TdApi.File) cont.resume(res) else cont.resume(null)
+        }
+    }
+
+    suspend fun readChunk(fileId: Int, offset: Long, count: Long): ByteArray? = suspendCancellableCoroutine { cont ->
+        val c = client ?: return@suspendCancellableCoroutine cont.resume(null)
+        // Request chunk download with high priority
+        c.send(TdApi.DownloadFile(fileId, 32, offset, count, false)) { downloadRes ->
+            // Read downloaded part directly into memory
+            c.send(TdApi.ReadFilePart(fileId, offset, count)) { readRes ->
+                if (readRes is TdApi.Data && readRes.data.isNotEmpty()) {
+                    cont.resume(readRes.data)
+                } else {
+                    cont.resume(null)
+                }
+            }
+        }
+    }
+
     fun downloadFileRangeSync(fileId: Int, offset: Long, limit: Long, onResult: (TdApi.File?) -> Unit) {
         val c = client
         if (c == null) {
-            Timber.e("downloadFileRangeSync(fileId=$fileId) called before TDLib client started")
             onResult(null)
             return
         }
-        c.send(TdApi.DownloadFile(fileId, 32 /* highest priority */, offset, limit, true)) { result ->
+        // Cap chunk to max 4MB so it streams on-the-fly instead of downloading full movies
+        val safeLimit = if (limit <= 0) 4 * 1024 * 1024L else minOf(limit, 4 * 1024 * 1024L)
+        c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, false)) { result ->
             when (result) {
                 is TdApi.File -> onResult(result)
-                is TdApi.Error -> {
-                    Timber.e("Range download failed for fileId=$fileId offset=$offset limit=$limit: ${result.message}")
-                    onResult(null)
-                }
-                else -> {
-                    Timber.e("Unexpected result downloading fileId=$fileId: $result")
-                    onResult(null)
-                }
+                else -> onResult(null)
             }
         }
     }

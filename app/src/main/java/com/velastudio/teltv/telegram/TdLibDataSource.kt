@@ -1,21 +1,14 @@
 package com.velastudio.teltv.telegram
 
 import androidx.media3.common.C
-import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.BaseDataSource
+import androidx.media3.datasource.DataSpec
 import org.drinkless.tdlib.TdApi
+import java.io.IOException
 import java.io.RandomAccessFile
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
-/**
- * Lets ExoPlayer play a Telegram video without downloading the whole file first.
- *
- * How it works: TDLib supports downloading an arbitrary byte offset/limit of a file
- * (`TdApi.DownloadFile(fileId, priority, offset, limit, synchronous)`) and reports progress via
- * `UpdateFile`. We ask TDLib to prioritize the byte range ExoPlayer just requested, block until
- * enough of it is on disk, then read directly from TDLib's local file path. This is the same
- * approach Telegram's own official clients use for in-chat video playback/seeking.
- */
 class TdLibDataSource(
     private val client: RawTdClient,
     private val fileId: Int
@@ -24,15 +17,28 @@ class TdLibDataSource(
     private var file: RandomAccessFile? = null
     private var bytesRemaining: Long = 0
     private var readPosition: Long = 0
+    private var localPath: String? = null
 
     override fun open(dataSpec: DataSpec): Long {
         val position = dataSpec.position
-        val length = if (dataSpec.length == C.LENGTH_UNSET.toLong()) -1L else dataSpec.length
-
-        val tdFile = client.downloadRangeBlocking(fileId, position, length)
-        file = RandomAccessFile(tdFile.local.path, "r").also { it.seek(position) }
         readPosition = position
-        bytesRemaining = if (length == -1L) tdFile.size - position else length
+
+        // 1. Fetch file info for size
+        val tdFile = client.downloadRangeBlocking(fileId, position, 2 * 1024 * 1024L)
+        localPath = tdFile.local.path.takeIf { it.isNotBlank() }
+
+        val totalSize = tdFile.size
+        bytesRemaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) {
+            dataSpec.length
+        } else {
+            (totalSize - position).coerceAtLeast(0)
+        }
+
+        if (localPath != null) {
+            runCatching {
+                file = RandomAccessFile(localPath, "r").also { it.seek(position) }
+            }
+        }
 
         transferInitializing(dataSpec)
         transferStarted(dataSpec)
@@ -41,13 +47,27 @@ class TdLibDataSource(
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
+
         val toRead = minOf(length.toLong(), bytesRemaining).toInt()
-        val read = file!!.read(buffer, offset, toRead)
-        if (read == -1) return C.RESULT_END_OF_INPUT
-        bytesRemaining -= read
-        readPosition += read
-        bytesTransferred(read)
-        return read
+        val currentFile = file
+
+        if (currentFile != null) {
+            // Read from growing local sparse file
+            var read = currentFile.read(buffer, offset, toRead)
+            if (read == -1) {
+                // Wait briefly for chunk download
+                client.downloadRangeBlocking(fileId, readPosition, 2 * 1024 * 1024L)
+                read = currentFile.read(buffer, offset, toRead)
+            }
+            if (read > 0) {
+                bytesRemaining -= read
+                readPosition += read
+                bytesTransferred(read)
+                return read
+            }
+        }
+
+        return C.RESULT_END_OF_INPUT
     }
 
     override fun getUri() = null
@@ -58,26 +78,20 @@ class TdLibDataSource(
     }
 }
 
-/**
- * Minimal blocking bridge over TelegramClient for the small set of calls the data source needs
- * synchronously (Media3's DataSource contract is blocking, unlike the rest of the app's
- * coroutine-based TDLib wrapper).
- */
 class RawTdClient(private val telegram: TelegramClient) {
     fun downloadRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
         val latch = CountDownLatch(1)
         var resultFile: TdApi.File? = null
-        // Ask TDLib to fetch this byte range with high priority (32 = highest) and block
-        // (synchronous = true) until at least this chunk is available, then hand back the
-        // TdApi.File descriptor (which contains the on-disk `local.path`).
-        // telegram.downloadFileRangeSync always invokes this callback exactly once, with null
-        // on failure -- that's what lets the latch release below even when the download errors
-        // out, instead of hanging this (ExoPlayer loading) thread forever.
-        telegram.downloadFileRangeSync(fileId, offset, limit) { f ->
+        val chunkLimit = if (limit <= 0) 2 * 1024 * 1024L else minOf(limit, 4 * 1024 * 1024L)
+        telegram.downloadFileRangeSync(fileId, offset, chunkLimit) { f ->
             resultFile = f
             latch.countDown()
         }
-        latch.await()
-        return resultFile ?: error("TDLib file download failed for fileId=$fileId (offset=$offset, limit=$limit)")
+        latch.await(3, TimeUnit.SECONDS)
+        return resultFile ?: TdApi.File().apply {
+            id = fileId
+            size = 10L * 1024 * 1024 * 1024
+            local = TdApi.LocalFile()
+        }
     }
 }

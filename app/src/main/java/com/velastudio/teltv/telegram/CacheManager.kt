@@ -17,7 +17,7 @@ import org.drinkless.tdlib.TdApi
 class CacheManager(private val telegramSend: suspend (TdApi.Function<*>) -> TdApi.Object) {
 
     companion object {
-        const val DEFAULT_LIMIT_BYTES = 5L * 1024 * 1024 * 1024 // 5 GB, matches Manny's default
+        const val DEFAULT_LIMIT_BYTES = 500L * 1024 * 1024 // 500MB max streaming cache // 5 GB, matches Manny's default
     }
 
     /** Current on-disk cache size, for display in Settings. */
