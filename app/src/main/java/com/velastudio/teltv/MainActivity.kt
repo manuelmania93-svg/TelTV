@@ -29,6 +29,7 @@ import com.velastudio.teltv.ui.settings.AppInfoSection
 import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
 import com.velastudio.teltv.ui.player.PlaybackPrefs
 import com.velastudio.teltv.ui.theme.TelTvTheme
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.net.URLDecoder
@@ -120,8 +121,20 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // 1. Fetch Pinned Channels (Fast)
-                            val pinned = runCatching { app.telegramClient.getPinnedChannels() }.getOrDefault(emptyList())
+                            // Pins and folders are independent TDLib requests; load them together
+                            // so Home is not blocked by two sequential chat-list walks.
+                            val discovery = kotlinx.coroutines.coroutineScope {
+                                val pinnedDeferred = async {
+                                    runCatching { app.telegramClient.getPinnedChannels() }
+                                        .getOrDefault(emptyList())
+                                }
+                                val foldersDeferred = async {
+                                    runCatching { app.telegramClient.getChannelsInFolders() }
+                                        .getOrDefault(emptyMap())
+                                }
+                                pinnedDeferred.await() to foldersDeferred.await()
+                            }
+                            val pinned = discovery.first
                             if (pinned.isNotEmpty()) {
                                 pinnedRow = HomeRow(
                                     "Pinned Channels",
@@ -135,8 +148,8 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // 2. Fetch Chat Folders (Organized media libraries)
-                            val folderMap = runCatching { app.telegramClient.getChannelsInFolders() }.getOrDefault(emptyMap())
+                            // Chat folders are the organized media libraries from Telegram.
+                            val folderMap = discovery.second
                             val dynamicFolderRows = folderMap.mapNotNull { (folderInfo, chatList) ->
                                 if (chatList.isEmpty()) null
                                 else HomeRow(

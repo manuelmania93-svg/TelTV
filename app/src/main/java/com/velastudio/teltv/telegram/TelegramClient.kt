@@ -8,9 +8,11 @@ import com.velastudio.teltv.data.model.SourceType
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import org.drinkless.tdlib.Client
@@ -332,27 +334,11 @@ class TelegramClient(private val context: Context) {
      * blocking on. Callers (the browse grid) should cancel this if the row scrolls off-screen
      * before it resolves -- see `ThumbnailLoader` for the cancellation-aware wrapper.
      */
-    suspend fun downloadThumbnail(fileId: Int): String = suspendCancellableCoroutine { cont ->
-        val c = client
-        if (c == null) {
-            if (cont.isActive) cont.resume("")
-            return@suspendCancellableCoroutine
-        }
-        try {
-            c.send(TdApi.DownloadFile(fileId, 1, 0, 0, false)) { result ->
-                if (!cont.isActive) return@send
-                try {
-                    when (result) {
-                        is TdApi.File -> cont.resume(result.local.path ?: "")
-                        else -> cont.resume("")
-                    }
-                } catch (_: Throwable) {
-                    if (cont.isActive) cont.resume("")
-                }
-            }
-        } catch (_: Throwable) {
-            if (cont.isActive) cont.resume("")
-        }
+    suspend fun downloadThumbnail(fileId: Int): String = withContext(Dispatchers.IO) {
+        downloadFileRangeBlocking(fileId, 0L, 1024L * 1024L)
+            ?.local?.path
+            ?.takeIf { it.isNotBlank() }
+            .orEmpty()
     }
 
     /** Cancels an in-flight low-priority thumbnail download, e.g. when its row scrolls off-screen. */
