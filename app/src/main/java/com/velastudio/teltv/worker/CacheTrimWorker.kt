@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Runs [CacheManager.maybeAutoClear] periodically in the background (not just when Settings
- * happens to be open), so a channel binge that fills the cache overnight doesn't leave the app
+ * happens to be open), so a channel binge that fills the cache doesn't leave the app
  * stuck downloading-then-immediately-evicting on the next launch. WorkManager, not a raw
  * coroutine/alarm, so this survives process death and respects battery/doze on boxes that have
  * one (some Android TV sticks do idle-optimize even though they're plugged in).
@@ -41,12 +41,7 @@ class CacheTrimWorker(context: Context, params: WorkerParameters) : CoroutineWor
         private const val UNIQUE_WORK_NAME = "cache_trim_periodic"
 
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<CacheTrimWorker>(6, TimeUnit.HOURS)
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiresBatteryNotLow(true)
-                        .build()
-                )
+            val request = PeriodicWorkRequestBuilder<CacheTrimWorker>(1, TimeUnit.HOURS)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(

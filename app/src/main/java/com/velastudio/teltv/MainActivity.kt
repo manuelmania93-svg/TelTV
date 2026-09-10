@@ -30,6 +30,7 @@ import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
 import com.velastudio.teltv.ui.player.PlaybackPrefs
 import com.velastudio.teltv.ui.theme.TelTvTheme
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.net.URLDecoder
@@ -111,6 +112,13 @@ class MainActivity : ComponentActivity() {
                         var cacheClearedSignal by remember { mutableStateOf(0) }
 
                         LaunchedEffect(Unit) {
+                            runCatching {
+                                val cachePrefs = com.velastudio.teltv.worker.CachePrefs(app)
+                                val limit = cachePrefs.limitBytes.first()
+                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute)
+                                    .maybeAutoClear(limit)
+                            }.onFailure { Timber.w(it, "Foreground cache trim skipped") }
+
                             val watchStates = app.database.watchStateDao().continueWatching()
                             continueWatching = watchStates.map {
                                 ContinueWatchingEntry(
