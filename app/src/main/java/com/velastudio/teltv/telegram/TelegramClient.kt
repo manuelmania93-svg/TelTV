@@ -35,6 +35,23 @@ import kotlin.coroutines.resumeWithException
  *      alongside this file (or as a module) so `org.drinkless.tdlib.*` resolves.
  */
 class TelegramClient(private val context: Context) {
+    suspend fun getFreshFileId(chatId: Long, messageId: Long): Int? = suspendCancellableCoroutine { cont ->
+        val c = client ?: return@suspendCancellableCoroutine cont.resume(null)
+        c.send(TdApi.GetMessage(chatId, messageId)) { res ->
+            if (res is TdApi.Message) {
+                val fId = when (val content = res.content) {
+                    is TdApi.MessageVideo -> content.video.video.id
+                    is TdApi.MessageDocument -> content.document.document.id
+                    else -> null
+                }
+                cont.resume(fId)
+            } else {
+                Timber.w("GetMessage failed for chatId=%d msgId=%d: %s", chatId, messageId, res)
+                cont.resume(null)
+            }
+        }
+    }
+
 
     fun executeAsync(fn: TdApi.Function<*>) {
         client?.send(fn) {}

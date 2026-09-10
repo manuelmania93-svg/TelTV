@@ -97,8 +97,13 @@ class TdLibDataSource(
 
 class RawTdClient(private val telegram: TelegramClient) {
     fun downloadRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
+        val cached = telegram.fileCache[fileId]
+        if (cached?.local?.path?.isNotBlank() == true) {
+            triggerChunkDownload(fileId, offset, limit)
+            return cached
+        }
         val latch = CountDownLatch(1)
-        var result: TdApi.File = telegram.fileCache[fileId] ?: TdApi.File().apply { id = fileId }
+        var result: TdApi.File = cached ?: TdApi.File().apply { id = fileId }
 
         val listener: (TdApi.File) -> Unit = { f ->
             if (!f.local?.path.isNullOrBlank()) {
@@ -109,7 +114,8 @@ class RawTdClient(private val telegram: TelegramClient) {
 
         telegram.registerFileListener(fileId, listener)
         triggerChunkDownload(fileId, offset, limit)
-        latch.await(3500, TimeUnit.MILLISECONDS)
+        telegram.executeAsync(TdApi.GetFile(fileId))
+        latch.await(4000, TimeUnit.MILLISECONDS)
         telegram.unregisterFileListener(fileId, listener)
 
         return telegram.fileCache[fileId] ?: result

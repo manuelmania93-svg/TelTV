@@ -315,14 +315,20 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(mediaId) {
                             val existingState = app.database.watchStateDao().get(mediaId)
                             resumeMs = existingState?.positionMs ?: 0L
-
-                            // The stream URL ("tdlib://file/<fileId>") lives on the cached video
-                            // index row, not on `mediaId` itself (mediaId is "tg:<chatId>:<msgId>",
-                            // see MediaItem.id) -- so look it up from whichever channel it was
-                            // browsed/searched from.
                             val cachedEntity = app.database.videoIndexDao().getByMediaId(mediaId)
                             title = cachedEntity?.title ?: existingState?.title?.ifBlank { null } ?: mediaId
-                            fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
+
+                            // Parse chatId and msgId to get the LIVE session fileId from Telegram
+                            val parts = mediaId.removePrefix("tg:").split(":")
+                            val cId = parts.getOrNull(0)?.toLongOrNull()
+                            val mId = parts.getOrNull(1)?.toLongOrNull()
+
+                            if (cId != null && mId != null) {
+                                val fresh = app.telegramClient.getFreshFileId(cId, mId)
+                                fileId = fresh ?: cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
+                            } else {
+                                fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
+                            }
                         }
 
                         var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
