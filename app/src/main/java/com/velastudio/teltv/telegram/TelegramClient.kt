@@ -1,5 +1,6 @@
-import java.util.concurrent.ConcurrentHashMap
 package com.velastudio.teltv.telegram
+
+import java.util.concurrent.ConcurrentHashMap
 
 import android.content.Context
 import com.velastudio.teltv.data.model.MediaItem
