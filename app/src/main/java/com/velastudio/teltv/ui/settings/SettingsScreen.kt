@@ -119,19 +119,19 @@ fun CacheSettingsSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Limit: ", color = Color(0xFFB0BEC5))
                     Spacer(Modifier.width(12.dp))
-                    StepButton(label = "−", enabled = limitGb > 1f) {
-                        onLimitChanged((limitGb - 1f).coerceIn(1f, 20f))
+                    StepButton(label = "−", enabled = limitGb > 0.5f) {
+                        onLimitChanged((limitGb - 0.5f).coerceIn(0.5f, 20f))
                     }
                     Spacer(Modifier.width(16.dp))
                     Text(
-                        "${limitGb.toInt()} GB",
+                        "${"%.1f".format(limitGb)} GB",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Spacer(Modifier.width(16.dp))
                     StepButton(label = "+", enabled = limitGb < 20f) {
-                        onLimitChanged((limitGb + 1f).coerceIn(1f, 20f))
+                        onLimitChanged((limitGb + 0.5f).coerceIn(0.5f, 20f))
                     }
                 }
             }
