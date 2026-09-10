@@ -194,6 +194,35 @@ class TelegramClient(private val context: Context) {
         }
     }
 
+    /**
+     * Fetches all channels and video groups available in the account,
+     * sorted so pinned chats come first, followed by active channels.
+     */
+    suspend fun getAllChannels(limit: Int = 40): List<TdApi.Chat> = coroutineScope {
+        runCatching { send(TdApi.LoadChats(TdApi.ChatListMain(), limit)) }
+        val chats = runCatching { send(TdApi.GetChats(TdApi.ChatListMain(), limit)) as TdApi.Chats }.getOrNull()
+            ?: return@coroutineScope emptyList()
+
+        val concurrencyLimit = Semaphore(8)
+        chats.chatIds
+            .take(limit)
+            .map { id ->
+                async {
+                    concurrencyLimit.withPermit {
+                        runCatching { send(TdApi.GetChat(id)) as TdApi.Chat }.getOrNull()
+                    }
+                }
+            }
+            .mapNotNull { it.await() }
+            .filter { chat ->
+                (chat.type as? TdApi.ChatTypeSupergroup) != null || chat.type is TdApi.ChatTypeBasicGroup
+            }
+            .sortedWith(
+                compareByDescending<TdApi.Chat> { chat -> chat.positions.any { it.isPinned } }
+                    .thenByDescending { it.lastMessage?.date ?: 0 }
+            )
+    }
+
     suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40): List<MediaItem> {
         val result = send(
             TdApi.SearchChatMessages(
