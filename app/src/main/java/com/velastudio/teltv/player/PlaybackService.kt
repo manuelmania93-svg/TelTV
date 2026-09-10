@@ -32,16 +32,18 @@ class PlaybackService : MediaSessionService() {
 
         val app = application as TelTvApp
         val dataSourceFactory = TdLibAwareDataSourceFactory(app.telegramClient, this)
+        val constrained = app.deviceProfile.isConstrained
 
-        // Low-RAM TV buffer tuning: 35s lookahead, strict 35MB memory ceiling
+        // Keep the decoder buffer small on low-memory TVs while retaining a larger cushion on
+        // devices that can afford it.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 35_000,
+                /* minBufferMs = */ if (constrained) 10_000 else 15_000,
+                /* maxBufferMs = */ if (constrained) 25_000 else 35_000,
                 /* bufferForPlaybackMs = */ 1_500,
-                /* bufferForPlaybackAfterRebufferMs = */ 2_500
+                /* bufferForPlaybackAfterRebufferMs = */ if (constrained) 2_000 else 2_500
             )
-            .setTargetBufferBytes(35 * 1024 * 1024)
+            .setTargetBufferBytes(if (constrained) 24 * 1024 * 1024 else 35 * 1024 * 1024)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 

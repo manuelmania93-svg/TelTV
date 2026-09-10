@@ -69,7 +69,11 @@ class TelTvApp : Application(), ImageLoaderFactory {
             .bitmapConfig(Bitmap.Config.RGB_565)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.15)
+                    .maxSizeBytes(
+                        deviceProfile.imageMemoryCacheBytes
+                            .coerceAtMost(Int.MAX_VALUE.toLong())
+                            .toInt()
+                    )
                     .build()
             }
             .diskCache {

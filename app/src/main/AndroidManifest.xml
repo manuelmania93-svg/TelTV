@@ -27,7 +27,6 @@
          for the full rationale and the API<24 caveat). Do not remove this flag while minSdk is
          21, or SMB/WebDAV browsing breaks on older TV boxes. -->
     <application
-        android:largeHeap="true"
         android:hardwareAccelerated="true"
         android:name=".TelTvApp"
         android:allowBackup="false"
