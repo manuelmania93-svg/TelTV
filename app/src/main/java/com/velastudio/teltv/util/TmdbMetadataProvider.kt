@@ -18,7 +18,8 @@ data class TmdbMetadata(
 
 object TmdbMetadataProvider {
     private val client = OkHttpClient.Builder().build()
-    private val cache = ConcurrentHashMap<String, TmdbMetadata?>()
+    private val EMPTY_META = TmdbMetadata(null, null, null, null, null)
+    private val cache = ConcurrentHashMap<String, TmdbMetadata>()
     private const val API_KEY = "e6931fc8ba77a2818c3a9f931e088b3f"
     private const val IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
@@ -30,10 +31,13 @@ object TmdbMetadataProvider {
         return if (stripped.isNotBlank()) stripped else clean
     }
 
-    suspend fun getMetadata(title: String): TmdbMetadata? {
-        val query = extractQuery(title)
+    suspend fun getMetadata(rawTitle: String): TmdbMetadata? {
+        val query = extractQuery(rawTitle)
         if (query.isBlank()) return null
-        if (cache.containsKey(query)) return cache[query]
+        val cached = cache[query]
+        if (cached != null) {
+            return if (cached === EMPTY_META) null else cached
+        }
 
         return withContext(Dispatchers.IO) {
             try {
@@ -42,14 +46,20 @@ object TmdbMetadataProvider {
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
                 if (!response.isSuccessful) {
-                    cache[query] = null
+                    cache[query] = EMPTY_META
                     return@withContext null
                 }
-                val body = response.body?.string() ?: return@withContext null
+                val body = response.body?.string() ?: run {
+                    cache[query] = EMPTY_META
+                    return@withContext null
+                }
                 val json = JSONObject(body)
-                val results = json.optJSONArray("results") ?: return@withContext null
+                val results = json.optJSONArray("results") ?: run {
+                    cache[query] = EMPTY_META
+                    return@withContext null
+                }
                 if (results.length() == 0) {
-                    cache[query] = null
+                    cache[query] = EMPTY_META
                     return@withContext null
                 }
                 val first = results.getJSONObject(0)
@@ -70,7 +80,7 @@ object TmdbMetadataProvider {
                 cache[query] = meta
                 meta
             } catch (e: Exception) {
-                cache[query] = null
+                cache[query] = EMPTY_META
                 null
             }
         }
