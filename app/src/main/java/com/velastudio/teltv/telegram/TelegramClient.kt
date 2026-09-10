@@ -134,56 +134,25 @@ class TelegramClient(private val context: Context) {
      * reading folder info off the `UpdateChatFolders` update instead.
      */
     suspend fun getChatFolders(): List<TdApi.ChatFolderInfo> {
-        if (_cachedFolders.isEmpty()) {
-            kotlinx.coroutines.delay(600)
+        var attempts = 0
+        while (_cachedFolders.isEmpty() && attempts < 12) {
+            kotlinx.coroutines.delay(250)
+            attempts++
         }
         return _cachedFolders.toList()
     }
 
     /**
-     * Chats pinned in the main list OR inside any folder, filtered to channels/supergroups only.
-     *
-     * Fetched with bounded concurrency (8 in-flight `GetChat` calls) instead of one at a time --
-     * on an account with a few hundred chats, a serial loop here is the difference between
-     * "Home appears in half a second" and "Home spins for several seconds every cold start",
-     * which matters even more on a TV box where that spinner is the first thing you see.
+     * Chats pinned in the main list OR inside any folder, including channels and groups.
      */
-    
-    /**
-     * Fetches all channels and video supergroups available in the account,
-     * sorted so pinned chats come first, followed by active channels.
-     */
-    suspend fun getAllChannels(limit: Int = 40): List<TdApi.Chat> = coroutineScope {
-        runCatching { send(TdApi.LoadChats(TdApi.ChatListMain(), limit)) }
-        val chats = runCatching { send(TdApi.GetChats(TdApi.ChatListMain(), limit)) as TdApi.Chats }.getOrNull()
-        if (chats == null) return@coroutineScope emptyList()
+    suspend fun getPinnedChannels(): List<TdApi.Chat> = coroutineScope {
+        // LoadChats returns 404 when all chats are already loaded -- ignore it safely
+        runCatching { send(TdApi.LoadChats(TdApi.ChatListMain(), 100)) }
+        val chats = runCatching { send(TdApi.GetChats(TdApi.ChatListMain(), 100)) as TdApi.Chats }.getOrNull()
+            ?: return@coroutineScope emptyList()
 
         val concurrencyLimit = Semaphore(8)
         chats.chatIds
-            .map { id ->
-                async {
-                    concurrencyLimit.withPermit { send(TdApi.GetChat(id)) as TdApi.Chat }
-                }
-            }
-            .map { it.await() }
-            .filter { chat ->
-                (chat.type as? TdApi.ChatTypeSupergroup)?.isChannel == true ||
-                chat.type is TdApi.ChatTypeSupergroup ||
-                chat.type is TdApi.ChatTypeBasicGroup
-            }
-            .sortedWith(
-                compareByDescending<TdApi.Chat> { chat -> chat.positions.any { it.isPinned } }
-                    .thenByDescending { it.lastMessage?.date ?: 0 }
-            )
-    }
-
-        suspend fun getPinnedChannels(): List<TdApi.Chat> = coroutineScope {
-        runCatching { send(TdApi.LoadChats(TdApi.ChatListMain(), 40)) }
-        val chatsResult = runCatching { send(TdApi.GetChats(TdApi.ChatListMain(), 40)) as TdApi.Chats }.getOrNull()
-        val chatIds = chatsResult?.chatIds ?: longArrayOf()
-
-        val concurrencyLimit = Semaphore(8)
-        chatIds
             .map { id ->
                 async {
                     concurrencyLimit.withPermit {
@@ -193,22 +162,12 @@ class TelegramClient(private val context: Context) {
             }
             .mapNotNull { it.await() }
             .filter { chat ->
-                val isPinned = chat.positions.any { it.isPinned }
-                val isEligible = (chat.type as? TdApi.ChatTypeSupergroup)?.isChannel == true ||
-                                chat.type is TdApi.ChatTypeSupergroup ||
-                                chat.type is TdApi.ChatTypeBasicGroup
-                isEligible && isPinned
+                chat.positions.any { it.isPinned }
             }
     }
 
     /**
-     * Every channel inside every folder (surfaces folder-organized libraries VelaTV can't see).
-     *
-     * `TdApi.ChatListFolder(folderId)` is the `ChatList` variant that scopes `GetChats` to one
-     * folder, the same way [getPinnedChannels] scopes it with `ChatListMain()` -- confirmed
-     * against the current TDLib docs (classtd_1_1td__api_1_1chat_list_folder.html). Folders are
-     * fetched sequentially (there are rarely more than a handful), but the `GetChat` calls
-     * within each folder use the same bounded-concurrency pattern as [getPinnedChannels].
+     * Every channel and media group inside every folder configured in Telegram.
      */
     suspend fun getChannelsInFolders(): Map<TdApi.ChatFolderInfo, List<TdApi.Chat>> = coroutineScope {
         val folders = getChatFolders()
@@ -216,20 +175,25 @@ class TelegramClient(private val context: Context) {
 
         val concurrencyLimit = Semaphore(8)
         folders.associateWith { folder ->
-            send(TdApi.LoadChats(TdApi.ChatListFolder(folder.id), 200))
-            val chats = send(TdApi.GetChats(TdApi.ChatListFolder(folder.id), 200)) as TdApi.Chats
+            runCatching { send(TdApi.LoadChats(TdApi.ChatListFolder(folder.id), 100)) }
+            val chats = runCatching { send(TdApi.GetChats(TdApi.ChatListFolder(folder.id), 100)) as TdApi.Chats }.getOrNull()
+                ?: return@associateWith emptyList<TdApi.Chat>()
+
             chats.chatIds
                 .map { id ->
                     async {
-                        concurrencyLimit.withPermit { send(TdApi.GetChat(id)) as TdApi.Chat }
+                        concurrencyLimit.withPermit {
+                            runCatching { send(TdApi.GetChat(id)) as TdApi.Chat }.getOrNull()
+                        }
                     }
                 }
-                .map { it.await() }
-                .filter { chat -> (chat.type as? TdApi.ChatTypeSupergroup)?.isChannel == true }
+                .mapNotNull { it.await() }
+                .filter { chat ->
+                    (chat.type as? TdApi.ChatTypeSupergroup) != null || chat.type is TdApi.ChatTypeBasicGroup
+                }
         }
     }
 
-    /** Paginated video messages for a given chat, newest first -- this becomes a MediaItem list. */
     suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40): List<MediaItem> {
         val result = send(
             TdApi.SearchChatMessages(
