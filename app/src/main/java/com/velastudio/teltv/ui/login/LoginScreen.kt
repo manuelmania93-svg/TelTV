@@ -37,6 +37,8 @@ import timber.log.Timber
 import com.velastudio.teltv.ui.theme.TelTvBlack
 import com.velastudio.teltv.ui.theme.TelTvMuted
 import com.velastudio.teltv.ui.theme.TelTvPanel
+import com.velastudio.teltv.ui.theme.TelTvPanelFocused
+import com.velastudio.teltv.ui.theme.TelTvWhite
 import com.velastudio.teltv.ui.theme.TelTvYellow
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -120,54 +122,51 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(TelTvBlack)
-            .padding(40.dp),
+            .padding(horizontal = 32.dp, vertical = 24.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .widthIn(max = 920.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(TelTvPanel)
+                .padding(horizontal = 36.dp, vertical = 28.dp)
         ) {
-            // Left Column: TelTV Emblem
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
-                modifier = Modifier.width(300.dp)
+                modifier = Modifier.width(190.dp)
             ) {
                 Image(
                     painter = painterResource(R.drawable.brand_poster),
                     contentDescription = "TelTV Emblem",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(220.dp)
+                        .width(150.dp)
+                        .height(230.dp)
                         .clip(RoundedCornerShape(20.dp))
                 )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "TelTV",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = TelTvYellow
-                )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     text = "Telegram Streaming for Android TV",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFB0BEC5)
+                    color = TelTvMuted,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
 
-            Spacer(Modifier.width(60.dp))
+            Spacer(Modifier.width(44.dp))
 
-            // Right Column: QR Code / Phone Login
             Column(
-                modifier = Modifier.widthIn(max = 480.dp),
+                modifier = Modifier.widthIn(min = 360.dp, max = 470.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Sign in to Telegram",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
+                    color = TelTvWhite,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(16.dp))
@@ -188,20 +187,20 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                             }
                         },
                         colors = ButtonDefaults.colors(
-                            containerColor = if (!isPhoneMode) Color(0xFF004D73) else Color(0xFF1E2638),
-                            focusedContainerColor = Color(0xFF29B6F6)
+                            containerColor = if (!isPhoneMode) TelTvYellow else TelTvPanelFocused,
+                            focusedContainerColor = TelTvYellow
                         )
                     ) {
-                        Text(if (!isPhoneMode) "● QR Code" else "QR Code", color = Color.White)
+                        Text(if (!isPhoneMode) "● QR Code" else "QR Code", color = if (!isPhoneMode) TelTvBlack else TelTvWhite)
                     }
                     Button(
                         onClick = { preferPhone = true },
                         colors = ButtonDefaults.colors(
-                            containerColor = if (isPhoneMode) Color(0xFF004D73) else Color(0xFF1E2638),
-                            focusedContainerColor = Color(0xFF29B6F6)
+                            containerColor = if (isPhoneMode) TelTvYellow else TelTvPanelFocused,
+                            focusedContainerColor = TelTvYellow
                         )
                     ) {
-                        Text(if (isPhoneMode) "● Phone Number" else "Phone Number", color = Color.White)
+                        Text(if (isPhoneMode) "● Phone Number" else "Phone Number", color = if (isPhoneMode) TelTvBlack else TelTvWhite)
                     }
                 }
 
