@@ -4,6 +4,8 @@ import androidx.media3.common.C
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSpec
 import org.drinkless.tdlib.TdApi
+import timber.log.Timber
+import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 import java.util.concurrent.CountDownLatch
@@ -23,20 +25,22 @@ class TdLibDataSource(
         val position = dataSpec.position
         readPosition = position
 
-        // 1. Fetch file info for size
-        val tdFile = client.downloadRangeBlocking(fileId, position, 2 * 1024 * 1024L)
-        localPath = tdFile.local.path.takeIf { it.isNotBlank() }
+        // 1. Ask TDLib to prioritize downloading from position
+        val initialFile = client.downloadRangeBlocking(fileId, position, 4 * 1024 * 1024L)
+        val totalSize = if (initialFile.size > 0) initialFile.size else 5L * 1024 * 1024 * 1024
 
-        val totalSize = tdFile.size
         bytesRemaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) {
             dataSpec.length
         } else {
             (totalSize - position).coerceAtLeast(0)
         }
 
-        if (localPath != null) {
+        localPath = initialFile.local?.path?.takeIf { it.isNotBlank() }
+
+        // 2. Open file if already present
+        localPath?.let { path ->
             runCatching {
-                file = RandomAccessFile(localPath, "r").also { it.seek(position) }
+                file = RandomAccessFile(File(path), "r").also { it.seek(position) }
             }
         }
 
@@ -49,21 +53,34 @@ class TdLibDataSource(
         if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
 
         val toRead = minOf(length.toLong(), bytesRemaining).toInt()
-        val currentFile = file
 
-        if (currentFile != null) {
-            // Read from growing local sparse file
-            var read = currentFile.read(buffer, offset, toRead)
-            if (read == -1) {
-                // Wait briefly for chunk download
-                client.downloadRangeBlocking(fileId, readPosition, 2 * 1024 * 1024L)
-                read = currentFile.read(buffer, offset, toRead)
+        // If file not open yet, wait up to 4s for TDLib to create the sparse file
+        if (file == null) {
+            val updated = client.downloadRangeBlocking(fileId, readPosition, 2 * 1024 * 1024L)
+            val path = updated.local?.path?.takeIf { it.isNotBlank() }
+            if (path != null) {
+                localPath = path
+                runCatching {
+                    file = RandomAccessFile(File(path), "r").also { it.seek(readPosition) }
+                }
             }
-            if (read > 0) {
-                bytesRemaining -= read
-                readPosition += read
-                bytesTransferred(read)
-                return read
+        }
+
+        val currentRaf = file
+        if (currentRaf != null) {
+            var attempts = 0
+            while (attempts < 20) {
+                val read = currentRaf.read(buffer, offset, toRead)
+                if (read > 0) {
+                    bytesRemaining -= read
+                    readPosition += read
+                    bytesTransferred(read)
+                    return read
+                }
+                // If EOF reached, wait 150ms for next chunk to arrive over network
+                Thread.sleep(150)
+                client.triggerChunkDownload(fileId, readPosition, 2 * 1024 * 1024L)
+                attempts++
             }
         }
 
@@ -73,7 +90,7 @@ class TdLibDataSource(
     override fun getUri() = null
 
     override fun close() {
-        file?.close()
+        runCatching { file?.close() }
         file = null
     }
 }
@@ -81,17 +98,25 @@ class TdLibDataSource(
 class RawTdClient(private val telegram: TelegramClient) {
     fun downloadRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
         val latch = CountDownLatch(1)
-        var resultFile: TdApi.File? = null
+        var result: TdApi.File = telegram.fileCache[fileId] ?: TdApi.File().apply { id = fileId }
+
+        val listener: (TdApi.File) -> Unit = { f ->
+            if (!f.local?.path.isNullOrBlank()) {
+                result = f
+                latch.countDown()
+            }
+        }
+
+        telegram.registerFileListener(fileId, listener)
+        triggerChunkDownload(fileId, offset, limit)
+        latch.await(3500, TimeUnit.MILLISECONDS)
+        telegram.unregisterFileListener(fileId, listener)
+
+        return telegram.fileCache[fileId] ?: result
+    }
+
+    fun triggerChunkDownload(fileId: Int, offset: Long, limit: Long) {
         val chunkLimit = if (limit <= 0) 2 * 1024 * 1024L else minOf(limit, 4 * 1024 * 1024L)
-        telegram.downloadFileRangeSync(fileId, offset, chunkLimit) { f ->
-            resultFile = f
-            latch.countDown()
-        }
-        latch.await(3, TimeUnit.SECONDS)
-        return resultFile ?: TdApi.File().apply {
-            id = fileId
-            size = 10L * 1024 * 1024 * 1024
-            local = TdApi.LocalFile()
-        }
+        telegram.executeAsync(TdApi.DownloadFile(fileId, 32, offset, chunkLimit, false))
     }
 }

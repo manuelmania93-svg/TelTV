@@ -1,3 +1,4 @@
+import java.util.concurrent.ConcurrentHashMap
 package com.velastudio.teltv.telegram
 
 import android.content.Context
@@ -33,6 +34,23 @@ import kotlin.coroutines.resumeWithException
  *      alongside this file (or as a module) so `org.drinkless.tdlib.*` resolves.
  */
 class TelegramClient(private val context: Context) {
+
+    fun executeAsync(fn: TdApi.Function<*>) {
+        client?.send(fn) {}
+    }
+
+    val fileCache = ConcurrentHashMap<Int, TdApi.File>()
+    private val fileListeners = ConcurrentHashMap<Int, MutableList<(TdApi.File) -> Unit>>()
+
+    fun registerFileListener(fileId: Int, listener: (TdApi.File) -> Unit) {
+        fileCache[fileId]?.let(listener)
+        fileListeners.getOrPut(fileId) { java.util.concurrent.CopyOnWriteArrayList() }.add(listener)
+    }
+
+    fun unregisterFileListener(fileId: Int, listener: (TdApi.File) -> Unit) {
+        fileListeners[fileId]?.remove(listener)
+    }
+
     private val _cachedFolders = java.util.concurrent.CopyOnWriteArrayList<TdApi.ChatFolderInfo>()
 
     private var client: Client? = null
@@ -47,6 +65,12 @@ class TelegramClient(private val context: Context) {
 
     /** Emits authorization states so the UI can drive phone-number / code / 2FA screens. */
     fun authorizationFlow(): Flow<TdApi.AuthorizationState> = callbackFlow {
+        authState?.let { trySend(it) }
+        val existing = client
+        if (existing != null) {
+            awaitClose { }
+            return@callbackFlow
+        }
         val c = Client.create(
             { update ->
                 when (update) {
@@ -58,6 +82,11 @@ class TelegramClient(private val context: Context) {
                         _cachedFolders.clear()
                         _cachedFolders.addAll(update.chatFolders)
                         Timber.i("TDLib received %d chat folders", update.chatFolders.size)
+                    }
+                    is TdApi.UpdateFile -> {
+                        val f = update.file
+                        fileCache[f.id] = f
+                        fileListeners[f.id]?.forEach { it(f) }
                     }
                 }
             },
