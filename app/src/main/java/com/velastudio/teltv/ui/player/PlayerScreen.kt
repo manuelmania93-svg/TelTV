@@ -308,6 +308,9 @@ fun PlayerScreen(
             factory = { ctx: Context ->
                 PlayerView(ctx).apply {
                     useController = false
+                    keepScreenOn = true
+                    keepScreenOn = true
+                    keepScreenOn = true
                     subtitleView?.apply {
                         setFractionalTextSize(0.065f) // Large readable subtitles for TV
                         setStyle(

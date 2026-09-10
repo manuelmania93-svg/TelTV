@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
                             val dynamicFolderRows = folderMap.mapNotNull { (folderInfo, chatList) ->
                                 if (chatList.isEmpty()) null
                                 else HomeRow(
-                                    folderInfo.title,
+                                    (folderInfo.name?.text?.text ?: "Folder"),
                                     chatList.map { chat ->
                                         HomeEntry(
                                             id = chat.id.toString(),
