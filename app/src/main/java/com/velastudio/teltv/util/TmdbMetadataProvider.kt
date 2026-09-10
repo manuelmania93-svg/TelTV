@@ -1,6 +1,9 @@
 package com.velastudio.teltv.util
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,6 +23,7 @@ object TmdbMetadataProvider {
     private val client = OkHttpClient.Builder().build()
     private val EMPTY_META = TmdbMetadata(null, null, null, null, null)
     private val cache = ConcurrentHashMap<String, TmdbMetadata>()
+    private val throttle = Semaphore(2)
     private const val API_KEY = "e6931fc8ba77a2818c3a9f931e088b3f"
     private const val IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
@@ -40,6 +44,8 @@ object TmdbMetadataProvider {
         }
 
         return withContext(Dispatchers.IO) {
+        delay(120) // Debounce so fast scrolling skips network
+        throttle.withPermit {
             try {
                 val encoded = URLEncoder.encode(query, "UTF-8")
                 val url = "https://api.themoviedb.org/3/search/multi?api_key=$API_KEY&query=$encoded"
@@ -83,6 +89,7 @@ object TmdbMetadataProvider {
                 cache[query] = EMPTY_META
                 null
             }
+        }
         }
     }
 }
