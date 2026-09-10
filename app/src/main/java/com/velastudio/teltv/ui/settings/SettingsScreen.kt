@@ -68,9 +68,7 @@ fun ClearCacheConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
 fun CacheSettingsSection(
     currentSizeBytes: Long,
     autoClearEnabled: Boolean,
-    limitGb: Float,
     onToggleAutoClear: (Boolean) -> Unit,
-    onLimitChanged: (Float) -> Unit,
     onClearNow: () -> Unit
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -109,31 +107,9 @@ fun CacheSettingsSection(
 
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Auto-clear cache when limit is reached", color = Color.White)
+                Text("Emergency auto-clear when TV storage is almost full", color = Color.White)
                 Spacer(Modifier.width(16.dp))
                 Switch(checked = autoClearEnabled, onCheckedChange = onToggleAutoClear)
-            }
-
-            if (autoClearEnabled) {
-                Spacer(Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Limit: ", color = Color(0xFFB0BEC5))
-                    Spacer(Modifier.width(12.dp))
-                    StepButton(label = "−", enabled = limitGb > 0.5f) {
-                        onLimitChanged((limitGb - 0.5f).coerceIn(0.5f, 20f))
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Text(
-                        "${"%.1f".format(limitGb)} GB",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.width(16.dp))
-                    StepButton(label = "+", enabled = limitGb < 20f) {
-                        onLimitChanged((limitGb + 0.5f).coerceIn(0.5f, 20f))
-                    }
-                }
             }
         }
     }

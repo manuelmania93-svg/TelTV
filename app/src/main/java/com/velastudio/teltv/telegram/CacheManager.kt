@@ -18,6 +18,7 @@ class CacheManager(private val telegramSend: suspend (TdApi.Function<*>) -> TdAp
 
     companion object {
         const val DEFAULT_LIMIT_BYTES = 500L * 1024 * 1024 // 500MB max streaming cache // 5 GB, matches Manny's default
+        const val EMERGENCY_FREE_SPACE_BYTES = 512L * 1024 * 1024
     }
 
     /** Current on-disk cache size, for display in Settings. */
@@ -57,6 +58,13 @@ class CacheManager(private val telegramSend: suspend (TdApi.Function<*>) -> TdAp
     suspend fun maybeAutoClear(limitBytes: Long = DEFAULT_LIMIT_BYTES) {
         if (getCurrentSizeBytes() > limitBytes) {
             trimToLimit(limitBytes)
+        }
+    }
+
+    /** Clears the cache only when the device itself is almost out of usable storage. */
+    suspend fun maybeEmergencyClear(usableSpaceBytes: Long) {
+        if (usableSpaceBytes < EMERGENCY_FREE_SPACE_BYTES) {
+            clearAllNow()
         }
     }
 }

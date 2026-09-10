@@ -9,8 +9,8 @@ import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
 /**
- * Runs [CacheManager.maybeAutoClear] periodically in the background (not just when Settings
- * happens to be open), so a channel binge that fills the cache doesn't leave the app
+ * Runs the emergency cache check periodically in the background (not just when Settings
+ * happens to be open), so the TV can recover when its storage becomes critically full.
  * stuck downloading-then-immediately-evicting on the next launch. WorkManager, not a raw
  * coroutine/alarm, so this survives process death and respects battery/doze on boxes that have
  * one (some Android TV sticks do idle-optimize even though they're plugged in).
@@ -22,10 +22,9 @@ class CacheTrimWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val enabled = prefs.autoClearEnabled.first()
         if (!enabled) return Result.success()
 
-        val limitBytes = prefs.limitBytes.first()
         return runCatching {
             val cacheManager = CacheManager(app.telegramClient::execute)
-            cacheManager.maybeAutoClear(limitBytes)
+            cacheManager.maybeEmergencyClear(applicationContext.filesDir.usableSpace)
         }.fold(
             onSuccess = { Result.success() },
             // Transient TDLib/network hiccup -- WorkManager will retry with backoff rather than

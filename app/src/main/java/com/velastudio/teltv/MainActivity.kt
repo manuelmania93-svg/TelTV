@@ -30,7 +30,6 @@ import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
 import com.velastudio.teltv.ui.player.PlaybackPrefs
 import com.velastudio.teltv.ui.theme.TelTvTheme
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.net.URLDecoder
@@ -113,10 +112,8 @@ class MainActivity : ComponentActivity() {
 
                         LaunchedEffect(Unit) {
                             runCatching {
-                                val cachePrefs = com.velastudio.teltv.worker.CachePrefs(app)
-                                val limit = cachePrefs.limitBytes.first()
                                 com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute)
-                                    .maybeAutoClear(limit)
+                                    .maybeEmergencyClear(app.filesDir.usableSpace)
                             }.onFailure { Timber.w(it, "Foreground cache trim skipped") }
 
                             val watchStates = app.database.watchStateDao().continueWatching()
@@ -400,10 +397,6 @@ class MainActivity : ComponentActivity() {
                         // DataStore that CacheTrimWorker reads in the background -- previously
                         // this was local `remember` state that the worker never saw.
                         val autoClearEnabled by cachePrefs.autoClearEnabled.collectAsState(initial = true)
-                        val limitBytes by cachePrefs.limitBytes.collectAsState(
-                            initial = com.velastudio.teltv.telegram.CacheManager.DEFAULT_LIMIT_BYTES
-                        )
-                        val limitGb = limitBytes / (1024f * 1024f * 1024f)
                         val playbackPrefs = remember { PlaybackPrefs(app) }
                         val skipMs by playbackPrefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
 
@@ -418,13 +411,7 @@ class MainActivity : ComponentActivity() {
                             CacheSettingsSection(
                                 currentSizeBytes = cacheSize,
                                 autoClearEnabled = autoClearEnabled,
-                                limitGb = limitGb,
                                 onToggleAutoClear = { scope.launch { cachePrefs.setAutoClearEnabled(it) } },
-                                onLimitChanged = { newLimitGb ->
-                                    scope.launch {
-                                        cachePrefs.setLimitBytes((newLimitGb * 1024 * 1024 * 1024).toLong())
-                                    }
-                                },
                                 onClearNow = {
                                     scope.launch {
                                         com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).clearAllNow()
