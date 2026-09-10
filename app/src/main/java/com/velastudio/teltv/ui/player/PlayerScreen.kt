@@ -107,10 +107,24 @@ fun PlayerScreen(
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isBuffering = false
-                Timber.e(error, "Playback failed: code=%s, cause=%s", error.errorCodeName, error.cause?.message)
-                playerErrorMessage = error.cause?.message?.takeIf { it.isNotBlank() }
-                    ?: error.message?.takeIf { it.isNotBlank() }
-                    ?: error.errorCodeName
+                Timber.e(
+                    error,
+                    "Playback failed: code=%s, uri=%s, fileId=%s",
+                    error.errorCodeName,
+                    resolvedUri(),
+                    fileId
+                )
+                playerErrorMessage = buildString {
+                    append(error.errorCodeName)
+                    error.cause?.let { cause ->
+                        append(": ")
+                        append(cause::class.java.simpleName)
+                        cause.message?.takeIf { it.isNotBlank() }?.let {
+                            append(" - ")
+                            append(it)
+                        }
+                    }
+                }
             }
         }
 
