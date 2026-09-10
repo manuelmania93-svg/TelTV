@@ -29,6 +29,12 @@ sizing) are actually solved here, not hand-waved.
 
 ## Setup
 
+### 0. Use a supported JDK
+
+Use JDK 17 for Android Studio and Gradle. The project targets Java 17, and the
+current Android Gradle Plugin/Gradle combination is not guaranteed to run on
+newer JDK releases.
+
 ### 1. Get your own Telegram API credentials
 Go to https://my.telegram.org → API development tools → create an app. You'll get an `api_id`
 and `api_hash`. Put them in `TelegramClient.kt` (`API_ID`, `API_HASH`). Never commit real values

@@ -18,6 +18,8 @@ import org.drinkless.tdlib.TdApi
 import timber.log.Timber
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Thin coroutine wrapper around the OFFICIAL TDLib JNI client (org.drinkless.tdlib).
@@ -55,6 +57,23 @@ class TelegramClient(private val context: Context) {
 
     fun executeAsync(fn: TdApi.Function<*>) {
         client?.send(fn) {}
+    }
+
+    fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File? {
+        val c = client ?: return null
+        val safeLimit = limit.coerceIn(1L, 4L * 1024L * 1024L)
+        val latch = CountDownLatch(1)
+        var result: TdApi.File? = null
+
+        c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
+            if (response is TdApi.File) {
+                result = response
+                fileCache[fileId] = response
+            }
+            latch.countDown()
+        }
+        latch.await(30, TimeUnit.SECONDS)
+        return result ?: fileCache[fileId]
     }
 
     val fileCache = ConcurrentHashMap<Int, TdApi.File>()

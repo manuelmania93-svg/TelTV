@@ -29,6 +29,7 @@ import com.velastudio.teltv.player.PlaybackService
 import com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory
 import com.velastudio.teltv.util.MediaTitleCleaner
 import kotlinx.coroutines.delay
+import timber.log.Timber
 
 private const val CONTROLS_AUTO_HIDE_MS = 4000L
 private const val POSITION_SAVE_INTERVAL_MS = 5000L
@@ -106,9 +107,10 @@ fun PlayerScreen(
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isBuffering = false
-                playerErrorMessage = error.errorCodeName.takeIf { it.isNotBlank() }
-                    ?: error.message
-                    ?: "Unknown playback error"
+                Timber.e(error, "Playback failed: code=%s, cause=%s", error.errorCodeName, error.cause?.message)
+                playerErrorMessage = error.cause?.message?.takeIf { it.isNotBlank() }
+                    ?: error.message?.takeIf { it.isNotBlank() }
+                    ?: error.errorCodeName
             }
         }
 
