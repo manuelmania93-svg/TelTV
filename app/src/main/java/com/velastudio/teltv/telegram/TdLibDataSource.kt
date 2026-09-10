@@ -23,7 +23,7 @@ class TdLibDataSource(
         readPosition = position
 
         // 1. Ask TDLib to prioritize downloading from position
-        val initialFile = client.downloadRangeBlocking(fileId, position, 4 * 1024 * 1024L)
+        val initialFile = downloadRangeOrThrow(position, 4 * 1024 * 1024L)
         if (initialFile.size <= 0L) {
             throw IOException("TDLib returned no size for file $fileId")
         }
@@ -35,8 +35,7 @@ class TdLibDataSource(
             (totalSize - position).coerceAtLeast(0)
         }
 
-        localPath = initialFile.local?.path?.takeIf { it.isNotBlank() }
-            ?: throw IOException("TDLib did not provide a local path for file $fileId")
+        localPath = localPathOrThrow(initialFile)
 
         // 2. Open file if already present
         file = RandomAccessFile(File(localPath!!), "r").also { it.seek(position) }
@@ -66,7 +65,7 @@ class TdLibDataSource(
 
             file?.close()
             file = null
-            val updated = client.downloadRangeBlocking(fileId, readPosition, 2 * 1024 * 1024L)
+            val updated = downloadRangeOrThrow(readPosition, 2 * 1024 * 1024L)
             val path = updated.local?.path?.takeIf { it.isNotBlank() }
             if (path != null) {
                 localPath = path
@@ -84,6 +83,16 @@ class TdLibDataSource(
         runCatching { file?.close() }
         file = null
     }
+
+    private fun downloadRangeOrThrow(position: Long, limit: Long): TdApi.File = try {
+        client.downloadRangeBlocking(fileId, position, limit)
+    } catch (error: NullPointerException) {
+        throw IOException("TDLib returned an incomplete file response for file $fileId at offset $position", error)
+    }
+
+    private fun localPathOrThrow(downloadedFile: TdApi.File): String =
+        downloadedFile.local?.path?.takeIf { it.isNotBlank() }
+            ?: throw IOException("TDLib did not provide a local path for file $fileId")
 }
 
 class RawTdClient(private val telegram: TelegramClient) {
