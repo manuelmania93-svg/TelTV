@@ -73,9 +73,8 @@ Real device: enable Developer Options + ADB debugging on your TV box, `adb conne
   use — no "wait for the whole video to download" delay.
 - **Cache management** (`CacheManager.kt`): rather than reinventing an LRU cache, this calls
   TDLib's own `OptimizeStorage`, which already knows every file it has downloaded, its size, and
-  last-access time. "Clear cache now" = optimize down to 0 bytes. Auto-clear = check current size
-  (`GetStorageStatisticsFast`) on app foreground / after each playback session, and if it's over
-  your configured limit (default 5 GB, adjustable 1–20 GB in Settings), trim back down to it.
+  last-access time. "Clear cache now" = optimize down to 0 bytes. Automatic cleanup is emergency
+  only: it clears the cache when the TV has less than 512 MB of usable storage remaining.
 - **NAS/WebDAV/local** (`SmbSourceClient.kt`, `WebDavSourceClient.kt`): same fields as VelaTV's
   "Add a source" flow (host/port/share/folder for SMB; server URL/user/pass for WebDAV), kept as
   a secondary source type alongside your Telegram account.

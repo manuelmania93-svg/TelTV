@@ -11,6 +11,7 @@ local.properties
 # Generated and local secrets
 *.keystore
 *.jks
+*.b64
 
 # OS/editor files
 .DS_Store
