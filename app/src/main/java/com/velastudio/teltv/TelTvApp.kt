@@ -31,6 +31,18 @@ class TelTvApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
+        // Global TV Crash Handler: Catch fatal exceptions and log them
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("TelTV_CRASH", "FATAL CRASH DETECTED: ", throwable)
+            // Save last crash to SharedPreferences so the app can display it on next boot
+            val prefs = getSharedPreferences("teltv_crash", android.content.Context.MODE_PRIVATE)
+            val stackTrace = android.util.Log.getStackTraceString(throwable)
+            prefs.edit().putString("last_crash", stackTrace).commit()
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
+
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
             enableStrictMode()
