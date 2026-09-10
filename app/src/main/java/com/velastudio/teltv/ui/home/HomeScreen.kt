@@ -8,9 +8,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.ViewHeadline
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -35,6 +39,8 @@ data class ContinueWatchingEntry(
     val thumbnailFileId: Int? = null
 )
 
+enum class HomeFilterMode { ALL, PINNED_ONLY, FOLDERS_ONLY }
+
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -55,9 +61,13 @@ fun HomeScreen(
     var updateInfo by remember { mutableStateOf<com.velastudio.teltv.util.UpdateInfo?>(null) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
+    var filterMode by remember { mutableStateOf(HomeFilterMode.ALL) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    androidx.activity.compose.BackHandler { (context as? android.app.Activity)?.finishAffinity() }
+
+    androidx.activity.compose.BackHandler {
+        (context as? android.app.Activity)?.finishAffinity()
+    }
 
     LaunchedEffect(Unit) {
         updateInfo = com.velastudio.teltv.util.AppUpdater.checkForUpdate()
@@ -68,14 +78,12 @@ fun HomeScreen(
             .fillMaxSize()
             .focusRestorer()
             .padding(horizontal = 40.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // App Header Row
+        // App Header
         item {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -133,8 +141,8 @@ fun HomeScreen(
                             focusedContainerColor = Color(0xFFE53935)
                         )
                     ) {
-                        Icon(Icons.Filled.DeleteSweep, contentDescription = "Exit App", tint = Color.White)
-                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Exit App", tint = Color.White)
+                        Spacer(Modifier.width(8.dp))
                         Text("Exit", color = Color.White)
                     }
 
@@ -153,48 +161,81 @@ fun HomeScreen(
             }
         }
 
-        // Continue Watching Row
-        if (continueWatching.isNotEmpty()) {
+        // View Filter Tabs: All / Pinned Only / Folders Only
+        item {
+            Row(
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                FilterTabButton(
+                    label = "All",
+                    icon = Icons.Filled.ViewHeadline,
+                    selected = filterMode == HomeFilterMode.ALL,
+                    onClick = { filterMode = HomeFilterMode.ALL }
+                )
+                FilterTabButton(
+                    label = "Pinned Only",
+                    icon = Icons.Filled.PushPin,
+                    selected = filterMode == HomeFilterMode.PINNED_ONLY,
+                    onClick = { filterMode = HomeFilterMode.PINNED_ONLY }
+                )
+                FilterTabButton(
+                    label = "Folders Only",
+                    icon = Icons.Filled.Folder,
+                    selected = filterMode == HomeFilterMode.FOLDERS_ONLY,
+                    onClick = { filterMode = HomeFilterMode.FOLDERS_ONLY }
+                )
+            }
+        }
+
+        // Continue Watching Row (hidden if in FOLDERS_ONLY)
+        if (filterMode != HomeFilterMode.FOLDERS_ONLY && continueWatching.isNotEmpty()) {
             item {
                 ContinueWatchingRow(continueWatching, thumbnailLoader, onResumeWatching)
             }
         }
 
-        // Pinned Channels Row
-        if (pinned.entries.isNotEmpty()) {
+        // Pinned Channels Row (hidden if in FOLDERS_ONLY)
+        if (filterMode != HomeFilterMode.FOLDERS_ONLY && pinned.entries.isNotEmpty()) {
             item {
                 HomeRowView(pinned, thumbnailLoader, onOpenEntry)
             }
         }
 
-        // All Channels & Groups Row
-        if (allChannels.entries.isNotEmpty()) {
+        // Chat Folders Shelves (hidden if in PINNED_ONLY)
+        if (filterMode != HomeFilterMode.PINNED_ONLY) {
+            items(folderRows) { row ->
+                if (row.entries.isNotEmpty()) {
+                    HomeRowView(row, thumbnailLoader, onOpenEntry)
+                }
+            }
+        }
+
+        // All Channels & Groups (only shown in ALL mode)
+        if (filterMode == HomeFilterMode.ALL && allChannels.entries.isNotEmpty()) {
             item {
                 HomeRowView(allChannels, thumbnailLoader, onOpenEntry)
             }
         }
 
-        // Chat Folders Rows
-        items(folderRows) { row ->
-            if (row.entries.isNotEmpty()) {
-                HomeRowView(row, thumbnailLoader, onOpenEntry)
-            }
-        }
-
         // Other Sources Row
-        if (otherSources.entries.isNotEmpty()) {
+        if (filterMode == HomeFilterMode.ALL && otherSources.entries.isNotEmpty()) {
             item {
                 HomeRowView(otherSources, thumbnailLoader, onOpenEntry)
             }
         }
 
-        // Informative Empty / Loading State
-        if (continueWatching.isEmpty() && pinned.entries.isEmpty() && allChannels.entries.isEmpty() && folderRows.isEmpty()) {
+        // Feedback / Empty state
+        val hasContent = (filterMode == HomeFilterMode.ALL && (pinned.entries.isNotEmpty() || allChannels.entries.isNotEmpty() || folderRows.isNotEmpty())) ||
+                         (filterMode == HomeFilterMode.PINNED_ONLY && pinned.entries.isNotEmpty()) ||
+                         (filterMode == HomeFilterMode.FOLDERS_ONLY && folderRows.isNotEmpty())
+
+        if (!hasContent && !isLoading) {
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp)
+                        .height(260.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFF161D27))
                         .padding(32.dp),
@@ -205,19 +246,26 @@ fun HomeScreen(
                             Icons.Filled.Tv,
                             contentDescription = null,
                             tint = Color(0xFF29B6F6),
-                            modifier = Modifier.size(64.dp)
+                            modifier = Modifier.size(56.dp)
                         )
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(14.dp))
                         Text(
-                            text = if (isLoading) "Loading your Telegram channels…" else "No Channels Found",
+                            text = when (filterMode) {
+                                HomeFilterMode.PINNED_ONLY -> "No Pinned Channels Found"
+                                HomeFilterMode.FOLDERS_ONLY -> "No Chat Folders Found"
+                                else -> "No Channels Found"
+                            },
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            text = if (isLoading) "Please wait a moment while TDLib syncs your chats."
-                                   else "Join Telegram channels or groups with videos on your phone, then return here!",
+                            text = when (filterMode) {
+                                HomeFilterMode.PINNED_ONLY -> "Pin your favorite movie or media channels in Telegram to see them here!"
+                                HomeFilterMode.FOLDERS_ONLY -> "Create folders (e.g. Movies, Series) in Telegram Settings > Folders."
+                                else -> "Join channels with videos to start streaming!"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFFB0BEC5)
                         )
@@ -253,6 +301,30 @@ fun HomeScreen(
     }
 }
 
+@Composable
+private fun FilterTabButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.colors(
+            containerColor = if (selected) Color(0xFF004D73) else Color(0xFF1E2638),
+            focusedContainerColor = Color(0xFF29B6F6)
+        )
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = label,
+            color = Color.White,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ContinueWatchingRow(
@@ -275,6 +347,7 @@ private fun ContinueWatchingRow(
                     thumbnailFileId = entry.thumbnailFileId,
                     thumbnailLoader = thumbnailLoader,
                     resumeFraction = entry.progressFraction,
+                    enableTmdb = true,
                     onClick = { onResumeWatching(entry.mediaId) }
                 )
             }
