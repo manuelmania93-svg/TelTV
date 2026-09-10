@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
@@ -24,10 +25,19 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.tv.material3.*
+import com.velastudio.teltv.R
 import com.velastudio.teltv.telegram.ThumbnailLoader
 import com.velastudio.teltv.ui.common.PosterCard
 import com.velastudio.teltv.ui.settings.ClearCacheConfirmDialog
+import com.velastudio.teltv.ui.theme.TelTvBlack
+import com.velastudio.teltv.ui.theme.TelTvMuted
+import com.velastudio.teltv.ui.theme.TelTvPanel
+import com.velastudio.teltv.ui.theme.TelTvPanelFocused
+import com.velastudio.teltv.ui.theme.TelTvWhite
+import com.velastudio.teltv.ui.theme.TelTvYellow
 import kotlinx.coroutines.launch
 
 data class HomeRow(val title: String, val entries: List<HomeEntry>)
@@ -88,23 +98,30 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = painterResource(R.drawable.brand_poster),
+                        contentDescription = "TelTV logo",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(width = 58.dp, height = 76.dp)
+                    )
+                    Spacer(Modifier.width(14.dp))
                     Text(
                         text = "TelTV",
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF29B6F6)
+                        color = TelTvYellow
                     )
                     Spacer(Modifier.width(16.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF1E2638))
+                            .background(TelTvPanel)
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = "Telegram TV",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFB0BEC5)
+                            color = TelTvMuted
                         )
                     }
                 }
@@ -113,25 +130,25 @@ fun HomeScreen(
                     Button(
                         onClick = onOpenSearch,
                         colors = ButtonDefaults.colors(
-                            containerColor = Color(0xFF1E2638),
-                            focusedContainerColor = Color(0xFF29B6F6)
+                            containerColor = TelTvPanel,
+                            focusedContainerColor = TelTvYellow
                         )
                     ) {
-                        Icon(Icons.Filled.Search, contentDescription = "Search", tint = Color.White)
+                        Icon(Icons.Filled.Search, contentDescription = "Search", tint = TelTvWhite)
                         Spacer(Modifier.width(8.dp))
-                        Text("Search", color = Color.White)
+                        Text("Search", color = TelTvWhite)
                     }
 
                     Button(
                         onClick = onOpenSettings,
                         colors = ButtonDefaults.colors(
-                            containerColor = Color(0xFF1E2638),
-                            focusedContainerColor = Color(0xFF29B6F6)
+                            containerColor = TelTvPanel,
+                            focusedContainerColor = TelTvYellow
                         )
                     ) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = Color.White)
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = TelTvWhite)
                         Spacer(Modifier.width(8.dp))
-                        Text("Settings", color = Color.White)
+                        Text("Settings", color = TelTvWhite)
                     }
 
                     Button(

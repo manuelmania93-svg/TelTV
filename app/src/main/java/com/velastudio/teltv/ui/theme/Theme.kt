@@ -5,20 +5,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
 
+val TelTvYellow = Color(0xFFFFC107)
+val TelTvBlack = Color(0xFF000000)
+val TelTvWhite = Color(0xFFFFFFFF)
+val TelTvPanel = Color(0xFF151515)
+val TelTvPanelFocused = Color(0xFF292929)
+val TelTvMuted = Color(0xFFBDBDBD)
+
 private val TelTvColorScheme = darkColorScheme(
-    primary = Color(0xFF29B6F6),              // Bright Telegram Blue accent
-    onPrimary = Color(0xFF000000),            // High-contrast black on active buttons
-    primaryContainer = Color(0xFF004D73),
-    onPrimaryContainer = Color(0xFFE1F5FE),
-    secondary = Color(0xFFE5A93C),            // Warm gold accent
-    onSecondary = Color(0xFF000000),
-    background = Color(0xFF0B0E14),           // Deep cinematic TV black
-    onBackground = Color(0xFFF0F4F8),         // Crisp off-white
-    surface = Color(0xFF161D27),              // Elevated card surface
-    onSurface = Color(0xFFFFFFFF),            // Pure white text
-    surfaceVariant = Color(0xFF212B3A),       // Secondary card surface
-    onSurfaceVariant = Color(0xFFB0BEC5),     // Slate secondary text
-    border = Color(0xFF29B6F6)                // Highlighting border on remote focus
+    primary = TelTvYellow,
+    onPrimary = TelTvBlack,
+    primaryContainer = Color(0xFF5C4600),
+    onPrimaryContainer = TelTvWhite,
+    secondary = TelTvWhite,
+    onSecondary = TelTvBlack,
+    background = TelTvBlack,
+    onBackground = TelTvWhite,
+    surface = TelTvPanel,
+    onSurface = TelTvWhite,
+    surfaceVariant = TelTvPanelFocused,
+    onSurfaceVariant = TelTvMuted,
+    border = TelTvYellow
 )
 
 @Composable

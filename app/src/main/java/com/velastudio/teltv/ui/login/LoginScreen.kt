@@ -34,6 +34,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.drinkless.tdlib.TdApi
 import timber.log.Timber
+import com.velastudio.teltv.ui.theme.TelTvBlack
+import com.velastudio.teltv.ui.theme.TelTvMuted
+import com.velastudio.teltv.ui.theme.TelTvPanel
+import com.velastudio.teltv.ui.theme.TelTvYellow
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -75,7 +79,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0B0E14)),
+                .background(TelTvBlack),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -92,17 +96,17 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                     text = "TelTV",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF29B6F6)
+                    color = TelTvYellow
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = "Connecting to Telegram…",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFB0BEC5)
+                    color = TelTvMuted
                 )
                 Spacer(Modifier.height(20.dp))
                 androidx.compose.material3.CircularProgressIndicator(
-                    color = Color(0xFF29B6F6),
+                    color = TelTvYellow,
                     modifier = Modifier.size(28.dp),
                     strokeWidth = 3.dp
                 )
@@ -115,7 +119,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0E14))
+            .background(TelTvBlack)
             .padding(40.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -143,7 +147,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                     text = "TelTV",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF29B6F6)
+                    color = TelTvYellow
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(

@@ -25,6 +25,10 @@ import com.velastudio.teltv.telegram.ThumbnailLoader
 import com.velastudio.teltv.util.MediaTitleCleaner
 import com.velastudio.teltv.util.TmdbMetadata
 import com.velastudio.teltv.util.TmdbMetadataProvider
+import com.velastudio.teltv.ui.theme.TelTvMuted
+import com.velastudio.teltv.ui.theme.TelTvPanel
+import com.velastudio.teltv.ui.theme.TelTvPanelFocused
+import com.velastudio.teltv.ui.theme.TelTvYellow
 
 val POSTER_CARD_WIDTH = 190.dp
 val POSTER_CARD_HEIGHT = 260.dp
@@ -63,14 +67,14 @@ fun PosterCard(
         shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
         border = CardDefaults.border(
             focusedBorder = Border(
-                border = BorderStroke(3.dp, Color(0xFF29B6F6)),
+                border = BorderStroke(3.dp, TelTvYellow),
                 shape = RoundedCornerShape(12.dp)
             )
         ),
         scale = CardDefaults.scale(focusedScale = 1.05f),
         colors = CardDefaults.colors(
-            containerColor = Color(0xFF161D27),
-            focusedContainerColor = Color(0xFF212B3A)
+            containerColor = TelTvPanel,
+            focusedContainerColor = TelTvPanelFocused
         ),
         modifier = Modifier
             .width(POSTER_CARD_WIDTH)
@@ -104,7 +108,7 @@ fun PosterCard(
                     Icon(
                         imageVector = Icons.Filled.Tv,
                         contentDescription = null,
-                        tint = Color(0xFF29B6F6).copy(alpha = 0.6f),
+                            tint = TelTvYellow.copy(alpha = 0.75f),
                         modifier = Modifier.size(48.dp)
                     )
                 }
@@ -143,7 +147,7 @@ fun PosterCard(
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
                     .height(85.dp)
-                    .background(Color(0xFF161D27))
+                    .background(TelTvPanel)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.Center
             ) {
@@ -163,7 +167,7 @@ fun PosterCard(
                         text = subText,
                         maxLines = 1,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF90CAF9)
+                        color = TelTvMuted
                     )
                 }
             }

@@ -13,6 +13,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.*
+import com.velastudio.teltv.ui.theme.TelTvMuted
+import com.velastudio.teltv.ui.theme.TelTvPanel
+import com.velastudio.teltv.ui.theme.TelTvPanelFocused
+import com.velastudio.teltv.ui.theme.TelTvYellow
 
 @Composable
 fun ClearCacheConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
@@ -21,7 +25,7 @@ fun ClearCacheConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
             modifier = Modifier
                 .width(420.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF1E2638))
+                .background(TelTvPanelFocused)
                 .padding(24.dp)
         ) {
             Column {
@@ -75,7 +79,7 @@ fun CacheSettingsSection(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF161D27))
+            .background(TelTvPanel)
             .padding(24.dp)
     ) {
         Column {
@@ -88,7 +92,7 @@ fun CacheSettingsSection(
             Spacer(Modifier.height(6.dp))
             Text(
                 "Currently using: ${"%.2f".format(currentSizeBytes / 1024.0 / 1024.0 / 1024.0)} GB",
-                color = Color(0xFF29B6F6),
+                color = TelTvYellow,
                 style = MaterialTheme.typography.bodyMedium
             )
 
