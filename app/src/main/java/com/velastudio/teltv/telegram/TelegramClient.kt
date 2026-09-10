@@ -33,6 +33,7 @@ import kotlin.coroutines.resumeWithException
  *      alongside this file (or as a module) so `org.drinkless.tdlib.*` resolves.
  */
 class TelegramClient(private val context: Context) {
+    private val _cachedFolders = java.util.concurrent.CopyOnWriteArrayList<TdApi.ChatFolderInfo>()
 
     private var client: Client? = null
     var authState: TdApi.AuthorizationState? = null
@@ -48,9 +49,16 @@ class TelegramClient(private val context: Context) {
     fun authorizationFlow(): Flow<TdApi.AuthorizationState> = callbackFlow {
         val c = Client.create(
             { update ->
-                if (update is TdApi.UpdateAuthorizationState) {
-                    authState = update.authorizationState
-                    trySend(update.authorizationState)
+                when (update) {
+                    is TdApi.UpdateAuthorizationState -> {
+                        authState = update.authorizationState
+                        trySend(update.authorizationState)
+                    }
+                    is TdApi.UpdateChatFolders -> {
+                        _cachedFolders.clear()
+                        _cachedFolders.addAll(update.chatFolders)
+                        Timber.i("TDLib received %d chat folders", update.chatFolders.size)
+                    }
                 }
             },
             // These two were previously null, which means any exception thrown while handling
@@ -125,7 +133,10 @@ class TelegramClient(private val context: Context) {
      * reading folder info off the `UpdateChatFolders` update instead.
      */
     suspend fun getChatFolders(): List<TdApi.ChatFolderInfo> {
-        return emptyList()
+        if (_cachedFolders.isEmpty()) {
+            kotlinx.coroutines.delay(600)
+        }
+        return _cachedFolders.toList()
     }
 
     /**
@@ -165,22 +176,27 @@ class TelegramClient(private val context: Context) {
             )
     }
 
-    suspend fun getPinnedChannels(): List<TdApi.Chat> = coroutineScope {
-        send(TdApi.LoadChats(TdApi.ChatListMain(), 200))
-        val chats = send(TdApi.GetChats(TdApi.ChatListMain(), 200)) as TdApi.Chats
+        suspend fun getPinnedChannels(): List<TdApi.Chat> = coroutineScope {
+        runCatching { send(TdApi.LoadChats(TdApi.ChatListMain(), 40)) }
+        val chatsResult = runCatching { send(TdApi.GetChats(TdApi.ChatListMain(), 40)) as TdApi.Chats }.getOrNull()
+        val chatIds = chatsResult?.chatIds ?: longArrayOf()
 
         val concurrencyLimit = Semaphore(8)
-        chats.chatIds
+        chatIds
             .map { id ->
                 async {
-                    concurrencyLimit.withPermit { send(TdApi.GetChat(id)) as TdApi.Chat }
+                    concurrencyLimit.withPermit {
+                        runCatching { send(TdApi.GetChat(id)) as TdApi.Chat }.getOrNull()
+                    }
                 }
             }
-            .map { it.await() }
+            .mapNotNull { it.await() }
             .filter { chat ->
-                val isChannel = (chat.type as? TdApi.ChatTypeSupergroup)?.isChannel == true
                 val isPinned = chat.positions.any { it.isPinned }
-                isChannel && isPinned
+                val isEligible = (chat.type as? TdApi.ChatTypeSupergroup)?.isChannel == true ||
+                                chat.type is TdApi.ChatTypeSupergroup ||
+                                chat.type is TdApi.ChatTypeBasicGroup
+                isEligible && isPinned
             }
     }
 

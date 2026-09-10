@@ -57,6 +57,7 @@ fun HomeScreen(
     var downloadProgress by remember { mutableStateOf(0f) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    androidx.activity.compose.BackHandler { (context as? android.app.Activity)?.finishAffinity() }
 
     LaunchedEffect(Unit) {
         updateInfo = com.velastudio.teltv.util.AppUpdater.checkForUpdate()
@@ -123,6 +124,18 @@ fun HomeScreen(
                         Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = Color.White)
                         Spacer(Modifier.width(8.dp))
                         Text("Settings", color = Color.White)
+                    }
+
+                    Button(
+                        onClick = { (context as? android.app.Activity)?.finishAffinity() },
+                        colors = ButtonDefaults.colors(
+                            containerColor = Color(0xFF1E2638),
+                            focusedContainerColor = Color(0xFFE53935)
+                        )
+                    ) {
+                        Icon(Icons.Filled.DeleteSweep, contentDescription = "Exit App", tint = Color.White)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Exit", color = Color.White)
                     }
 
                     if (onQuickClearCache != null) {

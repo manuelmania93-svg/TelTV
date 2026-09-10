@@ -16,17 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.OutlinedButton
-import androidx.tv.material3.Text
+import androidx.tv.material3.*
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
@@ -38,6 +35,7 @@ import kotlinx.coroutines.withContext
 import org.drinkless.tdlib.TdApi
 import timber.log.Timber
 
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -72,21 +70,92 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+    // While TDLib is initializing or confirming session: show clean Splash screen (no QR flashing)
+    if (authState == null || authState is TdApi.AuthorizationStateReady) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0B0E14)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(R.drawable.brand_poster),
+                    contentDescription = "TelTV",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .size(190.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                )
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    text = "TelTV",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF29B6F6)
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Connecting to Telegram…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFB0BEC5)
+                )
+                Spacer(Modifier.height(20.dp))
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = Color(0xFF29B6F6),
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 3.dp
+                )
+            }
+        }
+        return
+    }
+
+    // Genuinely logged out -> Show clean, proportional Sign-in UI
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0B0E14))
+            .padding(40.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Image(
-                painter = painterResource(R.drawable.brand_poster),
-                contentDescription = "TelTV Poster",
-                modifier = Modifier
-                    .height(440.dp)
-                    .clip(RoundedCornerShape(16.dp))
-            )
-            Spacer(Modifier.width(48.dp))
+            // Left Column: TelTV Emblem
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.width(300.dp)
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.brand_poster),
+                    contentDescription = "TelTV Emblem",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .size(220.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "TelTV",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF29B6F6)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Telegram Streaming for Android TV",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFB0BEC5)
+                )
+            }
 
+            Spacer(Modifier.width(60.dp))
+
+            // Right Column: QR Code / Phone Login
             Column(
                 modifier = Modifier.widthIn(max = 480.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -99,7 +168,6 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 )
                 Spacer(Modifier.height(16.dp))
 
-                // Mode switcher tabs (QR vs Phone)
                 val currentState = authState
                 val isPhoneMode = preferPhone || currentState is TdApi.AuthorizationStateWaitCode || currentState is TdApi.AuthorizationStateWaitPassword
                 Row(
@@ -116,18 +184,20 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                             }
                         },
                         colors = ButtonDefaults.colors(
-                            containerColor = if (!isPhoneMode) MaterialTheme.colorScheme.primary else Color.DarkGray
+                            containerColor = if (!isPhoneMode) Color(0xFF004D73) else Color(0xFF1E2638),
+                            focusedContainerColor = Color(0xFF29B6F6)
                         )
                     ) {
-                        Text(if (!isPhoneMode) "● QR Code" else "QR Code")
+                        Text(if (!isPhoneMode) "● QR Code" else "QR Code", color = Color.White)
                     }
                     Button(
                         onClick = { preferPhone = true },
                         colors = ButtonDefaults.colors(
-                            containerColor = if (isPhoneMode) MaterialTheme.colorScheme.primary else Color.DarkGray
+                            containerColor = if (isPhoneMode) Color(0xFF004D73) else Color(0xFF1E2638),
+                            focusedContainerColor = Color(0xFF29B6F6)
                         )
                     ) {
-                        Text(if (isPhoneMode) "● Phone Number" else "Phone Number")
+                        Text(if (isPhoneMode) "● Phone Number" else "Phone Number", color = Color.White)
                     }
                 }
 
@@ -201,7 +271,7 @@ private fun QrCodeStep(
     onRefresh: () -> Unit
 ) {
     Text("Scan with your phone to sign in", style = MaterialTheme.typography.bodyMedium, color = Color.White)
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(14.dp))
 
     val qrBitmap by produceState<Bitmap?>(initialValue = null, link) {
         value = link?.let { l ->
@@ -215,8 +285,8 @@ private fun QrCodeStep(
 
     Box(
         modifier = Modifier
-            .size(240.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .size(230.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
             .padding(12.dp),
         contentAlignment = Alignment.Center
@@ -233,16 +303,28 @@ private fun QrCodeStep(
         }
     }
 
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(14.dp))
     Text(
-        "On Phone: Telegram → Settings → Devices → Link Desktop Device",
+        "Telegram → Settings → Devices → Link Desktop Device",
         style = MaterialTheme.typography.bodySmall,
-        color = Color.LightGray
+        color = Color(0xFF90CAF9)
     )
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(14.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(onClick = onSwitchToPhone) { Text("Use Phone Number") }
-        OutlinedButton(onClick = onRefresh) { Text("Refresh QR") }
+        Button(
+            onClick = onSwitchToPhone,
+            colors = ButtonDefaults.colors(
+                containerColor = Color(0xFF1E2638),
+                focusedContainerColor = Color(0xFF29B6F6)
+            )
+        ) { Text("Use Phone Number", color = Color.White) }
+        Button(
+            onClick = onRefresh,
+            colors = ButtonDefaults.colors(
+                containerColor = Color(0xFF1E2638),
+                focusedContainerColor = Color(0xFF29B6F6)
+            )
+        ) { Text("Refresh QR", color = Color.White) }
     }
 }
 
@@ -330,7 +412,7 @@ private fun CodeStep(
         ) {
             Text(if (isBusy) "Verifying…" else "Verify Code")
         }
-        OutlinedButton(onClick = onBack) {
+        Button(onClick = onBack) {
             Text("Back")
         }
     }
