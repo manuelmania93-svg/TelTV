@@ -45,9 +45,16 @@ fun BrowseScreen(
     val items = pagingFlow.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
 
-    LaunchedEffect(gridState, items.itemCount) {
-        snapshotFlow { gridState.isNearEnd(deviceProfile.prefetchDistance) }
-            .collect { nearEnd -> if (nearEnd) onLoadMore() }
+    // Trigger onLoadMore only when the user actually scrolls near the end, not on initial item mount
+    LaunchedEffect(gridState) {
+        snapshotFlow { 
+            val layout = gridState.layoutInfo
+            val total = layout.totalItemsCount
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
+            total > 0 && lastVisible >= total - 4
+        }.collect { nearEnd ->
+            if (nearEnd) onLoadMore()
+        }
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 24.dp)) {

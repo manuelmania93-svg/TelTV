@@ -51,6 +51,33 @@ class MainActivity : ComponentActivity() {
             TelTvTheme {
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
+                
+                var crashReport by remember { mutableStateOf(com.velastudio.teltv.util.CrashLogger.lastCrashReport(app)) }
+                if (crashReport != null) {
+                    androidx.compose.ui.window.Dialog(onDismissRequest = { 
+                        java.io.File(app.filesDir, "last_crash.txt").delete()
+                        crashReport = null 
+                    }) {
+                        androidx.tv.material3.Card(onClick = {}) {
+                            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(24.dp)) {
+                                androidx.tv.material3.Text("Previous Crash Detected", style = androidx.tv.material3.MaterialTheme.typography.titleLarge)
+                                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(8.dp))
+                                androidx.tv.material3.Text(
+                                    text = crashReport!!.take(400),
+                                    style = androidx.tv.material3.MaterialTheme.typography.bodySmall
+                                )
+                                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(16.dp))
+                                androidx.tv.material3.Button(onClick = {
+                                    java.io.File(app.filesDir, "last_crash.txt").delete()
+                                    crashReport = null
+                                }) {
+                                    androidx.tv.material3.Text("Dismiss")
+                                }
+                            }
+                        }
+                    }
+                }
+
                 val thumbnailLoader = remember { ThumbnailLoader(app.telegramClient, scope, app.deviceProfile) }
 
                 // Shared across Home/Search for this session so Search doesn't need to re-fetch
