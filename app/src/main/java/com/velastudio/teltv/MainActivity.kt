@@ -25,6 +25,7 @@ import com.velastudio.teltv.ui.login.LoginScreen
 import com.velastudio.teltv.ui.player.PlayerScreen
 import com.velastudio.teltv.ui.search.SearchScreen
 import com.velastudio.teltv.ui.settings.CacheSettingsSection
+import com.velastudio.teltv.ui.settings.AppInfoSection
 import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
 import com.velastudio.teltv.ui.player.PlaybackPrefs
 import com.velastudio.teltv.ui.theme.TelTvTheme
@@ -414,6 +415,7 @@ class MainActivity : ComponentActivity() {
                                 skipIncrementMs = skipMs,
                                 onSkipIncrementChanged = { scope.launch { playbackPrefs.setSkipIncrementMs(it) } }
                             )
+                            AppInfoSection()
                         }
                     }
                 }

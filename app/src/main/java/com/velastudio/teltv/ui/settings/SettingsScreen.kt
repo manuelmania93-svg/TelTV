@@ -195,6 +195,33 @@ fun PlaybackSettingsSection(
 }
 
 @Composable
+fun AppInfoSection() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "TelTV",
+            color = TelTvYellow,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "App creator: manuelmania93",
+            color = TelTvMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
+        Text(
+            text = "Copyright 2026 manuelmania93",
+            color = TelTvMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
 private fun SkipChoiceButton(label: String, selected: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
