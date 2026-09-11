@@ -67,6 +67,8 @@ fun ClearCacheConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
 @Composable
 fun CacheSettingsSection(
     currentSizeBytes: Long,
+    freeStorageBytes: Long,
+    totalStorageBytes: Long,
     autoClearEnabled: Boolean,
     onToggleAutoClear: (Boolean) -> Unit,
     onClearNow: () -> Unit
@@ -88,11 +90,18 @@ fun CacheSettingsSection(
                 color = Color.White
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                "Currently using: ${"%.2f".format(currentSizeBytes / 1024.0 / 1024.0 / 1024.0)} GB",
-                color = TelTvYellow,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                StorageMetric(
+                    label = "Cache used",
+                    value = formatGigabytes(currentSizeBytes),
+                    valueColor = TelTvYellow
+                )
+                StorageMetric(
+                    label = "TV storage free",
+                    value = "${formatGigabytes(freeStorageBytes)} / ${formatGigabytes(totalStorageBytes)}",
+                    valueColor = Color.White
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
             Button(
@@ -121,6 +130,18 @@ fun CacheSettingsSection(
         )
     }
 }
+
+@Composable
+private fun StorageMetric(label: String, value: String, valueColor: Color) {
+    Column {
+        Text(label, color = TelTvMuted, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(2.dp))
+        Text(value, color = valueColor, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun formatGigabytes(bytes: Long): String =
+    "%.2f GB".format((bytes.coerceAtLeast(0L)).toDouble() / 1024.0 / 1024.0 / 1024.0)
 
 @Composable
 private fun StepButton(label: String, enabled: Boolean, onClick: () -> Unit) {

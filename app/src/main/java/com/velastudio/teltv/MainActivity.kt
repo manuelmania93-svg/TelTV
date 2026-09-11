@@ -392,6 +392,8 @@ class MainActivity : ComponentActivity() {
 
                     composable("settings") {
                         var cacheSize by remember { mutableStateOf(0L) }
+                        var freeStorage by remember { mutableStateOf(app.filesDir.usableSpace) }
+                        var totalStorage by remember { mutableStateOf(app.filesDir.totalSpace) }
                         val cachePrefs = remember { com.velastudio.teltv.worker.CachePrefs(app) }
                         // Both now read from (and, via the callbacks below, write to) the same
                         // DataStore that CacheTrimWorker reads in the background -- previously
@@ -405,17 +407,25 @@ class MainActivity : ComponentActivity() {
                                 com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).getCurrentSizeBytes()
                             }.onFailure { Timber.e(it, "Failed to read cache size") }
                                 .getOrDefault(0L)
+                            freeStorage = app.filesDir.usableSpace
+                            totalStorage = app.filesDir.totalSpace
                         }
 
                         androidx.compose.foundation.layout.Column {
                             CacheSettingsSection(
                                 currentSizeBytes = cacheSize,
+                                freeStorageBytes = freeStorage,
+                                totalStorageBytes = totalStorage,
                                 autoClearEnabled = autoClearEnabled,
                                 onToggleAutoClear = { scope.launch { cachePrefs.setAutoClearEnabled(it) } },
                                 onClearNow = {
                                     scope.launch {
                                         com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).clearAllNow()
-                                        cacheSize = 0L
+                                        cacheSize = runCatching {
+                                            com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).getCurrentSizeBytes()
+                                        }.getOrDefault(0L)
+                                        freeStorage = app.filesDir.usableSpace
+                                        totalStorage = app.filesDir.totalSpace
                                     }
                                 }
                             )
