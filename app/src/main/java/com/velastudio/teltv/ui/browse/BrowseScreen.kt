@@ -73,7 +73,7 @@ fun BrowseScreen(
             Text(channelTitle, style = MaterialTheme.typography.headlineSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = onCreateMarathon) {
-                    Text("Create Marathon")
+                    Text("Series Marathon")
                 }
                 Button(onClick = onToggleSort) {
                     Icon(Icons.Filled.SwapVert, contentDescription = "Sort")

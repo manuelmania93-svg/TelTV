@@ -113,6 +113,12 @@ fun HomeScreen(
                         fontWeight = FontWeight.ExtraBold,
                         color = TelTvYellow
                     )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "Copyright 2026 Manuel Durnig",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TelTvMuted
+                    )
                     Spacer(Modifier.width(16.dp))
                     Box(
                         modifier = Modifier

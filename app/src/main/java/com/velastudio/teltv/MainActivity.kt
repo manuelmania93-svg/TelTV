@@ -4,8 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 import androidx.navigation.NavType
@@ -503,7 +508,12 @@ class MainActivity : ComponentActivity() {
                             playlists = app.database.playlistDao().getAll()
                         }
 
-                        androidx.compose.foundation.layout.Column {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 32.dp, vertical = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                            item {
                             CacheSettingsSection(
                                 currentSizeBytes = cacheSize,
                                 freeStorageBytes = freeStorage,
@@ -521,6 +531,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            }
+                            item {
                             PlaylistSettingsSection(
                                 playlists = playlists,
                                 onCreate = { name ->
@@ -545,11 +557,16 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            }
+                            item {
                             PlaybackSettingsSection(
                                 skipIncrementMs = skipMs,
                                 onSkipIncrementChanged = { scope.launch { playbackPrefs.setSkipIncrementMs(it) } }
                             )
+                            }
+                            item {
                             AppInfoSection()
+                            }
                         }
                     }
                 }
