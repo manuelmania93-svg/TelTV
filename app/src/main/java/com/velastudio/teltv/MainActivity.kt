@@ -121,33 +121,35 @@ class MainActivity : ComponentActivity() {
                                     .maybeEmergencyClear(app.filesDir.usableSpace)
                             }.onFailure { Timber.w(it, "Foreground cache trim skipped") }
 
-                            val watchStates = app.database.watchStateDao().continueWatching()
-                            continueWatching = watchStates.map {
-                                ContinueWatchingEntry(
-                                    mediaId = it.mediaId,
-                                    title = it.title,
-                                    progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                    thumbnailFileId = it.thumbnailFileId
-                                )
-                            }
-                            recentlyWatched = app.database.watchStateDao().recentlyWatched(limit = 20).map {
-                                ContinueWatchingEntry(
-                                    mediaId = it.mediaId,
-                                    title = it.title,
-                                    progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                    thumbnailFileId = it.thumbnailFileId
-                                )
-                            }
-                            watchLater = app.database.watchlistDao().getAll().mapNotNull { saved ->
-                                app.database.videoIndexDao().getByMediaId(saved.mediaId)?.let { video ->
+                            runCatching {
+                                val watchStates = app.database.watchStateDao().continueWatching()
+                                continueWatching = watchStates.map {
                                     ContinueWatchingEntry(
-                                        mediaId = video.mediaId,
-                                        title = video.title,
-                                        progressFraction = 0f,
-                                        thumbnailFileId = video.thumbnailFileId
+                                        mediaId = it.mediaId,
+                                        title = it.title,
+                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
+                                        thumbnailFileId = it.thumbnailFileId
                                     )
                                 }
-                            }
+                                recentlyWatched = app.database.watchStateDao().recentlyWatched(limit = 20).map {
+                                    ContinueWatchingEntry(
+                                        mediaId = it.mediaId,
+                                        title = it.title,
+                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
+                                        thumbnailFileId = it.thumbnailFileId
+                                    )
+                                }
+                                watchLater = app.database.watchlistDao().getAll().mapNotNull { saved ->
+                                    app.database.videoIndexDao().getByMediaId(saved.mediaId)?.let { video ->
+                                        ContinueWatchingEntry(
+                                            mediaId = video.mediaId,
+                                            title = video.title,
+                                            progressFraction = 0f,
+                                            thumbnailFileId = video.thumbnailFileId
+                                        )
+                                    }
+                                }
+                            }.onFailure { Timber.e(it, "Failed to load local home shelves") }
 
                             // Pins and folders are independent TDLib requests; load them together
                             // so Home is not blocked by two sequential chat-list walks.
