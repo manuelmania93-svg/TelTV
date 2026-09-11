@@ -107,6 +107,8 @@ class MainActivity : ComponentActivity() {
 
                     composable("home") {
                         var continueWatching by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
+                        var recentlyWatched by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
+                        var watchLater by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
                         var pinnedRow by remember { mutableStateOf(HomeRow("Pinned Channels", emptyList())) }
                         var allChannelsRow by remember { mutableStateOf(HomeRow("Channels", emptyList())) }
                         var folderRowsState by remember { mutableStateOf<List<HomeRow>>(emptyList()) }
@@ -127,6 +129,24 @@ class MainActivity : ComponentActivity() {
                                     progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
                                     thumbnailFileId = it.thumbnailFileId
                                 )
+                            }
+                            recentlyWatched = app.database.watchStateDao().recentlyWatched(limit = 20).map {
+                                ContinueWatchingEntry(
+                                    mediaId = it.mediaId,
+                                    title = it.title,
+                                    progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
+                                    thumbnailFileId = it.thumbnailFileId
+                                )
+                            }
+                            watchLater = app.database.watchlistDao().getAll().mapNotNull { saved ->
+                                app.database.videoIndexDao().getByMediaId(saved.mediaId)?.let { video ->
+                                    ContinueWatchingEntry(
+                                        mediaId = video.mediaId,
+                                        title = video.title,
+                                        progressFraction = 0f,
+                                        thumbnailFileId = video.thumbnailFileId
+                                    )
+                                }
                             }
 
                             // Pins and folders are independent TDLib requests; load them together
@@ -204,6 +224,8 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             thumbnailLoader = thumbnailLoader,
                             continueWatching = continueWatching,
+                            recentlyWatched = recentlyWatched,
+                            watchLater = watchLater,
                             pinned = pinnedRow,
                             allChannels = allChannelsRow,
                             folderRows = folderRowsState,
@@ -277,6 +299,16 @@ class MainActivity : ComponentActivity() {
                                             mediaId = media.id,
                                             position = dao.nextPosition(playlist.id),
                                             title = media.title,
+                                            addedEpochSec = System.currentTimeMillis() / 1000
+                                        )
+                                    )
+                                }
+                            },
+                            onAddToWatchLater = { media ->
+                                scope.launch {
+                                    app.database.watchlistDao().add(
+                                        com.velastudio.teltv.data.local.WatchlistEntity(
+                                            mediaId = media.id,
                                             addedEpochSec = System.currentTimeMillis() / 1000
                                         )
                                     )

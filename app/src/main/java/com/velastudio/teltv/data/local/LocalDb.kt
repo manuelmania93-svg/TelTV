@@ -156,6 +156,9 @@ interface WatchlistDao {
 
     @Query("DELETE FROM watchlist WHERE mediaId = :mediaId")
     suspend fun remove(mediaId: String)
+
+    @Query("SELECT * FROM watchlist WHERE mediaId = :mediaId")
+    suspend fun get(mediaId: String): WatchlistEntity?
 }
 
 @Dao

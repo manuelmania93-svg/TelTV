@@ -20,6 +20,8 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import androidx.tv.material3.OutlinedButton
+import androidx.compose.ui.window.Dialog
 import com.velastudio.teltv.data.model.MediaItem
 import com.velastudio.teltv.telegram.ThumbnailLoader
 import com.velastudio.teltv.ui.common.PosterCard
@@ -42,10 +44,12 @@ fun BrowseScreen(
     onLoadMore: () -> Unit,
     onOpenItem: (MediaItem) -> Unit,
     onAddToPlaylist: (MediaItem) -> Unit,
+    onAddToWatchLater: (MediaItem) -> Unit,
     onCreateMarathon: () -> Unit
 ) {
     val items = pagingFlow.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
+    var actionItem by remember { mutableStateOf<MediaItem?>(null) }
 
     // Trigger onLoadMore only when the user actually scrolls near the end, not on initial item mount
     LaunchedEffect(gridState) {
@@ -128,7 +132,7 @@ fun BrowseScreen(
                         thumbnailLoader = thumbnailLoader,
                         resumeFraction = resumeFractionFor(media.id),
                         onClick = { onOpenItem(media) },
-                        onLongClick = { onAddToPlaylist(media) }
+                        onLongClick = { actionItem = media }
                     )
                 } else {
                     PosterCardPlaceholder()
@@ -144,6 +148,25 @@ fun BrowseScreen(
                         androidx.compose.material3.CircularProgressIndicator()
                     }
                 }
+            }
+        }
+    }
+
+    actionItem?.let { media ->
+        Dialog(onDismissRequest = { actionItem = null }) {
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier
+                    .width(360.dp)
+                    .background(androidx.compose.ui.graphics.Color(0xFF202735), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .padding(24.dp)
+            ) {
+                Text("Add video", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                Text(media.title, maxLines = 2)
+                Spacer(Modifier.height(18.dp))
+                Button(onClick = { onAddToPlaylist(media); actionItem = null }) { Text("Add to Playlist") }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { onAddToWatchLater(media); actionItem = null }) { Text("Watch Later") }
             }
         }
     }

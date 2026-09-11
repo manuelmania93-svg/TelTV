@@ -56,6 +56,8 @@ enum class HomeFilterMode { ALL, PINNED_ONLY, FOLDERS_ONLY }
 fun HomeScreen(
     thumbnailLoader: ThumbnailLoader,
     continueWatching: List<ContinueWatchingEntry>,
+    recentlyWatched: List<ContinueWatchingEntry>,
+    watchLater: List<ContinueWatchingEntry>,
     pinned: HomeRow,
     allChannels: HomeRow,
     folderRows: List<HomeRow>,
@@ -212,6 +214,14 @@ fun HomeScreen(
             }
         }
 
+        if (filterMode != HomeFilterMode.FOLDERS_ONLY && recentlyWatched.isNotEmpty()) {
+            item { ContinueWatchingRow(recentlyWatched, thumbnailLoader, onResumeWatching, title = "Recently Watched") }
+        }
+
+        if (filterMode != HomeFilterMode.FOLDERS_ONLY && watchLater.isNotEmpty()) {
+            item { ContinueWatchingRow(watchLater, thumbnailLoader, onResumeWatching, title = "Watch Later") }
+        }
+
         // Pinned Channels Row (hidden if in FOLDERS_ONLY)
         if (filterMode != HomeFilterMode.FOLDERS_ONLY && pinned.entries.isNotEmpty()) {
             item {
@@ -347,11 +357,12 @@ private fun FilterTabButton(
 private fun ContinueWatchingRow(
     entries: List<ContinueWatchingEntry>,
     thumbnailLoader: ThumbnailLoader,
-    onResumeWatching: (mediaId: String) -> Unit
+    onResumeWatching: (mediaId: String) -> Unit,
+    title: String = "Continue Watching"
 ) {
     Column {
         Text(
-            "Continue Watching",
+            title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = Color.White
