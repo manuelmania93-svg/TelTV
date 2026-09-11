@@ -93,7 +93,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                     contentDescription = "TelTV",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(220.dp)
+                        .size(280.dp)
                 )
                 Spacer(Modifier.height(18.dp))
                 Text(
@@ -144,14 +144,14 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
             Column(
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center,
-                modifier = Modifier.width(270.dp)
+                modifier = Modifier.width(320.dp)
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_launcher),
                     contentDescription = "TelTV logo",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(190.dp)
+                        .size(240.dp)
                 )
                 Spacer(Modifier.height(22.dp))
                 Text(

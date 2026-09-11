@@ -101,10 +101,10 @@ fun HomeScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
-                        painter = painterResource(R.drawable.brand_poster),
+                        painter = painterResource(R.drawable.ic_launcher),
                         contentDescription = "TelTV logo",
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(width = 58.dp, height = 76.dp)
+                        modifier = Modifier.size(84.dp)
                     )
                     Spacer(Modifier.width(14.dp))
                     Text(
