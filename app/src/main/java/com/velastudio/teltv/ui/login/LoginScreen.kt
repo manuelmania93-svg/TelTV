@@ -76,24 +76,26 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         }
     }
 
-    // While TDLib is initializing or confirming session: show clean Splash screen (no QR flashing)
+    // Keep the startup state focused on the mark while TDLib initializes.
     if (authState == null || authState is TdApi.AuthorizationStateWaitTdlibParameters || authState is TdApi.AuthorizationStateReady) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(TelTvBlack),
+                .background(Color(0xFF090B10)),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp)
+            ) {
                 Image(
-                    painter = painterResource(R.drawable.brand_poster),
+                    painter = painterResource(R.drawable.ic_launcher_foreground),
                     contentDescription = "TelTV",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(190.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .size(150.dp)
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(18.dp))
                 Text(
                     text = "TelTV",
                     style = MaterialTheme.typography.headlineLarge,
@@ -102,11 +104,11 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Connecting to Telegram…",
+                    text = "YOUR LIBRARY. ON YOUR SCREEN.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TelTvMuted
                 )
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(24.dp))
                 androidx.compose.material3.CircularProgressIndicator(
                     color = TelTvYellow,
                     modifier = Modifier.size(28.dp),
@@ -117,65 +119,83 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
         return
     }
 
-    // Genuinely logged out -> Show clean, proportional Sign-in UI
+    // Logged out state: a wide, remote-friendly two-column TV layout.
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(TelTvBlack)
-            .padding(horizontal = 32.dp, vertical = 24.dp),
+            .background(Color(0xFF090B10))
+            .padding(horizontal = 64.dp, vertical = 42.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.spacedBy(76.dp),
             modifier = Modifier
-                .widthIn(max = 920.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(TelTvPanel)
-                .padding(horizontal = 36.dp, vertical = 28.dp)
+                .fillMaxWidth()
+                .widthIn(max = 1120.dp)
+                .padding(horizontal = 28.dp, vertical = 20.dp)
         ) {
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.Center,
-                modifier = Modifier.width(190.dp)
+                modifier = Modifier.width(270.dp)
             ) {
                 Image(
-                    painter = painterResource(R.drawable.brand_poster),
-                    contentDescription = "TelTV Emblem",
+                    painter = painterResource(R.drawable.ic_launcher_foreground),
+                    contentDescription = "TelTV logo",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .width(150.dp)
-                        .height(230.dp)
-                        .clip(RoundedCornerShape(20.dp))
+                        .size(116.dp)
+                )
+                Spacer(Modifier.height(22.dp))
+                Text(
+                    text = "TelTV",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = TelTvWhite,
+                    fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .width(54.dp)
+                        .height(4.dp)
+                        .background(TelTvYellow, RoundedCornerShape(2.dp))
+                )
+                Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Telegram Streaming for Android TV",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TelTvMuted,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    text = "Your Telegram library,\nready for the big screen.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TelTvMuted
                 )
             }
 
-            Spacer(Modifier.width(44.dp))
-
             Column(
-                modifier = Modifier.widthIn(min = 360.dp, max = 470.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .widthIn(min = 420.dp, max = 520.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(TelTvPanel)
+                    .padding(horizontal = 34.dp, vertical = 30.dp),
+                horizontalAlignment = Alignment.Start
             ) {
                 Text(
-                    text = "Sign in to Telegram",
+                    text = "Welcome back",
                     style = MaterialTheme.typography.headlineMedium,
                     color = TelTvWhite,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Connect your Telegram account to continue.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TelTvMuted
+                )
+                Spacer(Modifier.height(22.dp))
 
                 val currentState = authState
                 val isPhoneMode = preferPhone || currentState is TdApi.AuthorizationStateWaitCode || currentState is TdApi.AuthorizationStateWaitPassword
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(bottom = 20.dp)
+                    modifier = Modifier.padding(bottom = 22.dp)
                 ) {
                     Button(
                         onClick = {
@@ -191,7 +211,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                             focusedContainerColor = TelTvYellow
                         )
                     ) {
-                        Text(if (!isPhoneMode) "● QR Code" else "QR Code", color = if (!isPhoneMode) TelTvBlack else TelTvWhite)
+                        Text(if (!isPhoneMode) "QR Code" else "QR Code", color = if (!isPhoneMode) TelTvBlack else TelTvWhite)
                     }
                     Button(
                         onClick = { preferPhone = true },
@@ -200,7 +220,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                             focusedContainerColor = TelTvYellow
                         )
                     ) {
-                        Text(if (isPhoneMode) "● Phone Number" else "Phone Number", color = if (isPhoneMode) TelTvBlack else TelTvWhite)
+                        Text("Phone Number", color = if (isPhoneMode) TelTvBlack else TelTvWhite)
                     }
                 }
 

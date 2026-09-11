@@ -1,5 +1,5 @@
 <resources>
     <style name="Theme.TelTV" parent="android:Theme.Material.NoActionBar">
-        <item name="android:colorBackground">#000000</item>
+        <item name="android:colorBackground">#090B10</item>
     </style>
 </resources>
