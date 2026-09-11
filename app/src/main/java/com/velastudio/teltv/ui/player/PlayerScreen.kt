@@ -43,6 +43,7 @@ fun PlayerScreen(
     resumePositionMs: Long,
     nextTitle: String? = null,
     onPlayNext: (() -> Unit)? = null,
+    autoPlayByDefault: Boolean = false,
     onPositionUpdate: (positionMs: Long, durationMs: Long) -> Unit,
     onPlaybackEnded: () -> Unit = {},
     onBack: () -> Unit
@@ -61,6 +62,7 @@ fun PlayerScreen(
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
+    var autoPlayNext by remember { mutableStateOf(autoPlayByDefault && nextTitle != null && onPlayNext != null) }
     var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
 
     // Seeking feedback state
@@ -98,7 +100,7 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_ENDED) {
-                    if (onPlayNext != null && nextTitle != null) {
+                    if (autoPlayNext && onPlayNext != null && nextTitle != null) {
                         showAutoPlayOverlay = true
                     } else {
                         onPlaybackEnded()
@@ -364,7 +366,13 @@ fun PlayerScreen(
             onSkipForward = { seekRelative(forward = true) },
             onOpenTracks = { showTrackSelector = true },
             onCycleAspectRatio = ::cycleAspectRatio,
-            onOpenExternal = ::openInExternalPlayer
+            onOpenExternal = ::openInExternalPlayer,
+            autoPlayNext = autoPlayNext,
+            canAutoPlayNext = nextTitle != null && onPlayNext != null,
+            onToggleAutoPlay = {
+                autoPlayNext = !autoPlayNext
+                controlsVisible = true
+            }
         )
 
         SeekingFeedbackBadge(seekText = seekingText, isForward = seekingIsForward)

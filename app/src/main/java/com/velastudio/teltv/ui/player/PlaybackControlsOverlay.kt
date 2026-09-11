@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +42,10 @@ fun PlaybackControlsOverlay(
     onSkipForward: () -> Unit,
     onOpenTracks: () -> Unit,
     onCycleAspectRatio: () -> Unit,
-    onOpenExternal: () -> Unit
+    onOpenExternal: () -> Unit,
+    autoPlayNext: Boolean,
+    canAutoPlayNext: Boolean,
+    onToggleAutoPlay: () -> Unit
 ) {
     val cleanTitle = remember(title) { MediaTitleCleaner.clean(title) }
 
@@ -84,6 +88,14 @@ fun PlaybackControlsOverlay(
                             contentDescription = "Open in External Player",
                             onClick = onOpenExternal
                         )
+                        if (canAutoPlayNext) {
+                            ControlButton(
+                                icon = Icons.Filled.SkipNext,
+                                contentDescription = if (autoPlayNext) "Autoplay on" else "Autoplay off",
+                                onClick = onToggleAutoPlay,
+                                active = autoPlayNext
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -134,14 +146,19 @@ private fun ControlButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    large: Boolean = false
+    large: Boolean = false,
+    active: Boolean = false
 ) {
     val size = if (large) 72.dp else 52.dp
     IconButton(
         onClick = onClick,
         modifier = Modifier
             .size(size)
-            .background(Color.White.copy(alpha = 0.15f), CircleShape)
+            .background(
+                if (active) Color(0xFF29B6F6).copy(alpha = 0.85f)
+                else Color.White.copy(alpha = 0.15f),
+                CircleShape
+            )
     ) {
         Icon(icon, contentDescription = contentDescription, tint = Color.White)
     }
