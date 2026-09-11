@@ -199,21 +199,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // 3. Fallback: only if both Pinned and Folders are completely empty
-                            if (pinned.isEmpty() && dynamicFolderRows.isEmpty()) {
-                                val topChats = runCatching { app.telegramClient.getAllChannels(limit = 15) }.getOrDefault(emptyList())
-                                allChannelsRow = HomeRow(
-                                    "Channels",
-                                    topChats.map { chat ->
-                                        HomeEntry(
-                                            id = chat.id.toString(),
-                                            name = chat.title,
-                                            thumbnailFileId = chat.photo?.small?.id
-                                        )
-                                    }
-                                )
-                            }
-
                             folderRowsState = dynamicFolderRows
                             pinnedChatIds = (pinned.map { it.id } + folderMap.values.flatten().map { it.id }).distinct()
                             isLoadingChannels = false
