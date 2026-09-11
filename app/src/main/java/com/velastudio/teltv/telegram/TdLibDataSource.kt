@@ -35,10 +35,11 @@ class TdLibDataSource(
             (totalSize - position).coerceAtLeast(0)
         }
 
-        localPath = localPathOrThrow(initialFile)
+        val resolvedPath = localPathOrThrow(initialFile)
+        localPath = resolvedPath
 
         // 2. Open file if already present
-        file = RandomAccessFile(File(localPath!!), "r").also { it.seek(position) }
+        file = RandomAccessFile(File(resolvedPath), "r").also { it.seek(position) }
 
         transferInitializing(dataSpec)
         transferStarted(dataSpec)
@@ -66,18 +67,16 @@ class TdLibDataSource(
             file?.close()
             file = null
             val updated = downloadRangeOrThrow(readPosition, 2 * 1024 * 1024L)
-            val path = updated.local?.path?.takeIf { it.isNotBlank() }
-            if (path != null) {
-                localPath = path
-                file = RandomAccessFile(File(path), "r").also { it.seek(readPosition) }
-            }
+            val path = localPathOrThrow(updated)
+            localPath = path
+            file = RandomAccessFile(File(path), "r").also { it.seek(readPosition) }
             attempts++
         }
 
         throw IOException("TDLib did not provide bytes at offset $readPosition for file $fileId")
     }
 
-    override fun getUri() = null
+    override fun getUri() = TdLibAwareDataSourceFactory.uriForFile(fileId)
 
     override fun close() {
         runCatching { file?.close() }
