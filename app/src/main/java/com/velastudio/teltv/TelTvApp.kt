@@ -3,6 +3,7 @@ package com.velastudio.teltv
 import android.app.Application
 import android.graphics.Bitmap
 import android.os.StrictMode
+import android.util.Log
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -16,6 +17,9 @@ import com.velastudio.teltv.worker.CacheTrimWorker
 import timber.log.Timber
 
 class TelTvApp : Application(), ImageLoaderFactory {
+    var startupError: String? = null
+        private set
+
     lateinit var telegramClient: TelegramClient
         private set
 
@@ -41,17 +45,22 @@ class TelTvApp : Application(), ImageLoaderFactory {
             Timber.plant(CrashLogger.ReleaseTree())
         }
 
-        deviceProfile = DeviceCapabilities.profile(this)
-        telegramClient = TelegramClient(this)
-        database = TelTvDatabase.get(this)
-        channelVideoRepository = ChannelVideoRepository(
-            telegram = telegramClient,
-            videoIndexDao = database.videoIndexDao(),
-            syncStateDao = database.channelSyncStateDao(),
-            deviceProfile = deviceProfile
-        )
+        try {
+            deviceProfile = DeviceCapabilities.profile(this)
+            telegramClient = TelegramClient(this)
+            database = TelTvDatabase.get(this)
+            channelVideoRepository = ChannelVideoRepository(
+                telegram = telegramClient,
+                videoIndexDao = database.videoIndexDao(),
+                syncStateDao = database.channelSyncStateDao(),
+                deviceProfile = deviceProfile
+            )
 
-        CacheTrimWorker.schedule(this)
+            CacheTrimWorker.schedule(this)
+        } catch (startupThrowable: Throwable) {
+            startupError = CrashLogger.record(this, Thread.currentThread(), startupThrowable)
+            Log.e("TelTV_STARTUP", "Application initialization failed", startupThrowable)
+        }
     }
 
     override fun newImageLoader(): ImageLoader {

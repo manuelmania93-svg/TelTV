@@ -32,7 +32,7 @@ object CrashLogger {
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                writeCrashFile(appContext, thread, throwable)
+                record(appContext, thread, throwable)
                 Log.e("TelTV_CRASH", "Fatal crash captured on ${thread.name}", throwable)
                 Timber.e(throwable, "Uncaught exception on thread ${thread.name}")
             } catch (loggingFailure: Throwable) {
@@ -49,7 +49,7 @@ object CrashLogger {
         }
     }
 
-    private fun writeCrashFile(context: Context, thread: Thread, throwable: Throwable) {
+    fun record(context: Context, thread: Thread, throwable: Throwable): String {
         val stackTrace = StringWriter().also { throwable.printStackTrace(PrintWriter(it)) }.toString()
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(Date())
         val report = buildString {
@@ -69,6 +69,7 @@ object CrashLogger {
             crashFile.writeText(report)
             temporaryFile.delete()
         }
+        return report
     }
 
     /** Last persisted crash report, if any -- handy to surface in a debug/settings screen. */

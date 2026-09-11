@@ -63,6 +63,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TelTvTheme {
+                if (app.startupError != null) {
+                    StartupErrorScreen(app.startupError!!)
+                    return@TelTvTheme
+                }
+
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
                 
@@ -579,5 +584,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun StartupErrorScreen(report: String) {
+    androidx.compose.foundation.layout.Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        androidx.tv.material3.Text(
+            text = "TelTV konnte nicht gestartet werden",
+            style = androidx.tv.material3.MaterialTheme.typography.headlineSmall
+        )
+        androidx.tv.material3.Text(
+            text = report.take(6000),
+            style = androidx.tv.material3.MaterialTheme.typography.bodySmall
+        )
     }
 }
