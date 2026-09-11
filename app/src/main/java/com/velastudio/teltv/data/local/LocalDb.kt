@@ -93,6 +93,26 @@ data class SearchHistoryEntity(
     val lastUsedEpochSec: Long
 )
 
+@Entity(tableName = "playlists")
+data class PlaylistEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val createdEpochSec: Long
+)
+
+@Entity(
+    tableName = "playlist_items",
+    primaryKeys = ["playlistId", "mediaId"],
+    indices = [Index(value = ["playlistId", "position"])]
+)
+data class PlaylistItemEntity(
+    val playlistId: Long,
+    val mediaId: String,
+    val position: Int,
+    val title: String,
+    val addedEpochSec: Long
+)
+
 @Dao
 interface SourceDao {
     @Query("SELECT * FROM sources")
@@ -157,6 +177,9 @@ interface VideoIndexDao {
     @Query("SELECT * FROM video_index WHERE mediaId = :mediaId")
     suspend fun getByMediaId(mediaId: String): VideoIndexEntity?
 
+    @Query("SELECT * FROM video_index WHERE chatId = :chatId ORDER BY position ASC")
+    suspend fun getAllForChat(chatId: Long): List<VideoIndexEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<VideoIndexEntity>)
 
@@ -207,6 +230,36 @@ interface SearchHistoryDao {
     suspend fun clear()
 }
 
+@Dao
+interface PlaylistDao {
+    @Query("SELECT * FROM playlists ORDER BY createdEpochSec DESC")
+    suspend fun getAll(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlists WHERE id = :id")
+    suspend fun getById(id: Long): PlaylistEntity?
+
+    @Insert
+    suspend fun insert(playlist: PlaylistEntity): Long
+
+    @Query("DELETE FROM playlists WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY position ASC")
+    suspend fun getItems(playlistId: Long): List<PlaylistItemEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addItem(item: PlaylistItemEntity)
+
+    @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_items WHERE playlistId = :playlistId")
+    suspend fun nextPosition(playlistId: Long): Int
+
+    @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId AND position > :position ORDER BY position ASC LIMIT 1")
+    suspend fun nextItem(playlistId: Long, position: Int): PlaylistItemEntity?
+
+    @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId AND mediaId = :mediaId")
+    suspend fun removeItem(playlistId: Long, mediaId: String)
+}
+
 @Database(
     entities = [
         SourceEntity::class,
@@ -214,9 +267,11 @@ interface SearchHistoryDao {
         WatchlistEntity::class,
         VideoIndexEntity::class,
         ChannelSyncStateEntity::class,
-        SearchHistoryEntity::class
+        SearchHistoryEntity::class,
+        PlaylistEntity::class,
+        PlaylistItemEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class TelTvDatabase : RoomDatabase() {
@@ -226,6 +281,7 @@ abstract class TelTvDatabase : RoomDatabase() {
     abstract fun videoIndexDao(): VideoIndexDao
     abstract fun channelSyncStateDao(): ChannelSyncStateDao
     abstract fun searchHistoryDao(): SearchHistoryDao
+    abstract fun playlistDao(): PlaylistDao
 
     companion object {
         @Volatile private var INSTANCE: TelTvDatabase? = null

@@ -12,7 +12,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.tv.material3.*
+import com.velastudio.teltv.data.local.PlaylistEntity
 import com.velastudio.teltv.ui.theme.TelTvMuted
 import com.velastudio.teltv.ui.theme.TelTvPanel
 import com.velastudio.teltv.ui.theme.TelTvPanelFocused
@@ -128,6 +131,67 @@ fun CacheSettingsSection(
             onDismiss = { showClearConfirm = false },
             onConfirm = onClearNow
         )
+    }
+}
+
+@Composable
+fun PlaylistSettingsSection(
+    playlists: List<PlaylistEntity>,
+    onCreate: (String) -> Unit,
+    onPlay: (PlaylistEntity) -> Unit,
+    onDelete: (PlaylistEntity) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(TelTvPanel)
+            .padding(24.dp)
+    ) {
+        Column {
+            Text("Playlists & Marathons", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(Modifier.height(6.dp))
+            Text("Create an ordered queue for a full series marathon.", color = TelTvMuted)
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    placeholder = { androidx.compose.material3.Text("Playlist name") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = TelTvYellow,
+                        unfocusedBorderColor = TelTvMuted
+                    ),
+                    modifier = Modifier.width(300.dp)
+                )
+                Button(
+                    onClick = { onCreate(name.trim()); name = "" },
+                    enabled = name.isNotBlank()
+                ) { Text("Create") }
+            }
+            Spacer(Modifier.height(16.dp))
+            playlists.forEach { playlist ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(playlist.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(onClick = { onPlay(playlist) }) { Text("Play All") }
+                        Button(onClick = { onDelete(playlist) }) { Text("Delete") }
+                    }
+                }
+            }
+            if (playlists.isEmpty()) {
+                Text("No playlists yet. Create one, then add episodes with a long-press in a channel.", color = TelTvMuted)
+            }
+        }
     }
 }
 

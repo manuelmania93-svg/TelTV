@@ -14,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.velastudio.teltv.data.local.WatchStateEntity
+import com.velastudio.teltv.data.local.PlaylistEntity
+import com.velastudio.teltv.data.local.PlaylistItemEntity
 import com.velastudio.teltv.data.model.MediaItem
 import com.velastudio.teltv.telegram.ThumbnailLoader
 import com.velastudio.teltv.ui.browse.BrowseScreen
@@ -27,6 +29,7 @@ import com.velastudio.teltv.ui.search.SearchScreen
 import com.velastudio.teltv.ui.settings.CacheSettingsSection
 import com.velastudio.teltv.ui.settings.AppInfoSection
 import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
+import com.velastudio.teltv.ui.settings.PlaylistSettingsSection
 import com.velastudio.teltv.ui.player.PlaybackPrefs
 import com.velastudio.teltv.ui.theme.TelTvTheme
 import kotlinx.coroutines.async
@@ -261,6 +264,43 @@ class MainActivity : ComponentActivity() {
                             onLoadMore = { scope.launch { app.channelVideoRepository.ensureNextPage(chatId) } },
                             onOpenItem = { media ->
                                 navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}")
+                            },
+                            onAddToPlaylist = { media ->
+                                scope.launch {
+                                    val dao = app.database.playlistDao()
+                                    val playlist = dao.getAll().firstOrNull()
+                                        ?: PlaylistEntity(name = "My Marathon", createdEpochSec = System.currentTimeMillis() / 1000)
+                                            .let { it.copy(id = dao.insert(it)) }
+                                    dao.addItem(
+                                        PlaylistItemEntity(
+                                            playlistId = playlist.id,
+                                            mediaId = media.id,
+                                            position = dao.nextPosition(playlist.id),
+                                            title = media.title,
+                                            addedEpochSec = System.currentTimeMillis() / 1000
+                                        )
+                                    )
+                                }
+                            },
+                            onCreateMarathon = {
+                                scope.launch {
+                                    val dao = app.database.playlistDao()
+                                    val playlist = PlaylistEntity(
+                                        name = "$title Marathon",
+                                        createdEpochSec = System.currentTimeMillis() / 1000
+                                    ).let { it.copy(id = dao.insert(it)) }
+                                    app.database.videoIndexDao().getAllForChat(chatId).forEachIndexed { index, video ->
+                                        dao.addItem(
+                                            PlaylistItemEntity(
+                                                playlistId = playlist.id,
+                                                mediaId = video.mediaId,
+                                                position = index,
+                                                title = video.title,
+                                                addedEpochSec = System.currentTimeMillis() / 1000
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         )
                     }
@@ -322,10 +362,16 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(
-                        "player/{mediaId}",
-                        arguments = listOf(navArgument("mediaId") { type = NavType.StringType })
+                        "player/{mediaId}?playlistId={playlistId}",
+                        arguments = listOf(
+                            navArgument("mediaId") { type = NavType.StringType },
+                            navArgument("playlistId") { type = NavType.LongType; nullable = true; defaultValue = null }
+                        )
                     ) { backStackEntry ->
                         val mediaId = URLDecoder.decode(backStackEntry.arguments?.getString("mediaId") ?: "", "UTF-8")
+                        val playlistId = backStackEntry.arguments
+                            ?.takeIf { it.containsKey("playlistId") }
+                            ?.getLong("playlistId")
                         var resolved by remember { mutableStateOf<WatchStateEntity?>(null) }
                         var fileId by remember { mutableStateOf<Int?>(null) }
                         var title by remember { mutableStateOf(mediaId) }
@@ -351,10 +397,18 @@ class MainActivity : ComponentActivity() {
                         }
 
                         var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
-                        LaunchedEffect(mediaId) {
+                        LaunchedEffect(mediaId, playlistId) {
                             val cur = app.database.videoIndexDao().getByMediaId(mediaId)
                             if (cur != null) {
-                                nextEntity = app.database.videoIndexDao().getNextInChannel(cur.chatId, cur.position)
+                                nextEntity = if (playlistId != null) {
+                                    app.database.playlistDao().nextItem(
+                                        playlistId,
+                                        app.database.playlistDao().getItems(playlistId)
+                                            .firstOrNull { it.mediaId == mediaId }?.position ?: -1
+                                    )?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
+                                } else {
+                                    app.database.videoIndexDao().getNextInChannel(cur.chatId, cur.position)
+                                }
                             }
                         }
 
@@ -366,7 +420,9 @@ class MainActivity : ComponentActivity() {
                             nextTitle = nextEntity?.title,
                             onPlayNext = nextEntity?.let { next ->
                                 {
-                                    navController.navigate("player/${URLEncoder.encode(next.mediaId, "UTF-8")}") {
+                                    val nextRoute = "player/${URLEncoder.encode(next.mediaId, "UTF-8")}" +
+                                        (playlistId?.let { "?playlistId=$it" } ?: "")
+                                    navController.navigate(nextRoute) {
                                         popUpTo("player/{mediaId}") { inclusive = true }
                                     }
                                 }
@@ -394,6 +450,7 @@ class MainActivity : ComponentActivity() {
                         var cacheSize by remember { mutableStateOf(0L) }
                         var freeStorage by remember { mutableStateOf(app.filesDir.usableSpace) }
                         var totalStorage by remember { mutableStateOf(app.filesDir.totalSpace) }
+                        var playlists by remember { mutableStateOf<List<PlaylistEntity>>(emptyList()) }
                         val cachePrefs = remember { com.velastudio.teltv.worker.CachePrefs(app) }
                         // Both now read from (and, via the callbacks below, write to) the same
                         // DataStore that CacheTrimWorker reads in the background -- previously
@@ -409,6 +466,7 @@ class MainActivity : ComponentActivity() {
                                 .getOrDefault(0L)
                             freeStorage = app.filesDir.usableSpace
                             totalStorage = app.filesDir.totalSpace
+                            playlists = app.database.playlistDao().getAll()
                         }
 
                         androidx.compose.foundation.layout.Column {
@@ -426,6 +484,30 @@ class MainActivity : ComponentActivity() {
                                         }.getOrDefault(0L)
                                         freeStorage = app.filesDir.usableSpace
                                         totalStorage = app.filesDir.totalSpace
+                                    }
+                                }
+                            )
+                            PlaylistSettingsSection(
+                                playlists = playlists,
+                                onCreate = { name ->
+                                    scope.launch {
+                                        val dao = app.database.playlistDao()
+                                        dao.insert(PlaylistEntity(name = name, createdEpochSec = System.currentTimeMillis() / 1000))
+                                        playlists = dao.getAll()
+                                    }
+                                },
+                                onPlay = { playlist ->
+                                    scope.launch {
+                                        val first = app.database.playlistDao().getItems(playlist.id).firstOrNull()
+                                        if (first != null) {
+                                            navController.navigate("player/${URLEncoder.encode(first.mediaId, "UTF-8")}?playlistId=${playlist.id}")
+                                        }
+                                    }
+                                },
+                                onDelete = { playlist ->
+                                    scope.launch {
+                                        app.database.playlistDao().delete(playlist.id)
+                                        playlists = app.database.playlistDao().getAll()
                                     }
                                 }
                             )

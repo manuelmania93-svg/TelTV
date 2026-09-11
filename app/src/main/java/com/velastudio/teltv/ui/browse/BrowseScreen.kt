@@ -40,7 +40,9 @@ fun BrowseScreen(
     deviceProfile: DeviceCapabilities.Profile,
     resumeFractionFor: (mediaId: String) -> Float?,
     onLoadMore: () -> Unit,
-    onOpenItem: (MediaItem) -> Unit
+    onOpenItem: (MediaItem) -> Unit,
+    onAddToPlaylist: (MediaItem) -> Unit,
+    onCreateMarathon: () -> Unit
 ) {
     val items = pagingFlow.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
@@ -64,10 +66,15 @@ fun BrowseScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(channelTitle, style = MaterialTheme.typography.headlineSmall)
-            Button(onClick = onToggleSort) {
-                Icon(Icons.Filled.SwapVert, contentDescription = "Sort")
-                Spacer(Modifier.width(8.dp))
-                Text(if (isAscending) "Newest First" else "Oldest First (S01E01)")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onCreateMarathon) {
+                    Text("Create Marathon")
+                }
+                Button(onClick = onToggleSort) {
+                    Icon(Icons.Filled.SwapVert, contentDescription = "Sort")
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isAscending) "Newest First" else "Oldest First (S01E01)")
+                }
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -120,7 +127,8 @@ fun BrowseScreen(
                         thumbnailFileId = parseThumbnailFileId(media.thumbnailUrl),
                         thumbnailLoader = thumbnailLoader,
                         resumeFraction = resumeFractionFor(media.id),
-                        onClick = { onOpenItem(media) }
+                        onClick = { onOpenItem(media) },
+                        onLongClick = { onAddToPlaylist(media) }
                     )
                 } else {
                     PosterCardPlaceholder()
