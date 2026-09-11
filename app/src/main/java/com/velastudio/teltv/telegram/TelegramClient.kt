@@ -272,6 +272,33 @@ class TelegramClient(private val context: Context) {
             ?: return@coroutineScope emptyList()
 
         val concurrencyLimit = Semaphore(8)
+
+    suspend fun getPinnedVideo(chatId: Long): MediaItem? {
+        val message = send(TdApi.GetChatPinnedMessage(chatId)) as? TdApi.Message ?: return null
+        val content = message.content as? TdApi.MessageVideo ?: return null
+        val video = content.video
+        val title = content.caption?.text.orEmpty()
+            .ifBlank { video.fileName }
+            .ifBlank { "Video ${message.id}" }
+        return MediaItem(
+            id = "tg:$chatId:${message.id}",
+            sourceType = SourceType.TELEGRAM,
+            title = title,
+            durationMs = video.duration * 1000L,
+            sizeBytes = video.video.size.toLong(),
+            thumbnailUrl = video.thumbnail?.file?.id?.let { "tdlib://thumb/$it" },
+            streamUrl = "tdlib://file/${video.video.id}",
+            addedAtEpochSec = message.date.toLong()
+        )
+    }
+
+    suspend fun pinVideo(chatId: Long, messageId: Long) {
+        send(TdApi.PinChatMessage(chatId, messageId, false, false))
+    }
+
+    suspend fun unpinVideo(chatId: Long, messageId: Long) {
+        send(TdApi.UnpinChatMessage(chatId, messageId))
+    }
         chats.chatIds
             .take(limit)
             .map { id ->

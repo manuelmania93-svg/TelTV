@@ -254,6 +254,7 @@ class MainActivity : ComponentActivity() {
                         val title = URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
 
                         var resumeFractions by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+                        var pinnedVideo by remember { mutableStateOf<MediaItem?>(null) }
                         LaunchedEffect(chatId) {
                             // refreshNewest runs first: corrects stale titles on already-cached rows
                             // (e.g. after the caption-title fix) and prepends any new videos posted
@@ -261,6 +262,9 @@ class MainActivity : ComponentActivity() {
                             // cache was empty. Both are no-ops if nothing has changed.
                             app.channelVideoRepository.refreshNewest(chatId)
                             app.channelVideoRepository.ensureNextPage(chatId)
+                            pinnedVideo = runCatching { app.telegramClient.getPinnedVideo(chatId) }
+                                .onFailure { Timber.w(it, "Failed to load pinned video for chat %d", chatId) }
+                                .getOrNull()
                             resumeFractions = app.database.watchStateDao().recentlyWatched(limit = 200)
                                 .filter { it.mediaId.startsWith("tg:$chatId:") }
                                 .associate { it.mediaId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f) }
@@ -269,6 +273,7 @@ class MainActivity : ComponentActivity() {
                         var isAscending by remember { mutableStateOf(true) }
                         BrowseScreen(
                             channelTitle = title,
+                            pinnedVideo = pinnedVideo,
                             isAscending = isAscending,
                             onToggleSort = { isAscending = !isAscending },
                             pagingFlow = remember(chatId, isAscending) { app.channelVideoRepository.videoPager(chatId, isAscending) },
@@ -278,6 +283,22 @@ class MainActivity : ComponentActivity() {
                             onLoadMore = { scope.launch { app.channelVideoRepository.ensureNextPage(chatId) } },
                             onOpenItem = { media ->
                                 navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}")
+                            },
+                            onPinVideo = { media ->
+                                scope.launch {
+                                    val messageId = media.id.substringAfterLast(':').toLongOrNull() ?: return@launch
+                                    runCatching { app.telegramClient.pinVideo(chatId, messageId) }
+                                        .onSuccess { pinnedVideo = media }
+                                        .onFailure { Timber.e(it, "Failed to pin video %s", media.id) }
+                                }
+                            },
+                            onUnpinVideo = { media ->
+                                scope.launch {
+                                    val messageId = media.id.substringAfterLast(':').toLongOrNull() ?: return@launch
+                                    runCatching { app.telegramClient.unpinVideo(chatId, messageId) }
+                                        .onSuccess { pinnedVideo = null }
+                                        .onFailure { Timber.e(it, "Failed to unpin video %s", media.id) }
+                                }
                             },
                             onAddToPlaylist = { media ->
                                 scope.launch {

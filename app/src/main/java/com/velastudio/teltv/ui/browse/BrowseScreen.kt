@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.Flow
 @Composable
 fun BrowseScreen(
     channelTitle: String,
+    pinnedVideo: MediaItem?,
     isAscending: Boolean,
     onToggleSort: () -> Unit,
     pagingFlow: Flow<androidx.paging.PagingData<MediaItem>>,
@@ -44,6 +45,8 @@ fun BrowseScreen(
     resumeFractionFor: (mediaId: String) -> Float?,
     onLoadMore: () -> Unit,
     onOpenItem: (MediaItem) -> Unit,
+    onPinVideo: (MediaItem) -> Unit,
+    onUnpinVideo: (MediaItem) -> Unit,
     onAddToPlaylist: (MediaItem) -> Unit,
     onAddToWatchLater: (MediaItem) -> Unit,
     onCreateMarathon: () -> Unit
@@ -83,6 +86,22 @@ fun BrowseScreen(
             }
         }
         Spacer(Modifier.height(16.dp))
+
+        pinnedVideo?.let { pinned ->
+            Column(Modifier.fillMaxWidth()) {
+                Text("Pinned Video", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                PosterCard(
+                    title = pinned.title,
+                    subtitle = "Pinned in this channel",
+                    thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),
+                    thumbnailLoader = thumbnailLoader,
+                    onClick = { onOpenItem(pinned) },
+                    onLongClick = { actionItem = pinned }
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+        }
 
         val refreshState = items.loadState.refresh
 
@@ -168,6 +187,12 @@ fun BrowseScreen(
                 Button(onClick = { onAddToPlaylist(media); actionItem = null }) { Text("Add to Playlist") }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = { onAddToWatchLater(media); actionItem = null }) { Text("Watch Later") }
+                Spacer(Modifier.height(8.dp))
+                if (pinnedVideo?.id == media.id) {
+                    OutlinedButton(onClick = { onUnpinVideo(media); actionItem = null }) { Text("Unpin from Channel") }
+                } else {
+                    OutlinedButton(onClick = { onPinVideo(media); actionItem = null }) { Text("Pin in Channel") }
+                }
             }
         }
     }
