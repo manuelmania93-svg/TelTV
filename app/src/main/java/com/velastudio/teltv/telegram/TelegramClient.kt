@@ -273,6 +273,25 @@ class TelegramClient(private val context: Context) {
 
         val concurrencyLimit = Semaphore(8)
 
+        chats.chatIds
+            .take(limit)
+            .map { id ->
+                async {
+                    concurrencyLimit.withPermit {
+                        runCatching { send(TdApi.GetChat(id)) as TdApi.Chat }.getOrNull()
+                    }
+                }
+            }
+            .mapNotNull { it.await() }
+            .filter { chat ->
+                (chat.type as? TdApi.ChatTypeSupergroup) != null || chat.type is TdApi.ChatTypeBasicGroup
+            }
+            .sortedWith(
+                compareByDescending<TdApi.Chat> { chat -> chat.positions.any { it.isPinned } }
+                    .thenByDescending { it.lastMessage?.date ?: 0 }
+            )
+    }
+
     suspend fun getPinnedVideo(chatId: Long): MediaItem? {
         val message = send(TdApi.GetChatPinnedMessage(chatId)) as? TdApi.Message ?: return null
         val content = message.content as? TdApi.MessageVideo ?: return null
@@ -298,24 +317,6 @@ class TelegramClient(private val context: Context) {
 
     suspend fun unpinVideo(chatId: Long, messageId: Long) {
         send(TdApi.UnpinChatMessage(chatId, messageId))
-    }
-        chats.chatIds
-            .take(limit)
-            .map { id ->
-                async {
-                    concurrencyLimit.withPermit {
-                        runCatching { send(TdApi.GetChat(id)) as TdApi.Chat }.getOrNull()
-                    }
-                }
-            }
-            .mapNotNull { it.await() }
-            .filter { chat ->
-                (chat.type as? TdApi.ChatTypeSupergroup) != null || chat.type is TdApi.ChatTypeBasicGroup
-            }
-            .sortedWith(
-                compareByDescending<TdApi.Chat> { chat -> chat.positions.any { it.isPinned } }
-                    .thenByDescending { it.lastMessage?.date ?: 0 }
-            )
     }
 
     suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40): List<MediaItem> {
