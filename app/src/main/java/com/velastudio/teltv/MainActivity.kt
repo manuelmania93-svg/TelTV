@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
                 var crashReport by remember { mutableStateOf(com.velastudio.teltv.util.CrashLogger.lastCrashReport(app)) }
                 if (crashReport != null) {
                     androidx.compose.ui.window.Dialog(onDismissRequest = { 
-                        java.io.File(app.filesDir, "last_crash.txt").delete()
+                        com.velastudio.teltv.util.CrashLogger.clear(app)
                         crashReport = null 
                     }) {
                         androidx.tv.material3.Card(onClick = {}) {
@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(16.dp))
                                 androidx.tv.material3.Button(onClick = {
-                                    java.io.File(app.filesDir, "last_crash.txt").delete()
+                                    com.velastudio.teltv.util.CrashLogger.clear(app)
                                     crashReport = null
                                 }) {
                                     androidx.tv.material3.Text("Dismiss")
