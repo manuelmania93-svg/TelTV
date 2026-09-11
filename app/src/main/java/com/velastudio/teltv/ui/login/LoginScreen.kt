@@ -89,11 +89,11 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 modifier = Modifier.padding(32.dp)
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
+                    painter = painterResource(R.drawable.ic_launcher),
                     contentDescription = "TelTV",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(150.dp)
+                        .size(220.dp)
                 )
                 Spacer(Modifier.height(18.dp))
                 Text(
@@ -106,6 +106,12 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 Text(
                     text = "YOUR LIBRARY. ON YOUR SCREEN.",
                     style = MaterialTheme.typography.bodyMedium,
+                    color = TelTvMuted
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Copyright 2026 Manuel Durnig",
+                    style = MaterialTheme.typography.bodySmall,
                     color = TelTvMuted
                 )
                 Spacer(Modifier.height(24.dp))
@@ -141,11 +147,11 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 modifier = Modifier.width(270.dp)
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
+                    painter = painterResource(R.drawable.ic_launcher),
                     contentDescription = "TelTV logo",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(116.dp)
+                        .size(190.dp)
                 )
                 Spacer(Modifier.height(22.dp))
                 Text(
@@ -165,6 +171,12 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 Text(
                     text = "Your Telegram library,\nready for the big screen.",
                     style = MaterialTheme.typography.bodyLarge,
+                    color = TelTvMuted
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "Copyright 2026 Manuel Durnig",
+                    style = MaterialTheme.typography.bodySmall,
                     color = TelTvMuted
                 )
             }

@@ -82,7 +82,7 @@ fun PosterCard(
             .semantics { this.contentDescription = contentDescription }
     ) {
         Box(Modifier.fillMaxSize()) {
-            val imageSource = tmdbMeta?.posterUrl ?: localThumbPath
+            val imageSource = localThumbPath ?: tmdbMeta?.posterUrl
             if (imageSource != null) {
                 AsyncImage(
                     model = imageSource,
