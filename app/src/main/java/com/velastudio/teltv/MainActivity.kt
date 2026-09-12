@@ -562,7 +562,7 @@ class MainActivity : ComponentActivity() {
                                         .firstOrNull { it.mediaId == mediaId }?.position ?: -1
                                 )?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
                             } else if (cur != null) {
-                                app.database.videoIndexDao().getNextInChannel(cur.chatId, cur.messageId)
+                                com.velastudio.teltv.util.HybridEpisodeMatcher.findNext(cur, app.database.videoIndexDao())
                             } else {
                                 null
                             }
