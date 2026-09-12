@@ -419,13 +419,13 @@ class MainActivity : ComponentActivity() {
                         "player/{mediaId}?playlistId={playlistId}",
                         arguments = listOf(
                             navArgument("mediaId") { type = NavType.StringType },
-                            navArgument("playlistId") { type = NavType.LongType; nullable = true; defaultValue = null }
+                            navArgument("playlistId") { type = NavType.StringType; nullable = true; defaultValue = null }
                         )
                     ) { backStackEntry ->
                         val mediaId = URLDecoder.decode(backStackEntry.arguments?.getString("mediaId") ?: "", "UTF-8")
                         val playlistId = backStackEntry.arguments
                             ?.takeIf { it.containsKey("playlistId") }
-                            ?.getLong("playlistId")
+                            ?.getString("playlistId")?.toLongOrNull()
                         var resolved by remember { mutableStateOf<WatchStateEntity?>(null) }
                         var fileId by remember { mutableStateOf<Int?>(null) }
                         var title by remember { mutableStateOf(mediaId) }
