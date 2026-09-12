@@ -1,5 +1,7 @@
 package com.velastudio.teltv.data.repository
 
+import timber.log.Timber
+
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
