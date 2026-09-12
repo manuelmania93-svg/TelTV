@@ -24,51 +24,50 @@ object AppUpdater {
 
     suspend fun checkForUpdate(force: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            // 1. Try latest release, or fallback to rolling-release tag
-            var url = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-            var request = Request.Builder()
-                .url(url)
-                .header("User-Agent", "TelTV-AndroidTV-Updater")
-                .build()
-            var response = client.newCall(request).execute()
+            val releaseUrls = listOf(
+                "https://api.github.com/repos/$GITHUB_REPO/releases/latest",
+                "https://api.github.com/repos/$GITHUB_REPO/releases/tags/rolling-release"
+            )
 
-            if (!response.isSuccessful) {
-                url = "https://api.github.com/repos/$GITHUB_REPO/releases/tags/rolling-release"
-                request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "TelTV-AndroidTV-Updater")
-                    .build()
-                response = client.newCall(request).execute()
-            }
+            for (url in releaseUrls) {
+                val json = fetchRelease(url) ?: continue
+                val tagName = json.optString("tag_name", "").removePrefix("v").trim()
+                val assets = json.optJSONArray("assets") ?: continue
+                var downloadUrl: String? = null
+                for (i in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(i)
+                    if (asset.optString("name", "").endsWith(".apk")) {
+                        downloadUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                        break
+                    }
+                }
 
-            if (!response.isSuccessful) return@withContext null
-
-            val body = response.body?.string() ?: return@withContext null
-            val json = JSONObject(body)
-            val tagName = json.optString("tag_name", "").removePrefix("v").trim()
-            val changelog = json.optString("body", "Continuous release update with latest fixes.")
-
-            val currentVersion = BuildConfig.VERSION_NAME
-            if (!force && (tagName.isBlank() || tagName == currentVersion)) {
-                return@withContext null
-            }
-
-            val assets = json.optJSONArray("assets") ?: return@withContext null
-            var downloadUrl: String? = null
-            for (i in 0 until assets.length()) {
-                val asset = assets.getJSONObject(i)
-                val name = asset.optString("name", "")
-                if (name.endsWith(".apk")) {
-                    downloadUrl = asset.optString("browser_download_url")
-                    break
+                if (downloadUrl != null) {
+                    val currentVersion = BuildConfig.VERSION_NAME
+                    if (!force && (tagName.isBlank() || tagName == currentVersion)) {
+                        return@withContext null
+                    }
+                    return@withContext UpdateInfo(
+                        tagName,
+                        downloadUrl,
+                        json.optString("body", "Continuous release update with latest fixes.")
+                    )
                 }
             }
-
-            if (downloadUrl != null) {
-                UpdateInfo(tagName, downloadUrl, changelog)
-            } else null
+            null
         } catch (e: Exception) {
             null
+        }
+    }
+
+    private fun fetchRelease(url: String): JSONObject? {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "TelTV-AndroidTV-Updater")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return null
+            return response.body?.string()?.let(::JSONObject)
         }
     }
 
@@ -82,43 +81,42 @@ object AppUpdater {
                 .url(downloadUrl)
                 .header("User-Agent", "TelTV-AndroidTV-Updater")
                 .build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@withContext false
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext false
 
-            val body = response.body ?: return@withContext false
-            val contentLength = body.contentLength()
+                val body = response.body ?: return@withContext false
+                val contentLength = body.contentLength()
+                val apkFile = File(context.cacheDir, "TelTV_update.apk")
 
-            val apkFile = File(context.cacheDir, "TelTV_update.apk")
-            if (apkFile.exists()) apkFile.delete()
-
-            body.byteStream().use { input ->
-                FileOutputStream(apkFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalRead = 0L
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalRead += bytesRead
-                        if (contentLength > 0) {
-                            onProgress(totalRead.toFloat() / contentLength)
+                body.byteStream().use { input ->
+                    FileOutputStream(apkFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        var totalRead = 0L
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalRead += bytesRead
+                            if (contentLength > 0) {
+                                onProgress(totalRead.toFloat() / contentLength)
+                            }
                         }
+                        output.flush()
                     }
-                    output.flush()
                 }
-            }
 
-            withContext(Dispatchers.Main) {
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    apkFile
-                )
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/vnd.android.package-archive")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                withContext(Dispatchers.Main) {
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        apkFile
+                    )
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
                 }
-                context.startActivity(intent)
             }
             true
         } catch (e: Exception) {
