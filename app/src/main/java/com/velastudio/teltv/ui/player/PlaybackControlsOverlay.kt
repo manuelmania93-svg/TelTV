@@ -127,15 +127,13 @@ fun PlaybackControlsOverlay(
                         contentDescription = "Skip forward",
                         onClick = onSkipForward
                     )
-                    if (canAutoPlayNext) {
-                        Spacer(Modifier.width(32.dp))
-                        ControlButton(
-                            icon = Icons.Filled.PlaylistPlay,
-                            contentDescription = if (autoPlayNext) "Autoplay deaktivieren" else "Autoplay aktivieren",
-                            onClick = onToggleAutoPlay,
-                            active = autoPlayNext
-                        )
-                    }
+                    Spacer(Modifier.width(32.dp))
+                    ControlButton(
+                        icon = Icons.Filled.PlaylistPlay,
+                        contentDescription = if (autoPlayNext) "Autoplay deaktivieren" else "Autoplay aktivieren",
+                        onClick = onToggleAutoPlay,
+                        active = autoPlayNext
+                    )
                 }
             }
         }

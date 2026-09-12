@@ -259,44 +259,49 @@ fun TrackSelectorDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(activeList) { track ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                if (track.isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
-                                RoundedCornerShape(8.dp)
-                            )
-                            .clickable {
-                                if (selectedTab == 0 && track.group != null) {
+                    androidx.tv.material3.Surface(
+                        onClick = {
+                            if (selectedTab == 0 && track.group != null) {
+                                val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
+                                controller.trackSelectionParameters = controller.trackSelectionParameters
+                                    .buildUpon()
+                                    .setOverrideForType(override)
+                                    .build()
+                            } else if (selectedTab == 1) {
+                                if (track.group == null) {
+                                    controller.trackSelectionParameters = controller.trackSelectionParameters
+                                        .buildUpon()
+                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                        .build()
+                                } else {
                                     val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
                                     controller.trackSelectionParameters = controller.trackSelectionParameters
                                         .buildUpon()
+                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                                         .setOverrideForType(override)
                                         .build()
-                                } else if (selectedTab == 1) {
-                                    if (track.group == null) {
-                                        controller.trackSelectionParameters = controller.trackSelectionParameters
-                                            .buildUpon()
-                                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                            .build()
-                                    } else {
-                                        val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
-                                        controller.trackSelectionParameters = controller.trackSelectionParameters
-                                            .buildUpon()
-                                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                            .setOverrideForType(override)
-                                            .build()
-                                    }
                                 }
-                                onDismiss()
                             }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            onDismiss()
+                        },
+                        colors = androidx.tv.material3.SurfaceDefaults.colors(
+                            containerColor = if (track.isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                            focusedContainerColor = Color(0xFF29B6F6)
+                        ),
+                        shape = androidx.tv.material3.SurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
                     ) {
-                        Text(track.title, color = Color.White, fontSize = 16.sp)
-                        if (track.isSelected) {
-                            Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Color.White)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(track.title, color = Color.White, fontSize = 16.sp)
+                            if (track.isSelected) {
+                                Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Color.White)
+                            }
                         }
                     }
                 }

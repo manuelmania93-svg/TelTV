@@ -69,10 +69,19 @@ class ChannelVideoRepository(
             val state = syncStateDao.get(chatId) ?: ChannelSyncStateEntity(chatId = chatId)
             if (state.fullyLoaded) return@withLock
 
+            val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
+                val raw = kotlin.math.abs(chatId)
+                val tId = (raw % 100_000L).toInt()
+                val cId = -(raw / 100_000L)
+                cId to tId
+            } else {
+                chatId to 0
+            }
             val fetched = telegram.getVideoMessages(
-                chatId = chatId,
+                chatId = realChatId,
                 fromMessageId = state.oldestLoadedMessageId,
-                limit = deviceProfile.pageSize
+                limit = deviceProfile.pageSize,
+                topicId = topicId
             )
             if (fetched.isEmpty()) {
                 syncStateDao.upsert(state.copy(fullyLoaded = true))

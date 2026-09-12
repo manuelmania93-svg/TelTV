@@ -63,7 +63,7 @@ fun PlayerScreen(
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
     var autoPlayNext by remember(fileId, directUri) {
-        mutableStateOf(autoPlayByDefault && nextTitle != null && onPlayNext != null)
+        mutableStateOf(autoPlayByDefault)
     }
     var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
 

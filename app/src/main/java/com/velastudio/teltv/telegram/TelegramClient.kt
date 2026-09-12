@@ -319,10 +319,26 @@ class TelegramClient(private val context: Context) {
         send(TdApi.UnpinChatMessage(chatId, messageId))
     }
 
-    suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40): List<MediaItem> {
+    
+    suspend fun getForumTopics(chatId: Long): List<org.drinkless.tdlib.TdApi.ForumTopicInfo> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val result = send(org.drinkless.tdlib.TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100)) as org.drinkless.tdlib.TdApi.ForumTopics
+            result.topics.map { it.info }
+        }.getOrDefault(emptyList())
+    }
+
+    suspend fun isForumChat(chatId: Long): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val chat = send(org.drinkless.tdlib.TdApi.GetChat(chatId)) as org.drinkless.tdlib.TdApi.Chat
+            chat.viewAsTopics
+        }.getOrDefault(false)
+    }
+
+    suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40, topicId: Int = 0): List<MediaItem> {
+        val topic = if (topicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(topicId) else null
         val result = send(
             TdApi.SearchChatMessages(
-                chatId, null, "", null, fromMessageId, 0, limit,
+                chatId, topic, "", null, fromMessageId, 0, limit,
                 TdApi.SearchMessagesFilterVideo()
             )
         ) as TdApi.FoundChatMessages

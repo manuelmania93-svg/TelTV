@@ -229,8 +229,17 @@ class MainActivity : ComponentActivity() {
                             otherSources = HomeRow("Other sources", emptyList()),
                             isLoading = isLoadingChannels,
                             onOpenEntry = { entry ->
-                                val encodedTitle = URLEncoder.encode(entry.name, "UTF-8")
-                                navController.navigate("browse/${entry.id}/$encodedTitle")
+                                scope.launch {
+                                    val isForum = runCatching { app.telegramClient.isForumChat(entry.id) }.getOrDefault(false)
+                                    val encodedTitle = URLEncoder.encode(entry.name, "UTF-8")
+                                    if (isForum) {
+                                        navController.navigate("topics/${entry.id}/$encodedTitle")
+                                    } else {
+                                        navController.navigate("browse/${entry.id}/$encodedTitle")
+                                    }
+                                }
+                            }
+                                }
                             },
                             onResumeWatching = { mediaId ->
                                 navController.navigate("player/${URLEncoder.encode(mediaId, "UTF-8")}")
@@ -246,6 +255,101 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+                    }
+
+                                        composable(
+                        "topics/{chatId}/{title}",
+                        arguments = listOf(
+                            navArgument("chatId") { type = NavType.LongType },
+                            navArgument("title") { type = NavType.StringType }
+                        )
+                    ) { backStackEntry ->
+                        val chatId = backStackEntry.arguments?.getLong("chatId") ?: return@composable
+                        val title = URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
+                        var topics by remember { mutableStateOf<List<org.drinkless.tdlib.TdApi.ForumTopicInfo>>(emptyList()) }
+                        var isLoading by remember { mutableStateOf(true) }
+
+                        LaunchedEffect(chatId) {
+                            topics = app.telegramClient.getForumTopics(chatId)
+                            isLoading = false
+                        }
+
+                        androidx.compose.foundation.layout.Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 40.dp, vertical = 28.dp)
+                        ) {
+                            androidx.tv.material3.Text(title, style = androidx.tv.material3.MaterialTheme.typography.headlineMedium, color = androidx.compose.ui.graphics.Color.White)
+                            androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+                            androidx.tv.material3.Text("Choose a Series / Topic", style = androidx.tv.material3.MaterialTheme.typography.bodyMedium, color = androidx.compose.ui.graphics.Color.Gray)
+                            androidx.compose.foundation.layout.Spacer(Modifier.height(24.dp))
+
+                            if (isLoading) {
+                                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                    androidx.compose.material3.CircularProgressIndicator(color = androidx.compose.ui.graphics.Color(0xFFFFC107))
+                                }
+                            } else if (topics.isEmpty()) {
+                                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                    androidx.tv.material3.Text("No topics found in this group.", color = androidx.compose.ui.graphics.Color.LightGray)
+                                }
+                            } else {
+                                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                                    columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(minSize = 220.dp),
+                                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp),
+                                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(topics.size) { idx ->
+                                        val topic = topics[idx]
+                                        androidx.tv.material3.Card(
+                                            onClick = {
+                                                val raw = kotlin.math.abs(chatId)
+                                                val virtualId = -(raw * 100_000L + topic.forumTopicId)
+                                                val encodedTopicTitle = URLEncoder.encode(topic.name, "UTF-8")
+                                                navController.navigate("browse/$virtualId/$encodedTopicTitle")
+                                            },
+                                            shape = androidx.tv.material3.CardDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+                                            colors = androidx.tv.material3.CardDefaults.colors(
+                                                containerColor = androidx.compose.ui.graphics.Color(0xFF151515),
+                                                focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF292929)
+                                            ),
+                                            scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.05f),
+                                            modifier = Modifier
+                                                .height(130.dp)
+                                                .fillMaxWidth()
+                                        ) {
+                                            androidx.compose.foundation.layout.Box(
+                                                modifier = Modifier.fillMaxSize().padding(16.dp),
+                                                contentAlignment = androidx.compose.ui.Alignment.CenterStart
+                                            ) {
+                                                androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                                    androidx.tv.material3.Icon(
+                                                        imageVector = androidx.compose.material.icons.Icons.Filled.Tv,
+                                                        contentDescription = null,
+                                                        tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
+                                                        modifier = Modifier.size(36.dp)
+                                                    )
+                                                    androidx.compose.foundation.layout.Spacer(Modifier.width(16.dp))
+                                                    androidx.compose.foundation.layout.Column {
+                                                        androidx.tv.material3.Text(
+                                                            text = topic.name,
+                                                            style = androidx.tv.material3.MaterialTheme.typography.titleMedium,
+                                                            color = androidx.compose.ui.graphics.Color.White,
+                                                            maxLines = 2
+                                                        )
+                                                        androidx.tv.material3.Text(
+                                                            text = "Topic #${topic.forumTopicId}",
+                                                            style = androidx.tv.material3.MaterialTheme.typography.bodySmall,
+                                                            color = androidx.compose.ui.graphics.Color.Gray
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     composable(
