@@ -88,14 +88,6 @@ fun PlaybackControlsOverlay(
                             contentDescription = "Open in External Player",
                             onClick = onOpenExternal
                         )
-                        if (canAutoPlayNext) {
-                            ControlButton(
-                                icon = Icons.Filled.PlaylistPlay,
-                                contentDescription = if (autoPlayNext) "Autoplay deaktivieren" else "Autoplay aktivieren",
-                                onClick = onToggleAutoPlay,
-                                active = autoPlayNext
-                            )
-                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -135,6 +127,15 @@ fun PlaybackControlsOverlay(
                         contentDescription = "Skip forward",
                         onClick = onSkipForward
                     )
+                    if (canAutoPlayNext) {
+                        Spacer(Modifier.width(32.dp))
+                        ControlButton(
+                            icon = Icons.Filled.PlaylistPlay,
+                            contentDescription = if (autoPlayNext) "Autoplay deaktivieren" else "Autoplay aktivieren",
+                            onClick = onToggleAutoPlay,
+                            active = autoPlayNext
+                        )
+                    }
                 }
             }
         }

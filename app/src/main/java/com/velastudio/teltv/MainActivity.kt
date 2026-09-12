@@ -449,16 +449,16 @@ class MainActivity : ComponentActivity() {
                         var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
                         LaunchedEffect(mediaId, playlistId) {
                             val cur = app.database.videoIndexDao().getByMediaId(mediaId)
-                            if (cur != null) {
-                                nextEntity = if (playlistId != null) {
-                                    app.database.playlistDao().nextItem(
-                                        playlistId,
-                                        app.database.playlistDao().getItems(playlistId)
-                                            .firstOrNull { it.mediaId == mediaId }?.position ?: -1
-                                    )?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
-                                } else {
-                                    app.database.videoIndexDao().getNextInChannel(cur.chatId, cur.position)
-                                }
+                            nextEntity = if (playlistId != null) {
+                                app.database.playlistDao().nextItem(
+                                    playlistId,
+                                    app.database.playlistDao().getItems(playlistId)
+                                        .firstOrNull { it.mediaId == mediaId }?.position ?: -1
+                                )?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
+                            } else if (cur != null) {
+                                app.database.videoIndexDao().getNextInChannel(cur.chatId, cur.position)
+                            } else {
+                                null
                             }
                         }
 
