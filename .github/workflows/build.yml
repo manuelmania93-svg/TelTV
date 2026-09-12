@@ -36,12 +36,35 @@ jobs:
           echo "$KEYSTORE_BASE64" | tr -d '\r\n[:space:]' | base64 -d -i > teltv-release.jks
           echo "Keystore decoded successfully."
 
-      - name: Build Debug and Release APKs
+      - name: Build APKs with Gradle
+        run: ./gradlew assembleDebug assembleRelease --stacktrace
+
+      - name: Sign Release APK with apksigner
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleDebug assembleRelease --stacktrace
+        run: |
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+          echo "Using apksigner at: $APKSIGNER"
+          
+          # Find the generated release APK
+          INPUT_APK=$(ls app/build/outputs/apk/release/*.apk | head -n 1)
+          echo "Signing APK: $INPUT_APK"
+          
+          # Sign using the keystore
+          $APKSIGNER sign \
+            --ks teltv-release.jks \
+            --ks-pass "pass:${KEYSTORE_PASSWORD:-YourSecurePassword123}" \
+            --ks-key-alias "${KEY_ALIAS:-teltv}" \
+            --key-pass "pass:${KEY_PASSWORD:-YourSecurePassword123}" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --out app/build/outputs/apk/release/TelTV-release.apk \
+            "$INPUT_APK"
+
+          echo "Verifying APK signature..."
+          $APKSIGNER verify -v app/build/outputs/apk/release/TelTV-release.apk
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -54,5 +77,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TelTV-release
-          path: app/build/outputs/apk/release/*-release.apk
+          path: app/build/outputs/apk/release/TelTV-release.apk
           if-no-files-found: error
