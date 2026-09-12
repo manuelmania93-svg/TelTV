@@ -44,11 +44,13 @@ object AppUpdater {
 
                 if (downloadUrl != null) {
                     val currentVersion = BuildConfig.VERSION_NAME
-                    if (!force && (tagName.isBlank() || tagName == currentVersion)) {
+                    val releaseName = json.optString("name", "")
+                    val versionInRelease = releaseName.removePrefix("TelTV").removePrefix("v").trim()
+                    if (!force && (versionInRelease == currentVersion || tagName == currentVersion || (tagName == "rolling-release" && (versionInRelease.isBlank() || versionInRelease == currentVersion)))) {
                         return@withContext null
                     }
                     return@withContext UpdateInfo(
-                        tagName,
+                        if (versionInRelease.isNotBlank()) versionInRelease else tagName,
                         downloadUrl,
                         json.optString("body", "Continuous release update with latest fixes.")
                     )

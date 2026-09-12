@@ -21,6 +21,12 @@ import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.velastudio.teltv.ui.theme.TelTvYellow
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.font.FontWeight
+import androidx.tv.material3.IconButtonDefaults
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Button
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -130,12 +136,22 @@ fun PlaybackControlsOverlay(
                         onClick = onSkipForward
                     )
                     Spacer(Modifier.width(32.dp))
-                    ControlButton(
-                        icon = Icons.Filled.PlaylistPlay,
-                        contentDescription = if (autoPlayNext) "Autoplay deaktivieren" else "Autoplay aktivieren",
+                    Button(
                         onClick = onToggleAutoPlay,
-                        active = autoPlayNext
-                    )
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (autoPlayNext) TelTvYellow else Color.White.copy(alpha = 0.15f),
+                            focusedContainerColor = if (autoPlayNext) Color(0xFFFFD54F) else Color.White,
+                            contentColor = if (autoPlayNext) Color.Black else Color.White,
+                            focusedContentColor = Color.Black
+                        )
+                    ) {
+                        Icon(Icons.Filled.PlaylistPlay, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (autoPlayNext) "Autoplay: ON" else "Autoplay: OFF",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -152,16 +168,34 @@ private fun ControlButton(
     modifier: Modifier = Modifier
 ) {
     val size = if (large) 72.dp else 52.dp
+    var isFocused by remember { mutableStateOf(false) }
+
     IconButton(
         onClick = onClick,
-        modifier = modifier.size(size)
+        modifier = modifier
+            .size(size)
+            .onFocusChanged { isFocused = it.isFocused }
             .background(
-                if (active) Color(0xFF29B6F6).copy(alpha = 0.85f)
-                else Color.White.copy(alpha = 0.15f),
-                CircleShape
-            )
+                color = when {
+                    isFocused && active -> TelTvYellow
+                    isFocused -> Color.White
+                    active -> TelTvYellow.copy(alpha = 0.85f)
+                    else -> Color.White.copy(alpha = 0.15f)
+                },
+                shape = CircleShape
+            ),
+        colors = IconButtonDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = if (active && !isFocused) Color.Black else Color.White,
+            focusedContainerColor = Color.Transparent,
+            focusedContentColor = Color.Black
+        )
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = Color.White)
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = if (isFocused || (active && !isFocused)) Color.Black else Color.White
+        )
     }
 }
 

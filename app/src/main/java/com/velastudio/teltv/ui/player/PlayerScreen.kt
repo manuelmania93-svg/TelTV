@@ -387,6 +387,8 @@ fun PlayerScreen(
             onToggleAutoPlay = {
                 autoPlayNext = !autoPlayNext
                 controlsVisible = true
+                seekingText = if (autoPlayNext) "Autoplay: ON" else "Autoplay: OFF"
+                seekingIsForward = autoPlayNext
             }
         )
 

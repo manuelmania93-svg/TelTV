@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -59,3 +61,26 @@ jobs:
           name: TelTV-release
           path: app/build/outputs/apk/release/TelTV-release.apk
           if-no-files-found: error
+
+      - name: Prepare Release APKs
+        run: |
+          cp app/build/outputs/apk/release/TelTV-release.apk app/build/outputs/apk/release/app-release.apk
+
+      - name: Extract Version
+        id: get_version
+        run: |
+          VERSION=$(grep "versionName =" app/build.gradle.kts | head -n 1 | cut -d"""" -f2)
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Publish GitHub Rolling Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: rolling-release
+          name: "TelTV ${{ steps.get_version.outputs.version }}"
+          body: "Automated continuous release from commit ${{ github.sha }} (${{ steps.get_version.outputs.version }})"
+          files: |
+            app/build/outputs/apk/release/TelTV-release.apk
+            app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
