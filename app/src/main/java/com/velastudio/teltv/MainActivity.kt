@@ -1,5 +1,8 @@
 package com.velastudio.teltv
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
