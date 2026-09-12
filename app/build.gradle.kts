@@ -34,7 +34,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             if (!releaseKeystorePath.isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -199,3 +199,9 @@ tasks.matching { it.name == "preBuild" }.configureEach {
     dependsOn("checkTdlibPresent")
 }
 
+
+configurations.all {
+    exclude(group = "xpp3", module = "xpp3")
+    exclude(group = "stax", module = "stax-api")
+    exclude(group = "xmlpull", module = "xmlpull")
+}
