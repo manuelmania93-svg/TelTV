@@ -56,7 +56,11 @@ class TelTvApp : Application(), ImageLoaderFactory {
                 deviceProfile = deviceProfile
             )
 
-            CacheTrimWorker.schedule(this)
+            try {
+                CacheTrimWorker.schedule(this)
+            } catch (wEx: Throwable) {
+                Timber.w(wEx, "WorkManager schedule deferred")
+            }
         } catch (startupThrowable: Throwable) {
             startupError = CrashLogger.record(this, Thread.currentThread(), startupThrowable)
             Log.e("TelTV_STARTUP", "Application initialization failed", startupThrowable)
@@ -64,12 +68,17 @@ class TelTvApp : Application(), ImageLoaderFactory {
     }
 
     override fun newImageLoader(): ImageLoader {
+        val cacheBytes = if (::deviceProfile.isInitialized) {
+            deviceProfile.imageMemoryCacheBytes
+        } else {
+            16L * 1024 * 1024
+        }
         return ImageLoader.Builder(this)
             .bitmapConfig(Bitmap.Config.RGB_565)
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizeBytes(
-                        deviceProfile.imageMemoryCacheBytes
+                        cacheBytes
                             .coerceAtMost(Int.MAX_VALUE.toLong())
                             .toInt()
                     )

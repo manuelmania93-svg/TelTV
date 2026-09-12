@@ -593,19 +593,30 @@ class MainActivity : ComponentActivity() {
 
 @androidx.compose.runtime.Composable
 private fun StartupErrorScreen(report: String) {
-    androidx.compose.foundation.layout.Column(
+    androidx.compose.foundation.layout.Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(androidx.compose.ui.graphics.Color(0xFF090B10))
+            .padding(40.dp),
+        contentAlignment = androidx.compose.ui.Alignment.Center
     ) {
-        androidx.tv.material3.Text(
-            text = "TelTV konnte nicht gestartet werden",
-            style = androidx.tv.material3.MaterialTheme.typography.headlineSmall
-        )
-        androidx.tv.material3.Text(
-            text = report.take(6000),
-            style = androidx.tv.material3.MaterialTheme.typography.bodySmall
-        )
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(androidx.compose.ui.graphics.Color(0xFF1E1E1E), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                .padding(28.dp)
+        ) {
+            androidx.tv.material3.Text(
+                text = "TelTV Startup Error",
+                style = androidx.tv.material3.MaterialTheme.typography.titleLarge,
+                color = androidx.compose.ui.graphics.Color(0xFFFFC107)
+            )
+            androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+            androidx.tv.material3.Text(
+                text = report.take(3000),
+                style = androidx.tv.material3.MaterialTheme.typography.bodyMedium,
+                color = androidx.compose.ui.graphics.Color.White
+            )
+        }
     }
 }
