@@ -3,6 +3,7 @@ package com.velastudio.teltv.ui.player
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -119,7 +120,8 @@ fun PlaybackControlsOverlay(
                         icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         onClick = onPlayPause,
-                        large = true
+                        large = true,
+                        modifier = playPauseModifier
                     )
                     Spacer(Modifier.width(32.dp))
                     ControlButton(

@@ -293,22 +293,87 @@ class TelegramClient(private val context: Context) {
     }
 
     suspend fun getPinnedVideo(chatId: Long): MediaItem? {
-        val message = send(TdApi.GetChatPinnedMessage(chatId)) as? TdApi.Message ?: return null
-        val content = message.content as? TdApi.MessageVideo ?: return null
-        val video = content.video
-        val title = content.caption?.text.orEmpty()
-            .ifBlank { video.fileName }
-            .ifBlank { "Video ${message.id}" }
-        return MediaItem(
-            id = "tg:$chatId:${message.id}",
-            sourceType = SourceType.TELEGRAM,
-            title = title,
-            durationMs = video.duration * 1000L,
-            sizeBytes = video.video.size.toLong(),
-            thumbnailUrl = video.thumbnail?.file?.id?.let { "tdlib://thumb/$it" },
-            streamUrl = "tdlib://file/${video.video.id}",
-            addedAtEpochSec = message.date.toLong()
-        )
+        val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
+            val raw = kotlin.math.abs(chatId)
+            val tId = (raw % 100_000L).toInt()
+            val cId = -(raw / 100_000L)
+            cId to tId
+        } else {
+            chatId to 0
+        }
+
+        val message: TdApi.Message? = if (topicId != 0) {
+            val res = send(
+                TdApi.SearchChatMessages(
+                    realChatId,
+                    TdApi.MessageTopicForum(topicId),
+                    "",
+                    null,
+                    0L,
+                    0,
+                    1,
+                    TdApi.SearchMessagesFilterPinned()
+                )
+            ) as? TdApi.FoundChatMessages
+            res?.messages?.firstOrNull()
+        } else {
+            (send(TdApi.GetChatPinnedMessage(realChatId)) as? TdApi.Message)
+                ?: run {
+                    val res = send(
+                        TdApi.SearchChatMessages(
+                            realChatId,
+                            null,
+                            "",
+                            null,
+                            0L,
+                            0,
+                            1,
+                            TdApi.SearchMessagesFilterPinned()
+                        )
+                    ) as? TdApi.FoundChatMessages
+                    res?.messages?.firstOrNull()
+                }
+        } ?: return null
+
+        return when (val content = message.content) {
+            is TdApi.MessageVideo -> {
+                val video = content.video
+                val title = content.caption?.text.orEmpty()
+                    .ifBlank { video.fileName }
+                    .ifBlank { "Video ${message.id}" }
+                MediaItem(
+                    id = "tg:$chatId:${message.id}",
+                    sourceType = SourceType.TELEGRAM,
+                    title = title,
+                    subtitle = null,
+                    category = null,
+                    durationMs = video.duration * 1000L,
+                    sizeBytes = video.video.size.toLong(),
+                    thumbnailUrl = video.thumbnail?.file?.id?.let { "tdlib://thumb/$it" },
+                    streamUrl = "tdlib://file/${video.video.id}",
+                    addedAtEpochSec = message.date.toLong()
+                )
+            }
+            is TdApi.MessageDocument -> {
+                val doc = content.document
+                val title = content.caption?.text.orEmpty()
+                    .ifBlank { doc.fileName }
+                    .ifBlank { "File ${message.id}" }
+                MediaItem(
+                    id = "tg:$chatId:${message.id}",
+                    sourceType = SourceType.TELEGRAM,
+                    title = title,
+                    subtitle = null,
+                    category = null,
+                    durationMs = null,
+                    sizeBytes = doc.document.size.toLong(),
+                    thumbnailUrl = doc.thumbnail?.file?.id?.let { "tdlib://thumb/$it" },
+                    streamUrl = "tdlib://file/${doc.document.id}",
+                    addedAtEpochSec = message.date.toLong()
+                )
+            }
+            else -> null
+        }
     }
 
     suspend fun pinVideo(chatId: Long, messageId: Long) {

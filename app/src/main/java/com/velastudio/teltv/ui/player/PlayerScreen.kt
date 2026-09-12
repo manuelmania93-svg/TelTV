@@ -31,7 +31,7 @@ import com.velastudio.teltv.util.MediaTitleCleaner
 import kotlinx.coroutines.delay
 import timber.log.Timber
 
-private const val CONTROLS_AUTO_HIDE_MS = 4000L
+private const val CONTROLS_AUTO_HIDE_MS = 7000L
 private const val POSITION_SAVE_INTERVAL_MS = 5000L
 
 @OptIn(UnstableApi::class)
@@ -245,7 +245,15 @@ fun PlayerScreen(
     }
 
     val focusRequester = remember { FocusRequester() }
+    val playPauseFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            kotlinx.coroutines.delay(100)
+            runCatching { playPauseFocusRequester.requestFocus() }
+        }
+    }
 
     Box(
         modifier = Modifier
