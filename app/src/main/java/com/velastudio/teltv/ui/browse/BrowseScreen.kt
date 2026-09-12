@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,15 +15,15 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import androidx.tv.material3.Button
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
 import androidx.tv.material3.OutlinedButton
-import androidx.compose.ui.window.Dialog
+import androidx.tv.material3.Text
 import com.velastudio.teltv.data.model.MediaItem
 import com.velastudio.teltv.telegram.ThumbnailLoader
 import com.velastudio.teltv.ui.common.PosterCard
@@ -60,16 +61,9 @@ fun BrowseScreen(
     var actionItem by remember { mutableStateOf<MediaItem?>(null) }
     var showMarathonDialog by remember { mutableStateOf(false) }
 
-    // Trigger onLoadMore only when the user actually scrolls near the end, not on initial item mount
-    LaunchedEffect(gridState) {
-        snapshotFlow { 
-            val layout = gridState.layoutInfo
-            val total = layout.totalItemsCount
-            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: 0
-            total > 0 && lastVisible >= total - 4
-        }.collect { nearEnd ->
-            if (nearEnd) onLoadMore()
-        }
+    LaunchedEffect(gridState, items.itemCount) {
+        snapshotFlow { gridState.isNearEnd(deviceProfile.prefetchDistance) }
+            .collect { nearEnd -> if (nearEnd) onLoadMore() }
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 24.dp)) {
@@ -80,13 +74,15 @@ fun BrowseScreen(
         ) {
             Text(channelTitle, style = MaterialTheme.typography.headlineSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onCreateMarathon) {
-                    Text("Series Marathon")
+                Button(onClick = { showMarathonDialog = true }) {
+                    Icon(Icons.Filled.PlaylistPlay, contentDescription = "Marathon")
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (activeMarathonName != null) "Marathon (Active)" else "Series Marathon")
                 }
                 Button(onClick = onToggleSort) {
                     Icon(Icons.Filled.SwapVert, contentDescription = "Sort")
                     Spacer(Modifier.width(8.dp))
-                    Text(if (isAscending) "Newest First" else "Oldest First (S01E01)")
+                    Text(if (isAscending) "Newest First" else "Oldest First (Ep 1)")
                 }
             }
         }
@@ -101,11 +97,10 @@ fun BrowseScreen(
                     subtitle = "Pinned in this channel",
                     thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),
                     thumbnailLoader = thumbnailLoader,
-                    onClick = { onOpenItem(pinned) },
-                    onLongClick = { actionItem = pinned }
+                    onClick = { onOpenItem(pinned) }
                 )
-                Spacer(Modifier.height(16.dp))
             }
+            Spacer(Modifier.height(16.dp))
         }
 
         val refreshState = items.loadState.refresh
@@ -119,7 +114,7 @@ fun BrowseScreen(
             }
             items.itemCount == 0 && refreshState is androidx.paging.LoadState.Error -> {
                 ErrorState(
-                    message = "Couldn't load this channel.",
+                    message = "Could not load this channel.",
                     onRetry = { items.retry() }
                 )
                 return@Column
@@ -156,8 +151,7 @@ fun BrowseScreen(
                         thumbnailFileId = parseThumbnailFileId(media.thumbnailUrl),
                         thumbnailLoader = thumbnailLoader,
                         resumeFraction = resumeFractionFor(media.id),
-                        onClick = { onOpenItem(media) },
-                        onLongClick = { actionItem = media }
+                        onClick = { onOpenItem(media) }
                     )
                 } else {
                     PosterCardPlaceholder()
@@ -177,6 +171,7 @@ fun BrowseScreen(
         }
     }
 
+    // Item Action Dialog
     actionItem?.let { media ->
         Dialog(onDismissRequest = { actionItem = null }) {
             androidx.compose.foundation.layout.Column(
@@ -185,7 +180,7 @@ fun BrowseScreen(
                     .background(androidx.compose.ui.graphics.Color(0xFF202735), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
                     .padding(24.dp)
             ) {
-                Text("Add video", style = MaterialTheme.typography.titleLarge)
+                Text("Video Options", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(media.title, maxLines = 2)
                 Spacer(Modifier.height(18.dp))
@@ -203,6 +198,87 @@ fun BrowseScreen(
             }
         }
     }
+
+    // Marathon Options Dialog (Safely INSIDE BrowseScreen)
+    if (showMarathonDialog) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.tv.material3.Card(
+                onClick = {},
+                colors = androidx.tv.material3.CardDefaults.colors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF202020)
+                ),
+                shape = androidx.tv.material3.CardDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)),
+                modifier = Modifier.width(440.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🎬 Marathon: $channelTitle",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                    Spacer(Modifier.height(20.dp))
+
+                    if (activeMarathonName != null) {
+                        Button(
+                            onClick = {
+                                showMarathonDialog = false
+                                onResumeMarathon()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("▶️ Resume Marathon")
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                showMarathonDialog = false
+                                onCreateMarathon()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🔄 Restart from Beginning (Ep 1)")
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = {
+                                showMarathonDialog = false
+                                onDeleteMarathon()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🗑️ Clear / Remove Marathon")
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                showMarathonDialog = false
+                                onCreateMarathon()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("▶️ Start Marathon from Beginning")
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { showMarathonDialog = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -212,87 +288,6 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
             Text(message, style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(16.dp))
             Button(onClick = onRetry) { Text("Retry") }
-        }
-
-        // Marathon Options Dialog
-        if (showMarathonDialog) {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.85f)),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.tv.material3.Card(
-                    onClick = {},
-                    colors = androidx.tv.material3.CardDefaults.colors(
-                        containerColor = androidx.compose.ui.graphics.Color(0xFF202020)
-                    ),
-                    shape = androidx.tv.material3.CardDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)),
-                    modifier = Modifier.width(440.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "🎬 Marathon: $channelTitle",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = androidx.compose.ui.graphics.Color.White
-                        )
-                        Spacer(Modifier.height(20.dp))
-
-                        if (activeMarathonName != null) {
-                            Button(
-                                onClick = {
-                                    showMarathonDialog = false
-                                    onResumeMarathon()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("▶️ Resume Marathon")
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Button(
-                                onClick = {
-                                    showMarathonDialog = false
-                                    onCreateMarathon()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("🔄 Restart from Beginning (Ep 1)")
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            OutlinedButton(
-                                onClick = {
-                                    showMarathonDialog = false
-                                    onDeleteMarathon()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("🗑️ Clear / Remove Marathon")
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    showMarathonDialog = false
-                                    onCreateMarathon()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("▶️ Start Marathon from Beginning")
-                            }
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedButton(
-                            onClick = { showMarathonDialog = false },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Cancel")
-                        }
-                    }
-                }
-            }
         }
     }
 }
