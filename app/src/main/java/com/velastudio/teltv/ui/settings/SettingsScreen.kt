@@ -298,3 +298,98 @@ private fun SkipChoiceButton(label: String, selected: Boolean, onClick: () -> Un
         )
     }
 }
+
+@Composable
+fun AppUpdateSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isChecking by remember { mutableStateOf(false) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0f) }
+    var statusMessage by remember { 
+        mutableStateOf<String?>("Installed version: v${com.velastudio.teltv.BuildConfig.VERSION_NAME} (build ${com.velastudio.teltv.BuildConfig.VERSION_CODE})") 
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(TelTvPanel)
+            .padding(24.dp)
+    ) {
+        Column {
+            Text(
+                "Software Update",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Download the latest APK build directly from GitHub and install it on this TV.",
+                color = TelTvMuted,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(Modifier.height(14.dp))
+
+            Text(
+                text = statusMessage ?: "",
+                color = if (isDownloading) TelTvYellow else Color.White,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            if (isDownloading) {
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = downloadProgress,
+                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                    color = TelTvYellow
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Downloading: ${(downloadProgress * 100).toInt()}%",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Button(
+                    onClick = {
+                        if (isChecking || isDownloading) return@Button
+                        isChecking = true
+                        statusMessage = "Connecting to GitHub..."
+                        scope.launch {
+                            val updateInfo = com.velastudio.teltv.util.AppUpdater.checkForUpdate(force = true)
+                            isChecking = false
+                            if (updateInfo != null) {
+                                statusMessage = "Found update! Downloading APK..."
+                                isDownloading = true
+                                val success = com.velastudio.teltv.util.AppUpdater.downloadAndInstall(context, updateInfo.downloadUrl) { progress ->
+                                    downloadProgress = progress
+                                }
+                                isDownloading = false
+                                if (!success) {
+                                    statusMessage = "Download failed. Check TV internet connection."
+                                } else {
+                                    statusMessage = "Opening package installer..."
+                                }
+                            } else {
+                                statusMessage = "Could not find a release on GitHub. Make sure a GitHub Actions build has completed!"
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.colors(
+                        containerColor = Color(0xFF212B3A),
+                        focusedContainerColor = TelTvYellow
+                    )
+                ) {
+                    Text(
+                        if (isChecking) "Checking GitHub..." else "🔄 Check for Updates & Install",
+                        color = Color.White
+                    )
+                }
+            }
+        }
+    }
+}

@@ -22,20 +22,34 @@ object AppUpdater {
     private val client = OkHttpClient.Builder().build()
     private const val GITHUB_REPO = "manuelmania93-svg/TelTV"
 
-    suspend fun checkForUpdate(): UpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(force: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            val url = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
-            val request = Request.Builder().url(url).build()
-            val response = client.newCall(request).execute()
+            // 1. Try latest release, or fallback to rolling-release tag
+            var url = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+            var request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "TelTV-AndroidTV-Updater")
+                .build()
+            var response = client.newCall(request).execute()
+
+            if (!response.isSuccessful) {
+                url = "https://api.github.com/repos/$GITHUB_REPO/releases/tags/rolling-release"
+                request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "TelTV-AndroidTV-Updater")
+                    .build()
+                response = client.newCall(request).execute()
+            }
+
             if (!response.isSuccessful) return@withContext null
 
             val body = response.body?.string() ?: return@withContext null
             val json = JSONObject(body)
             val tagName = json.optString("tag_name", "").removePrefix("v").trim()
-            val changelog = json.optString("body", "Bug fixes and performance enhancements.")
+            val changelog = json.optString("body", "Continuous release update with latest fixes.")
 
             val currentVersion = BuildConfig.VERSION_NAME
-            if (tagName.isBlank() || tagName == currentVersion) {
+            if (!force && (tagName.isBlank() || tagName == currentVersion)) {
                 return@withContext null
             }
 
@@ -64,7 +78,10 @@ object AppUpdater {
         onProgress: (Float) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder().url(downloadUrl).build()
+            val request = Request.Builder()
+                .url(downloadUrl)
+                .header("User-Agent", "TelTV-AndroidTV-Updater")
+                .build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) return@withContext false
 

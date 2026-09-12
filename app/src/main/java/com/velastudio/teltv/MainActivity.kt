@@ -31,6 +31,7 @@ import com.velastudio.teltv.ui.home.HomeScreen
 import com.velastudio.teltv.ui.login.LoginScreen
 import com.velastudio.teltv.ui.player.PlayerScreen
 import com.velastudio.teltv.ui.search.SearchScreen
+import com.velastudio.teltv.ui.settings.AppUpdateSection
 import com.velastudio.teltv.ui.settings.CacheSettingsSection
 import com.velastudio.teltv.ui.settings.AppInfoSection
 import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
@@ -711,6 +712,9 @@ class MainActivity : ComponentActivity() {
                             contentPadding = PaddingValues(horizontal = 32.dp, vertical = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(20.dp)
                         ) {
+                            item {
+                                AppUpdateSection()
+                            }
                             item {
                             CacheSettingsSection(
                                 currentSizeBytes = cacheSize,
