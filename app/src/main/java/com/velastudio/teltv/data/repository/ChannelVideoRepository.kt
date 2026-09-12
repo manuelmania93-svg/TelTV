@@ -128,7 +128,19 @@ class ChannelVideoRepository(
         lock.withLock {
             if (videoIndexDao.count(chatId) == 0) return@withLock // nothing cached yet; let ensureNextPage handle first load
 
-            val fetched = telegram.getVideoMessages(chatId = chatId, fromMessageId = 0L, limit = deviceProfile.pageSize)
+            val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
+                val raw = kotlin.math.abs(chatId)
+                val tId = (raw % 100_000L).toInt()
+                val cId = -(raw / 100_000L)
+                cId to tId
+            } else {
+                chatId to 0
+            }
+
+            val fetched = runCatching {
+                telegram.getVideoMessages(chatId = realChatId, fromMessageId = 0L, limit = deviceProfile.pageSize, topicId = topicId)
+            }.onFailure { Timber.w(it, "refreshNewest failed for chatId=%d", chatId) }
+                .getOrDefault(emptyList())
             if (fetched.isEmpty()) return@withLock
 
             // Split into brand-new items vs already-cached items that may have a stale title.

@@ -309,36 +309,39 @@ class TelegramClient(private val context: Context) {
         }
 
         val messageRaw: TdApi.Message? = if (topicId != 0) {
-            val res = send(
-                TdApi.SearchChatMessages(
-                    realChatId,
-                    TdApi.MessageTopicForum(topicId),
-                    "",
-                    null,
-                    0L,
-                    0,
-                    1,
-                    TdApi.SearchMessagesFilterPinned()
-                )
-            ) as? TdApi.FoundChatMessages
-            res?.messages?.firstOrNull()
+            runCatching {
+                val res = send(
+                    TdApi.SearchChatMessages(
+                        realChatId,
+                        TdApi.MessageTopicForum(topicId),
+                        "",
+                        null,
+                        0L,
+                        0,
+                        1,
+                        TdApi.SearchMessagesFilterPinned()
+                    )
+                ) as? TdApi.FoundChatMessages
+                res?.messages?.firstOrNull()
+            }.getOrNull()
         } else {
-            (send(TdApi.GetChatPinnedMessage(realChatId)) as? TdApi.Message)
-                ?: run {
-                    val res = send(
-                        TdApi.SearchChatMessages(
-                            realChatId,
-                            null,
-                            "",
-                            null,
-                            0L,
-                            0,
-                            1,
-                            TdApi.SearchMessagesFilterPinned()
-                        )
-                    ) as? TdApi.FoundChatMessages
-                    res?.messages?.firstOrNull()
-                }
+            runCatching {
+                (send(TdApi.GetChatPinnedMessage(realChatId)) as? TdApi.Message)
+            }.getOrNull() ?: runCatching {
+                val res = send(
+                    TdApi.SearchChatMessages(
+                        realChatId,
+                        null,
+                        "",
+                        null,
+                        0L,
+                        0,
+                        1,
+                        TdApi.SearchMessagesFilterPinned()
+                    )
+                ) as? TdApi.FoundChatMessages
+                res?.messages?.firstOrNull()
+            }.getOrNull()
         }
         val message = messageRaw ?: return null
 
@@ -434,13 +437,24 @@ class TelegramClient(private val context: Context) {
     }
 
     suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40, topicId: Int = 0): List<MediaItem> {
-        val topic = if (topicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(topicId) else null
-        val result = send(
-            TdApi.SearchChatMessages(
-                chatId, topic, "", null, fromMessageId, 0, limit,
-                TdApi.SearchMessagesFilterVideo()
-            )
-        ) as TdApi.FoundChatMessages
+        val (realChatId, resolvedTopicId) = if (chatId <= -100_000_000_000_000_000L) {
+            val raw = kotlin.math.abs(chatId)
+            val tId = (raw % 100_000L).toInt()
+            val cId = -(raw / 100_000L)
+            cId to tId
+        } else {
+            chatId to topicId
+        }
+        val topic = if (resolvedTopicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(resolvedTopicId) else null
+        val result = runCatching {
+            send(
+                TdApi.SearchChatMessages(
+                    realChatId, topic, "", null, fromMessageId, 0, limit,
+                    TdApi.SearchMessagesFilterVideo()
+                )
+            ) as? TdApi.FoundChatMessages
+        }.onFailure { Timber.w(it, "SearchChatMessages failed for chatId=%d topicId=%d", realChatId, resolvedTopicId) }
+            .getOrNull() ?: return emptyList()
 
         return result.messages.mapNotNull { msg ->
             val msgVideo = msg.content as? TdApi.MessageVideo ?: return@mapNotNull null
@@ -553,12 +567,24 @@ class TelegramClient(private val context: Context) {
      * that were never fully paged into the local cache yet.
      */
     suspend fun searchChannelVideos(chatId: Long, query: String, limit: Int = 40): List<MediaItem> {
-        val result = send(
-            TdApi.SearchChatMessages(
-                chatId, null, query, null, 0L, 0, limit,
-                TdApi.SearchMessagesFilterVideo()
-            )
-        ) as TdApi.FoundChatMessages
+        val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
+            val raw = kotlin.math.abs(chatId)
+            val tId = (raw % 100_000L).toInt()
+            val cId = -(raw / 100_000L)
+            cId to tId
+        } else {
+            chatId to 0
+        }
+        val topic = if (topicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(topicId) else null
+        val result = runCatching {
+            send(
+                TdApi.SearchChatMessages(
+                    realChatId, topic, query, null, 0L, 0, limit,
+                    TdApi.SearchMessagesFilterVideo()
+                )
+            ) as? TdApi.FoundChatMessages
+        }.onFailure { Timber.w(it, "searchChannelVideos failed for chatId=%d topicId=%d", realChatId, topicId) }
+            .getOrNull() ?: return emptyList()
 
         return result.messages.mapNotNull { msg ->
             val msgVideo = msg.content as? TdApi.MessageVideo ?: return@mapNotNull null

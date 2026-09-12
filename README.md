@@ -29,6 +29,19 @@ sizing) are actually solved here, not hand-waved.
 
 ## Setup
 
+### APK mit einem Klick herunterladen
+
+Die aktuellste signierte APK liegt nach einem erfolgreichen Build hier:
+
+[**TelTV APK herunterladen**](https://github.com/manuelmania93-svg/TelTV/releases/download/rolling-release/app-release.apk)
+
+Auf der Android-TV-Box den Link im Browser öffnen, den Download bestätigen und die APK
+anschließend aus dem Download-Ordner installieren. Dafür muss die Installation aus dieser
+Quelle in den Android-TV-Sicherheitseinstellungen erlaubt sein.
+
+Der Link wird durch den Workflow `Build TelTV APK` aktualisiert, sobald nach `main` gepusht
+wird. Den Build kann man auch in GitHub unter **Actions** manuell über **Run workflow** starten.
+
 ### 0. Use a supported JDK
 
 Use JDK 17 for Android Studio and Gradle. The project targets Java 17, and the

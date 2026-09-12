@@ -372,8 +372,10 @@ class MainActivity : ComponentActivity() {
                             // (e.g. after the caption-title fix) and prepends any new videos posted
                             // since the last visit. ensureNextPage then fills the first page if the
                             // cache was empty. Both are no-ops if nothing has changed.
-                            app.channelVideoRepository.refreshNewest(chatId)
-                            app.channelVideoRepository.ensureNextPage(chatId)
+                            runCatching {
+                                app.channelVideoRepository.refreshNewest(chatId)
+                                app.channelVideoRepository.ensureNextPage(chatId)
+                            }.onFailure { Timber.w(it, "Failed to load channel videos for chatId=%d", chatId) }
                             pinnedVideo = runCatching { app.telegramClient.getPinnedVideo(chatId) }
                                 .onFailure { Timber.w(it, "Failed to load pinned video for chat %d", chatId) }
                                 .getOrNull()
