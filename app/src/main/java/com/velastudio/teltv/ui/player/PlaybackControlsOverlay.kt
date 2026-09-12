@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,8 +90,8 @@ fun PlaybackControlsOverlay(
                         )
                         if (canAutoPlayNext) {
                             ControlButton(
-                                icon = Icons.Filled.SkipNext,
-                                contentDescription = if (autoPlayNext) "Autoplay on" else "Autoplay off",
+                                icon = Icons.Filled.PlaylistPlay,
+                                contentDescription = if (autoPlayNext) "Autoplay deaktivieren" else "Autoplay aktivieren",
                                 onClick = onToggleAutoPlay,
                                 active = autoPlayNext
                             )

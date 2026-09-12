@@ -62,7 +62,9 @@ fun PlayerScreen(
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
-    var autoPlayNext by remember { mutableStateOf(autoPlayByDefault && nextTitle != null && onPlayNext != null) }
+    var autoPlayNext by remember(fileId, directUri) {
+        mutableStateOf(autoPlayByDefault && nextTitle != null && onPlayNext != null)
+    }
     var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
 
     // Seeking feedback state

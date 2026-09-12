@@ -468,7 +468,7 @@ class MainActivity : ComponentActivity() {
                             title = title,
                             resumePositionMs = resumeMs,
                             nextTitle = nextEntity?.title,
-                            autoPlayByDefault = nextEntity != null,
+                            autoPlayByDefault = false,
                             onPlayNext = nextEntity?.let { next ->
                                 {
                                     val nextRoute = "player/${URLEncoder.encode(next.mediaId, "UTF-8")}" +
