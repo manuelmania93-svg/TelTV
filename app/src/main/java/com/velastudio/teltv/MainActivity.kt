@@ -238,8 +238,6 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("browse/${entry.id}/$encodedTitle")
                                     }
                                 }
-                            }
-                                }
                             },
                             onResumeWatching = { mediaId ->
                                 navController.navigate("player/${URLEncoder.encode(mediaId, "UTF-8")}")
