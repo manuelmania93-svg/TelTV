@@ -381,13 +381,81 @@ class MainActivity : ComponentActivity() {
                                 .associate { it.mediaId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f) }
                         }
 
-                        var isAscending by remember { mutableStateOf(true) }
+                        var isAscending by remember { mutableStateOf(false) } // Default to Oldest First (Ep 1)
+                        val marathonName = "$title Marathon"
+                        var activeMarathon by remember { mutableStateOf<com.velastudio.teltv.data.local.PlaylistEntity?>(null) }
+
+                        LaunchedEffect(chatId) {
+                            activeMarathon = app.database.playlistDao().getByName(marathonName)
+                        }
+
                         BrowseScreen(
                             channelTitle = title,
                             pinnedVideo = pinnedVideo,
                             isAscending = isAscending,
                             onToggleSort = { isAscending = !isAscending },
                             pagingFlow = remember(chatId, isAscending) { app.channelVideoRepository.videoPager(chatId, isAscending) },
+                            activeMarathonName = activeMarathon?.name,
+                            onResumeMarathon = {
+                                activeMarathon?.let { playlist ->
+                                    scope.launch {
+                                        val items = app.database.playlistDao().getItems(playlist.id)
+                                        // Resume from first unwatched episode, or first episode
+                                        val resumeItem = items.firstOrNull { item ->
+                                            val state = app.database.watchStateDao().get(item.mediaId)
+                                            state == null || !state.finished
+                                        } ?: items.firstOrNull()
+
+                                        if (resumeItem != null) {
+                                            navController.navigate("player/${URLEncoder.encode(resumeItem.mediaId, "UTF-8")}?playlistId=${playlist.id}")
+                                        }
+                                    }
+                                }
+                            },
+                            onDeleteMarathon = {
+                                activeMarathon?.let { playlist ->
+                                    scope.launch {
+                                        app.database.playlistDao().clearItems(playlist.id)
+                                        app.database.playlistDao().delete(playlist.id)
+                                        activeMarathon = null
+                                    }
+                                }
+                            },
+                            onStartMarathonFrom = { startMedia ->
+                                scope.launch {
+                                    val dao = app.database.playlistDao()
+                                    // Remove any existing marathon for this title
+                                    val existing = dao.getByName(marathonName)
+                                    if (existing != null) {
+                                        dao.clearItems(existing.id)
+                                        dao.delete(existing.id)
+                                    }
+
+                                    val playlist = com.velastudio.teltv.data.local.PlaylistEntity(
+                                        name = marathonName,
+                                        createdEpochSec = System.currentTimeMillis() / 1000
+                                    ).let { it.copy(id = dao.insert(it)) }
+
+                                    // Sort all videos in chronological order (oldest to newest)
+                                    val allVideos = app.database.videoIndexDao().getAllForChat(chatId).sortedBy { it.messageId }
+                                    val startIndex = allVideos.indexOfFirst { it.mediaId == startMedia.id }.coerceAtLeast(0)
+                                    val marathonVideos = allVideos.drop(startIndex)
+
+                                    marathonVideos.forEachIndexed { index, video ->
+                                        dao.addItem(
+                                            com.velastudio.teltv.data.local.PlaylistItemEntity(
+                                                playlistId = playlist.id,
+                                                mediaId = video.mediaId,
+                                                position = index,
+                                                title = video.title,
+                                                addedEpochSec = System.currentTimeMillis() / 1000
+                                            )
+                                        )
+                                    }
+                                    activeMarathon = playlist
+                                    navController.navigate("player/${URLEncoder.encode(startMedia.id, "UTF-8")}?playlistId=${playlist.id}")
+                                }
+                            },
                             thumbnailLoader = thumbnailLoader,
                             deviceProfile = app.deviceProfile,
                             resumeFractionFor = { mediaId -> resumeFractions[mediaId] },
@@ -441,13 +509,21 @@ class MainActivity : ComponentActivity() {
                             onCreateMarathon = {
                                 scope.launch {
                                     val dao = app.database.playlistDao()
-                                    val playlist = PlaylistEntity(
-                                        name = "$title Marathon",
+                                    val existing = dao.getByName(marathonName)
+                                    if (existing != null) {
+                                        dao.clearItems(existing.id)
+                                        dao.delete(existing.id)
+                                    }
+
+                                    val playlist = com.velastudio.teltv.data.local.PlaylistEntity(
+                                        name = marathonName,
                                         createdEpochSec = System.currentTimeMillis() / 1000
                                     ).let { it.copy(id = dao.insert(it)) }
-                                    app.database.videoIndexDao().getAllForChat(chatId).forEachIndexed { index, video ->
+
+                                    val allVideos = app.database.videoIndexDao().getAllForChat(chatId).sortedBy { it.messageId }
+                                    allVideos.forEachIndexed { index, video ->
                                         dao.addItem(
-                                            PlaylistItemEntity(
+                                            com.velastudio.teltv.data.local.PlaylistItemEntity(
                                                 playlistId = playlist.id,
                                                 mediaId = video.mediaId,
                                                 position = index,
@@ -455,6 +531,10 @@ class MainActivity : ComponentActivity() {
                                                 addedEpochSec = System.currentTimeMillis() / 1000
                                             )
                                         )
+                                    }
+                                    activeMarathon = playlist
+                                    allVideos.firstOrNull()?.let { first ->
+                                        navController.navigate("player/${URLEncoder.encode(first.mediaId, "UTF-8")}?playlistId=${playlist.id}")
                                     }
                                 }
                             }

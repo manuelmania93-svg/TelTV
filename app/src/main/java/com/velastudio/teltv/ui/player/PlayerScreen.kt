@@ -292,44 +292,49 @@ fun PlayerScreen(
                     }
                 }
 
-                when (keyEvent.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        seekRelative(forward = false); true
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        seekRelative(forward = true); true
-                    }
-                    KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                        seekRelative(forward = false); true
-                    }
-                    KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                        seekRelative(forward = true); true
-                    }
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                        if (!controlsVisible) controlsVisible = true else togglePlayPause()
-                        true
-                    }
-                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> {
-                        togglePlayPause(); true
-                    }
-                    KeyEvent.KEYCODE_BACK -> {
-                        if (controlsVisible) { controlsVisible = false; true }
-                        else { onBack(); true }
-                    }
-                    KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (controlsVisible) {
-                            showTrackSelector = true
-                        } else {
-                            controlsVisible = true
+                if (!controlsVisible) {
+                    return@onKeyEvent when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            seekRelative(forward = false); true
                         }
-                        true
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            seekRelative(forward = true); true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                            seekRelative(forward = false); true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                            seekRelative(forward = true); true
+                        }
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP -> {
+                            controlsVisible = true; true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> {
+                            togglePlayPause(); true
+                        }
+                        KeyEvent.KEYCODE_BACK -> {
+                            onBack(); true
+                        }
+                        else -> false
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        controlsVisible = true; true
+                } else {
+                    return@onKeyEvent when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_BACK -> {
+                            controlsVisible = false; true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> {
+                            togglePlayPause(); true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                            seekRelative(forward = false); true
+                        }
+                        KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                            seekRelative(forward = true); true
+                        }
+                        else -> false // Let D-pad Left, Right, Up, Down, Center pass straight through to the buttons!
                     }
-                    else -> false
-                }
-            }
+                }            }
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -378,6 +383,7 @@ fun PlayerScreen(
             onCycleAspectRatio = ::cycleAspectRatio,
             onOpenExternal = ::openInExternalPlayer,
             autoPlayNext = autoPlayNext,
+            playPauseModifier = Modifier.focusRequester(playPauseFocusRequester),
             onToggleAutoPlay = {
                 autoPlayNext = !autoPlayNext
                 controlsVisible = true
