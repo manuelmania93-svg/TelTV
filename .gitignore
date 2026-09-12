@@ -16,3 +16,7 @@ local.properties
 # OS/editor files
 .DS_Store
 .vscode/
+*.jks
+*.jks
+keystore_base64.txt
+keystore_base64.txt
