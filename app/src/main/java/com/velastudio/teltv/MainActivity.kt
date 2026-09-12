@@ -269,7 +269,7 @@ class MainActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val chatId = backStackEntry.arguments?.getLong("chatId") ?: return@composable
                         val title = URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
-                        var topics by remember { mutableStateOf<List<org.drinkless.tdlib.TdApi.ForumTopicInfo>>(emptyList()) }
+                        var topics by remember { mutableStateOf<List<com.velastudio.teltv.telegram.TelegramClient.ForumTopicDetail>>(emptyList()) }
                         var isLoading by remember { mutableStateOf(true) }
 
                         LaunchedEffect(chatId) {
@@ -307,8 +307,8 @@ class MainActivity : ComponentActivity() {
                                         androidx.tv.material3.Card(
                                             onClick = {
                                                 val raw = kotlin.math.abs(chatId)
-                                                val virtualId = -(raw * 100_000L + topic.forumTopicId)
-                                                val encodedTopicTitle = URLEncoder.encode(topic.name, "UTF-8")
+                                                val virtualId = -(raw * 100_000L + topic.info.forumTopicId)
+                                                val encodedTopicTitle = URLEncoder.encode(topic.info.name, "UTF-8")
                                                 navController.navigate("browse/$virtualId/$encodedTopicTitle")
                                             },
                                             shape = androidx.tv.material3.CardDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
@@ -335,15 +335,15 @@ class MainActivity : ComponentActivity() {
                                                     androidx.compose.foundation.layout.Spacer(Modifier.width(16.dp))
                                                     androidx.compose.foundation.layout.Column {
                                                         androidx.tv.material3.Text(
-                                                            text = topic.name,
+                                                            text = topic.info.name,
                                                             style = androidx.tv.material3.MaterialTheme.typography.titleMedium,
                                                             color = androidx.compose.ui.graphics.Color.White,
                                                             maxLines = 2
                                                         )
                                                         androidx.tv.material3.Text(
-                                                            text = "Topic #${topic.forumTopicId}",
+                                                            text = if (topic.videoCount > 0) "🎬 ${topic.videoCount} Videos" else "Topic #${topic.info.forumTopicId}",
                                                             style = androidx.tv.material3.MaterialTheme.typography.bodySmall,
-                                                            color = androidx.compose.ui.graphics.Color.Gray
+                                                            color = androidx.compose.ui.graphics.Color(0xFFFFC107)
                                                         )
                                                     }
                                                 }

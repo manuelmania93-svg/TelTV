@@ -31,8 +31,8 @@ object DeviceCapabilities {
 
     private val CONSTRAINED = Profile(
         isConstrained = true,
-        pageSize = 24,
-        prefetchDistance = 12,
+        pageSize = 60,
+        prefetchDistance = 30,
         gridColumns = 3,
         imageMemoryCacheBytes = 12L * 1024 * 1024,
         thumbnailMaxDimensionPx = 200,
@@ -41,8 +41,8 @@ object DeviceCapabilities {
 
     private val NORMAL = Profile(
         isConstrained = false,
-        pageSize = 40,
-        prefetchDistance = 24,
+        pageSize = 100,
+        prefetchDistance = 50,
         gridColumns = 5,
         imageMemoryCacheBytes = 48L * 1024 * 1024,
         thumbnailMaxDimensionPx = 320,

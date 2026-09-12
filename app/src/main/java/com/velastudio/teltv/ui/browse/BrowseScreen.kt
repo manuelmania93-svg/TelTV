@@ -58,8 +58,10 @@ fun BrowseScreen(
 ) {
     val items = pagingFlow.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
+    val coroutineScope = rememberCoroutineScope()
     var actionItem by remember { mutableStateOf<MediaItem?>(null) }
     var showMarathonDialog by remember { mutableStateOf(false) }
+    var marathonModeEnabled by remember { mutableStateOf(false) }
 
     LaunchedEffect(gridState, items.itemCount) {
         snapshotFlow { gridState.isNearEnd(deviceProfile.prefetchDistance) }
@@ -74,10 +76,18 @@ fun BrowseScreen(
         ) {
             Text(channelTitle, style = MaterialTheme.typography.headlineSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { showMarathonDialog = true }) {
-                    Icon(Icons.Filled.PlaylistPlay, contentDescription = "Marathon")
+                Button(
+                    onClick = { marathonModeEnabled = !marathonModeEnabled },
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = if (marathonModeEnabled) androidx.compose.ui.graphics.Color(0xFF29B6F6) else androidx.compose.ui.graphics.Color(0xFF202735)
+                    )
+                ) {
+                    Icon(Icons.Filled.PlaylistPlay, contentDescription = "Marathon Mode")
                     Spacer(Modifier.width(8.dp))
-                    Text(if (activeMarathonName != null) "Marathon (Active)" else "Series Marathon")
+                    Text(if (marathonModeEnabled) "Marathon: Click to Start" else "Marathon Mode: OFF")
+                }
+                Button(onClick = { showMarathonDialog = true }) {
+                    Text(if (activeMarathonName != null) "Manage Marathon" else "Marathon Menu")
                 }
                 Button(onClick = onToggleSort) {
                     Icon(Icons.Filled.SwapVert, contentDescription = "Sort")
@@ -151,7 +161,13 @@ fun BrowseScreen(
                         thumbnailFileId = parseThumbnailFileId(media.thumbnailUrl),
                         thumbnailLoader = thumbnailLoader,
                         resumeFraction = resumeFractionFor(media.id),
-                        onClick = { onOpenItem(media) }
+                        onClick = {
+                            if (marathonModeEnabled) {
+                                onStartMarathonFrom(media)
+                            } else {
+                                onOpenItem(media)
+                            }
+                        }
                     )
                 } else {
                     PosterCardPlaceholder()

@@ -127,6 +127,12 @@ class TelegramClient(private val context: Context) {
                         fileCache[f.id] = f
                         fileListeners[f.id]?.forEach { it(f) }
                     }
+                    is TdApi.UpdateNewMessage -> {
+                        val msg = update.message
+                        if (msg.content is TdApi.MessageVideo || msg.content is TdApi.MessageDocument) {
+                            onNewVideoMessageListener?.invoke(msg)
+                        }
+                    }
                 }
             },
             // These two were previously null, which means any exception thrown while handling
@@ -386,10 +392,37 @@ class TelegramClient(private val context: Context) {
     }
 
     
-    suspend fun getForumTopics(chatId: Long): List<org.drinkless.tdlib.TdApi.ForumTopicInfo> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    data class ForumTopicDetail(
+        val info: org.drinkless.tdlib.TdApi.ForumTopicInfo,
+        val videoCount: Int = 0
+    )
+
+    var onNewVideoMessageListener: ((org.drinkless.tdlib.TdApi.Message) -> Unit)? = null
+
+    suspend fun getForumTopics(chatId: Long): List<ForumTopicDetail> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
             val result = send(org.drinkless.tdlib.TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100)) as org.drinkless.tdlib.TdApi.ForumTopics
-            result.topics.map { it.info }
+            val semaphore = kotlinx.coroutines.sync.Semaphore(6)
+            kotlinx.coroutines.coroutineScope {
+                result.topics.map { topic ->
+                    async {
+                        semaphore.withPermit {
+                            val count = runCatching {
+                                val search = send(
+                                    org.drinkless.tdlib.TdApi.SearchChatMessages(
+                                        chatId,
+                                        org.drinkless.tdlib.TdApi.MessageTopicForum(topic.info.forumTopicId),
+                                        "", null, 0L, 0, 1,
+                                        org.drinkless.tdlib.TdApi.SearchMessagesFilterVideo()
+                                    )
+                                ) as org.drinkless.tdlib.TdApi.FoundChatMessages
+                                search.totalCount
+                            }.getOrDefault(0)
+                            ForumTopicDetail(topic.info, count)
+                        }
+                    }
+                }.map { it.await() }
+            }
         }.getOrDefault(emptyList())
     }
 
