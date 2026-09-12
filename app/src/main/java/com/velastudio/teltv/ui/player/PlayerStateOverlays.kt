@@ -259,7 +259,7 @@ fun TrackSelectorDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(activeList) { track ->
-                    androidx.tv.material3.Surface(
+                    androidx.tv.material3.Card(
                         onClick = {
                             if (selectedTab == 0 && track.group != null) {
                                 val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
@@ -284,11 +284,12 @@ fun TrackSelectorDialog(
                             }
                             onDismiss()
                         },
-                        colors = androidx.tv.material3.SurfaceDefaults.colors(
+                        colors = androidx.tv.material3.CardDefaults.colors(
                             containerColor = if (track.isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
                             focusedContainerColor = Color(0xFF29B6F6)
                         ),
-                        shape = androidx.tv.material3.SurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+                        shape = androidx.tv.material3.CardDefaults.shape(RoundedCornerShape(8.dp)),
+                        scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.02f),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
                     ) {
                         Row(

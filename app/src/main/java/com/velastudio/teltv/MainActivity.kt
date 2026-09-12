@@ -230,7 +230,8 @@ class MainActivity : ComponentActivity() {
                             isLoading = isLoadingChannels,
                             onOpenEntry = { entry ->
                                 scope.launch {
-                                    val isForum = runCatching { app.telegramClient.isForumChat(entry.id) }.getOrDefault(false)
+                                    val chatId = entry.id.toLongOrNull() ?: 0L
+                                    val isForum = if (chatId != 0L) runCatching { app.telegramClient.isForumChat(chatId) }.getOrDefault(false) else false
                                     val encodedTitle = URLEncoder.encode(entry.name, "UTF-8")
                                     if (isForum) {
                                         navController.navigate("topics/${entry.id}/$encodedTitle")
@@ -322,7 +323,7 @@ class MainActivity : ComponentActivity() {
                                             ) {
                                                 androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                                     androidx.tv.material3.Icon(
-                                                        imageVector = androidx.compose.material.icons.Icons.Filled.Tv,
+                                                        imageVector = androidx.compose.material.icons.Icons.Filled.Folder,
                                                         contentDescription = null,
                                                         tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
                                                         modifier = Modifier.size(36.dp)
