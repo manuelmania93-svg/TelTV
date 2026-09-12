@@ -45,8 +45,8 @@ fun PlaybackControlsOverlay(
     onCycleAspectRatio: () -> Unit,
     onOpenExternal: () -> Unit,
     autoPlayNext: Boolean,
-    canAutoPlayNext: Boolean,
-    onToggleAutoPlay: () -> Unit
+    onToggleAutoPlay: () -> Unit,
+    playPauseModifier: Modifier = Modifier
 ) {
     val cleanTitle = remember(title) { MediaTitleCleaner.clean(title) }
 
@@ -148,13 +148,13 @@ private fun ControlButton(
     contentDescription: String,
     onClick: () -> Unit,
     large: Boolean = false,
-    active: Boolean = false
+    active: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     val size = if (large) 72.dp else 52.dp
     IconButton(
         onClick = onClick,
-        modifier = Modifier
-            .size(size)
+        modifier = modifier.size(size)
             .background(
                 if (active) Color(0xFF29B6F6).copy(alpha = 0.85f)
                 else Color.White.copy(alpha = 0.15f),

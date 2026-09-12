@@ -302,7 +302,7 @@ class TelegramClient(private val context: Context) {
             chatId to 0
         }
 
-        val message: TdApi.Message? = if (topicId != 0) {
+        val messageRaw: TdApi.Message? = if (topicId != 0) {
             val res = send(
                 TdApi.SearchChatMessages(
                     realChatId,
@@ -333,7 +333,8 @@ class TelegramClient(private val context: Context) {
                     ) as? TdApi.FoundChatMessages
                     res?.messages?.firstOrNull()
                 }
-        } ?: return null
+        }
+        val message = messageRaw ?: return null
 
         return when (val content = message.content) {
             is TdApi.MessageVideo -> {
