@@ -378,7 +378,6 @@ fun PlayerScreen(
             onCycleAspectRatio = ::cycleAspectRatio,
             onOpenExternal = ::openInExternalPlayer,
             autoPlayNext = autoPlayNext,
-            canAutoPlayNext = nextTitle != null && onPlayNext != null,
             onToggleAutoPlay = {
                 autoPlayNext = !autoPlayNext
                 controlsVisible = true
