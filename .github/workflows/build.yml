@@ -30,14 +30,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            python3 -c "
-import base64, os, re
-raw = os.environ.get('KEYSTORE_BASE64', '')
-clean = re.sub(r'[^A-Za-z0-9+/=]', '', raw)
-clean += '=' * ((4 - len(clean) % 4) % 4)
-with open('teltv-release.jks', 'wb') as f:
-    f.write(base64.b64decode(clean))
-"
+            echo "$KEYSTORE_BASE64" | tr -d '\r\n[:space:]' | base64 -d -i > teltv-release.jks
             echo "Keystore decoded successfully."
           else
             echo "Warning: KEYSTORE_BASE64 secret is not set!"
