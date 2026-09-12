@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
                                             ) {
                                                 androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                                     androidx.tv.material3.Icon(
-                                                        imageVector = androidx.compose.material.icons.Icons.Filled.Folder,
+                                                        imageVector = androidx.compose.material.icons.Icons.Filled.PlayArrow,
                                                         contentDescription = null,
                                                         tint = androidx.compose.ui.graphics.Color(0xFFFFC107),
                                                         modifier = Modifier.size(36.dp)
