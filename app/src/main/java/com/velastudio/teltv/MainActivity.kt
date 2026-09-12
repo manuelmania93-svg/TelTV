@@ -73,10 +73,12 @@ class MainActivity : ComponentActivity() {
                 
                 var crashReport by remember { mutableStateOf(com.velastudio.teltv.util.CrashLogger.lastCrashReport(app)) }
                 if (crashReport != null) {
-                    androidx.compose.ui.window.Dialog(onDismissRequest = { 
-                        com.velastudio.teltv.util.CrashLogger.clear(app)
-                        crashReport = null 
-                    }) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.9f)),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
                         androidx.tv.material3.Card(onClick = {}) {
                             androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(24.dp)) {
                                 androidx.tv.material3.Text("Previous Crash Detected", style = androidx.tv.material3.MaterialTheme.typography.titleLarge)
@@ -95,6 +97,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                    return@TelTvTheme
                 }
 
                 val thumbnailLoader = remember { ThumbnailLoader(app.telegramClient, scope, app.deviceProfile) }

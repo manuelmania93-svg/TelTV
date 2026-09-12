@@ -64,7 +64,7 @@ fun PosterCard(
     }
 
     Card(
-        onClick = {},
+        onClick = onClick,
         shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
         border = CardDefaults.border(
             focusedBorder = Border(
@@ -80,10 +80,6 @@ fun PosterCard(
         modifier = Modifier
             .width(POSTER_CARD_WIDTH)
             .height(POSTER_CARD_HEIGHT)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
             .semantics { this.contentDescription = contentDescription }
     ) {
         Box(Modifier.fillMaxSize()) {
