@@ -29,12 +29,12 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | tr -d '\r\n[:space:]' | base64 -d -i > teltv-release.jks
-            echo "Keystore decoded successfully."
-          else
-            echo "Warning: KEYSTORE_BASE64 secret is not set!"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "ERROR: KEYSTORE_BASE64 secret is not set!"
+            exit 1
           fi
+          echo "$KEYSTORE_BASE64" | tr -d '\r\n[:space:]' | base64 -d -i > teltv-release.jks
+          echo "Keystore decoded successfully."
 
       - name: Build Debug and Release APKs
         env:
@@ -54,5 +54,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TelTV-release
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/*-release.apk
           if-no-files-found: error

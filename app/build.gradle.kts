@@ -21,14 +21,14 @@ android {
     val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
     val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 
-    signingConfigs {
+        signingConfigs {
         create("release") {
-            if (!releaseKeystorePath.isNullOrBlank()) {
-                storeFile = file(releaseKeystorePath)
-                storePassword = releaseKeystorePassword
-                keyAlias = releaseKeyAlias
-                keyPassword = releaseKeyPassword
-            }
+            storeFile = rootProject.file("teltv-release.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "YourSecurePassword123"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "teltv"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "YourSecurePassword123"
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 
