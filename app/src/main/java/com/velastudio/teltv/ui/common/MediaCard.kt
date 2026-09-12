@@ -1,8 +1,10 @@
 package com.velastudio.teltv.ui.common
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
@@ -34,7 +36,7 @@ val POSTER_CARD_WIDTH = 190.dp
 val POSTER_CARD_HEIGHT = 260.dp
 private val POSTER_THUMB_HEIGHT = 175.dp
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalTvMaterial3Api::class)
 @Composable
 fun PosterCard(
     title: String,
@@ -62,8 +64,7 @@ fun PosterCard(
     }
 
     Card(
-        onClick = onClick,
-        onLongClick = onLongClick,
+        onClick = {},
         shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
         border = CardDefaults.border(
             focusedBorder = Border(
@@ -79,6 +80,10 @@ fun PosterCard(
         modifier = Modifier
             .width(POSTER_CARD_WIDTH)
             .height(POSTER_CARD_HEIGHT)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .semantics { this.contentDescription = contentDescription }
     ) {
         Box(Modifier.fillMaxSize()) {

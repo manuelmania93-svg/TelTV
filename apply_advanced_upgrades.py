@@ -135,7 +135,9 @@ print("✅ 3/6 ChannelVideoRepository.kt updated with ascending/descending toggl
 with open("app/src/main/java/com/velastudio/teltv/ui/common/MediaCard.kt", "w", encoding="utf-8") as f:
     f.write('''package com.velastudio.teltv.ui.common
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -164,6 +166,7 @@ val POSTER_CARD_WIDTH = 180.dp
 val POSTER_CARD_HEIGHT = 240.dp
 private val POSTER_THUMB_HEIGHT = 160.dp
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PosterCard(
     title: String,
@@ -190,11 +193,14 @@ fun PosterCard(
     }
 
     Card(
-        onClick = onClick,
-        onLongClick = onLongClick,
+        onClick = {},
         modifier = Modifier
             .width(POSTER_CARD_WIDTH)
             .height(POSTER_CARD_HEIGHT)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .semantics { this.contentDescription = contentDescription }
     ) {
         Box(Modifier.fillMaxSize()) {
