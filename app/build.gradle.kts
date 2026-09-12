@@ -21,7 +21,7 @@ android {
     val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
     val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 
-        signingConfigs {
+            signingConfigs {
         create("release") {
             storeFile = rootProject.file("teltv-release.jks")
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "YourSecurePassword123"

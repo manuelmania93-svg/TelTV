@@ -30,7 +30,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "ERROR: KEYSTORE_BASE64 secret is not set!"
+            echo "ERROR: KEYSTORE_BASE64 secret is missing!"
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | tr -d '\r\n[:space:]' | base64 -d -i > teltv-release.jks
