@@ -1,0 +1,74 @@
+[1mdiff --git a/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt b/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt[m
+[1mindex 46bd416..19816a1 100644[m
+[1m--- a/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt[m
+[1m+++ b/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt[m
+[36m@@ -9,6 +9,7 @@[m [mimport androidx.compose.foundation.lazy.grid.rememberLazyGridState[m
+ import androidx.compose.material.icons.Icons[m
+ import androidx.compose.material.icons.filled.PlaylistPlay[m
+ import androidx.compose.material.icons.filled.SwapVert[m
+[32m+[m[32mimport androidx.compose.material.icons.filled.PushPin[m
+ import androidx.compose.runtime.*[m
+ import androidx.compose.ui.Alignment[m
+ import androidx.compose.ui.ExperimentalComposeUiApi[m
+[36m@@ -43,6 +44,8 @@[m [mfun BrowseScreen([m
+     pagingFlow: Flow<androidx.paging.PagingData<MediaItem>>,[m
+     thumbnailLoader: ThumbnailLoader,[m
+     fastModeEnabled: Boolean = false,[m
+[32m+[m[32m    showPinnedVideos: Boolean = true,[m
+[32m+[m[32m    onToggleShowPinned: () -> Unit = {},[m
+     deviceProfile: DeviceCapabilities.Profile,[m
+     resumeFractionFor: (mediaId: String) -> Float?,[m
+     onLoadMore: () -> Unit,[m
+[36m@@ -90,6 +93,16 @@[m [mfun BrowseScreen([m
+                 Button(onClick = { showMarathonDialog = true }) {[m
+                     Text(if (activeMarathonName != null) "Manage Marathon" else "Marathon Menu")[m
+                 }[m
+[32m+[m[32m                Button([m
+[32m+[m[32m                    onClick = onToggleShowPinned,[m
+[32m+[m[32m                    colors = androidx.tv.material3.ButtonDefaults.colors([m
+[32m+[m[32m                        containerColor = if (showPinnedVideos) androidx.compose.ui.graphics.Color(0xFF202735) else androidx.compose.ui.graphics.Color(0xFF374151)[m
+[32m+[m[32m                    )[m
+[32m+[m[32m                ) {[m
+[32m+[m[32m                    Icon(Icons.Filled.PushPin, contentDescription = "Toggle Pinned Videos")[m
+[32m+[m[32m                    Spacer(Modifier.width(8.dp))[m
+[32m+[m[32m                    Text(if (showPinnedVideos) "Pins: ON" else "Pins: OFF")[m
+[32m+[m[32m                }[m
+                 Button(onClick = onToggleSort) {[m
+                     Icon(Icons.Filled.SwapVert, contentDescription = "Sort")[m
+                     Spacer(Modifier.width(8.dp))[m
+[36m@@ -99,20 +112,22 @@[m [mfun BrowseScreen([m
+         }[m
+         Spacer(Modifier.height(16.dp))[m
+ [m
+[31m-        pinnedVideo?.let { pinned ->[m
+[31m-            Column(Modifier.fillMaxWidth()) {[m
+[31m-                Text("Pinned Video", style = MaterialTheme.typography.titleMedium)[m
+[31m-                Spacer(Modifier.height(8.dp))[m
+[31m-                PosterCard([m
+[31m-                    title = pinned.title,[m
+[31m-                    subtitle = "Pinned in this channel",[m
+[31m-                    thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),[m
+[31m-                    thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,[m
+[31m-                    enableTmdb = !fastModeEnabled,[m
+[31m-                    onClick = { onOpenItem(pinned) }[m
+[31m-                )[m
+[32m+[m[32m        if (showPinnedVideos) {[m
+[32m+[m[32m            pinnedVideo?.let { pinned ->[m
+[32m+[m[32m                Column(Modifier.fillMaxWidth()) {[m
+[32m+[m[32m                    Text("Pinned Video", style = MaterialTheme.typography.titleMedium)[m
+[32m+[m[32m                    Spacer(Modifier.height(8.dp))[m
+[32m+[m[32m                    PosterCard([m
+[32m+[m[32m                        title = pinned.title,[m
+[32m+[m[32m                        subtitle = "Pinned in this channel",[m
+[32m+[m[32m                        thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),[m
+[32m+[m[32m                        thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,[m
+[32m+[m[32m                        enableTmdb = !fastModeEnabled,[m
+[32m+[m[32m                        onClick = { onOpenItem(pinned) }[m
+[32m+[m[32m                    )[m
+[32m+[m[32m                }[m
+[32m+[m[32m                Spacer(Modifier.height(16.dp))[m
+             }[m
+[31m-            Spacer(Modifier.height(16.dp))[m
+         }[m
+ [m
+         val refreshState = items.loadState.refresh[m

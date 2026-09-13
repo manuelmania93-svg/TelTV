@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -43,6 +44,8 @@ fun BrowseScreen(
     pagingFlow: Flow<androidx.paging.PagingData<MediaItem>>,
     thumbnailLoader: ThumbnailLoader,
     fastModeEnabled: Boolean = false,
+    showPinnedVideos: Boolean = true,
+    onToggleShowPinned: () -> Unit = {},
     deviceProfile: DeviceCapabilities.Profile,
     resumeFractionFor: (mediaId: String) -> Float?,
     onLoadMore: () -> Unit,
@@ -90,6 +93,16 @@ fun BrowseScreen(
                 Button(onClick = { showMarathonDialog = true }) {
                     Text(if (activeMarathonName != null) "Manage Marathon" else "Marathon Menu")
                 }
+                Button(
+                    onClick = onToggleShowPinned,
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = if (showPinnedVideos) androidx.compose.ui.graphics.Color(0xFF202735) else androidx.compose.ui.graphics.Color(0xFF374151)
+                    )
+                ) {
+                    Icon(Icons.Filled.PushPin, contentDescription = "Toggle Pinned Videos")
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (showPinnedVideos) "Pins: ON" else "Pins: OFF")
+                }
                 Button(onClick = onToggleSort) {
                     Icon(Icons.Filled.SwapVert, contentDescription = "Sort")
                     Spacer(Modifier.width(8.dp))
@@ -99,20 +112,22 @@ fun BrowseScreen(
         }
         Spacer(Modifier.height(16.dp))
 
-        pinnedVideo?.let { pinned ->
-            Column(Modifier.fillMaxWidth()) {
-                Text("Pinned Video", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                PosterCard(
-                    title = pinned.title,
-                    subtitle = "Pinned in this channel",
-                    thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),
-                    thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
-                    enableTmdb = !fastModeEnabled,
-                    onClick = { onOpenItem(pinned) }
-                )
+        if (showPinnedVideos) {
+            pinnedVideo?.let { pinned ->
+                Column(Modifier.fillMaxWidth()) {
+                    Text("Pinned Video", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    PosterCard(
+                        title = pinned.title,
+                        subtitle = "Pinned in this channel",
+                        thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),
+                        thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
+                        enableTmdb = !fastModeEnabled,
+                        onClick = { onOpenItem(pinned) }
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
             }
-            Spacer(Modifier.height(16.dp))
         }
 
         val refreshState = items.loadState.refresh

@@ -18,6 +18,7 @@ class PlaybackPrefs(private val context: Context) {
         val KEY_AUTOPLAY = booleanPreferencesKey("autoplay_enabled")
         val KEY_DIALOGUE_BOOST = booleanPreferencesKey("dialogue_boost")
         val KEY_FAST_MODE = booleanPreferencesKey("fast_mode_enabled")
+        val KEY_SHOW_PINNED = booleanPreferencesKey("show_pinned_videos")
         val KEY_SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
         val KEY_SUBTITLE_COLOR = stringPreferencesKey("subtitle_color")
         const val DEFAULT_SKIP_MS = 10_000L
@@ -70,6 +71,15 @@ class PlaybackPrefs(private val context: Context) {
 
     suspend fun setFastModeEnabled(enabled: Boolean) {
         context.playbackDataStore.edit { it[KEY_FAST_MODE] = enabled }
+    }
+
+
+    val showPinnedVideos: Flow<Boolean> = context.playbackDataStore.data.map {
+        it[KEY_SHOW_PINNED] ?: true
+    }
+
+    suspend fun setShowPinnedVideos(enabled: Boolean) {
+        context.playbackDataStore.edit { it[KEY_SHOW_PINNED] = enabled }
     }
 
 }
