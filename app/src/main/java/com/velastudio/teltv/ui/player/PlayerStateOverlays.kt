@@ -33,6 +33,8 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 import java.util.Locale
+import com.velastudio.teltv.util.OnlineSubtitle
+import com.velastudio.teltv.util.OnlineSubtitleProvider
 
 @Composable
 fun BufferingIndicator() {
@@ -184,6 +186,8 @@ data class TrackItem(
 @Composable
 fun TrackSelectorDialog(
     controller: MediaController?,
+    videoTitle: String = "",
+    onSelectOnlineSubtitle: (OnlineSubtitle) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     if (controller == null) return
@@ -224,7 +228,19 @@ fun TrackSelectorDialog(
         list
     }
 
-    var selectedTab by remember { mutableStateOf(0) } // 0 = Audio, 1 = Subtitles
+    var onlineSubtitles by remember { mutableStateOf<List<OnlineSubtitle>>(emptyList()) }
+    var isLoadingOnlineSubs by remember { mutableStateOf(false) }
+
+    LaunchedEffect(videoTitle) {
+        if (videoTitle.isNotBlank()) {
+            isLoadingOnlineSubs = true
+            onlineSubtitles = OnlineSubtitleProvider.searchSubtitles(videoTitle)
+            isLoadingOnlineSubs = false
+        }
+    }
+
+    // Default to Online Subs if video has 0 embedded subtitle tracks
+    var selectedTab by remember { mutableStateOf(if (subtitleTracks.size <= 1) 2 else 0) } // 0 = Audio, 1 = Embedded, 2 = Online Subs
 
     Box(
         modifier = Modifier
@@ -235,73 +251,127 @@ fun TrackSelectorDialog(
     ) {
         Column(
             modifier = Modifier
-                .width(440.dp)
+                .width(480.dp)
                 .background(Color(0xFF222222), RoundedCornerShape(16.dp))
                 .padding(24.dp)
         ) {
             Text("Audio & Subtitles", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(Modifier.height(16.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = { selectedTab = 0 }) {
                     Text(if (selectedTab == 0) "● Audio (${audioTracks.size})" else "Audio (${audioTracks.size})")
                 }
                 Button(onClick = { selectedTab = 1 }) {
-                    Text(if (selectedTab == 1) "● Subtitles (${subtitleTracks.size - 1})" else "Subtitles (${subtitleTracks.size - 1})")
+                    Text(if (selectedTab == 1) "● Embedded (${subtitleTracks.size - 1})" else "Embedded (${subtitleTracks.size - 1})")
+                }
+                Button(onClick = { selectedTab = 2 }) {
+                    Text(if (selectedTab == 2) "● Online (${if (isLoadingOnlineSubs) "..." else onlineSubtitles.size})" else "Online (${if (isLoadingOnlineSubs) "..." else onlineSubtitles.size})")
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            val activeList = if (selectedTab == 0) audioTracks else subtitleTracks
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 280.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(activeList) { track ->
-                    androidx.tv.material3.Card(
-                        onClick = {
-                            if (selectedTab == 0 && track.group != null) {
-                                val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
-                                controller.trackSelectionParameters = controller.trackSelectionParameters
-                                    .buildUpon()
-                                    .setOverrideForType(override)
-                                    .build()
-                            } else if (selectedTab == 1) {
-                                if (track.group == null) {
-                                    controller.trackSelectionParameters = controller.trackSelectionParameters
-                                        .buildUpon()
-                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                        .build()
-                                } else {
+            if (selectedTab == 2) {
+                if (isLoadingOnlineSubs) {
+                    Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            androidx.compose.material3.CircularProgressIndicator(color = Color(0xFF29B6F6))
+                            Spacer(Modifier.height(12.dp))
+                            Text("Searching OpenSubtitles database...", color = Color.LightGray, fontSize = 14.sp)
+                        }
+                    }
+                } else if (onlineSubtitles.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                        Text("No online subtitles found for this title.", color = Color.Gray, fontSize = 14.sp)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 280.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(onlineSubtitles) { sub ->
+                            androidx.tv.material3.Card(
+                                onClick = {
+                                    onSelectOnlineSubtitle(sub)
+                                    onDismiss()
+                                },
+                                colors = androidx.tv.material3.CardDefaults.colors(
+                                    containerColor = Color.White.copy(alpha = 0.08f),
+                                    focusedContainerColor = Color(0xFF29B6F6)
+                                ),
+                                shape = androidx.tv.material3.CardDefaults.shape(RoundedCornerShape(8.dp)),
+                                scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.02f),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(sub.langDisplay, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                        Text(sub.fileName, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
+                                    }
+                                    Icon(Icons.Filled.Check, contentDescription = "Select", tint = Color.White.copy(alpha = 0.7f))
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                val activeList = if (selectedTab == 0) audioTracks else subtitleTracks
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 280.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(activeList) { track ->
+                        androidx.tv.material3.Card(
+                            onClick = {
+                                if (selectedTab == 0 && track.group != null) {
                                     val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
                                     controller.trackSelectionParameters = controller.trackSelectionParameters
                                         .buildUpon()
-                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                                         .setOverrideForType(override)
                                         .build()
+                                } else if (selectedTab == 1) {
+                                    if (track.group == null) {
+                                        controller.trackSelectionParameters = controller.trackSelectionParameters
+                                            .buildUpon()
+                                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                            .build()
+                                    } else {
+                                        val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
+                                        controller.trackSelectionParameters = controller.trackSelectionParameters
+                                            .buildUpon()
+                                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                            .setOverrideForType(override)
+                                            .build()
+                                    }
                                 }
-                            }
-                            onDismiss()
-                        },
-                        colors = androidx.tv.material3.CardDefaults.colors(
-                            containerColor = if (track.isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
-                            focusedContainerColor = Color(0xFF29B6F6)
-                        ),
-                        shape = androidx.tv.material3.CardDefaults.shape(RoundedCornerShape(8.dp)),
-                        scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.02f),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                onDismiss()
+                            },
+                            colors = androidx.tv.material3.CardDefaults.colors(
+                                containerColor = if (track.isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
+                                focusedContainerColor = Color(0xFF29B6F6)
+                            ),
+                            shape = androidx.tv.material3.CardDefaults.shape(RoundedCornerShape(8.dp)),
+                            scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.02f),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
                         ) {
-                            Text(track.title, color = Color.White, fontSize = 16.sp)
-                            if (track.isSelected) {
-                                Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Color.White)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(track.title, color = Color.White, fontSize = 16.sp)
+                                if (track.isSelected) {
+                                    Icon(Icons.Filled.Check, contentDescription = "Selected", tint = Color.White)
+                                }
                             }
                         }
                     }

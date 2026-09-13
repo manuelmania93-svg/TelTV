@@ -29,6 +29,9 @@ import com.velastudio.teltv.player.PlaybackService
 import com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory
 import com.velastudio.teltv.util.MediaTitleCleaner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.velastudio.teltv.util.OnlineSubtitle
+import com.velastudio.teltv.util.OnlineSubtitleProvider
 import timber.log.Timber
 
 private const val CONTROLS_AUTO_HIDE_MS = 7000L
@@ -49,6 +52,7 @@ fun PlayerScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { PlaybackPrefs(context) }
     val skipIncrementMs by prefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
@@ -74,6 +78,38 @@ fun PlayerScreen(
 
     fun resolvedUri(): String? =
         directUri ?: fileId?.let { TdLibAwareDataSourceFactory.uriForFile(it).toString() }
+
+    fun attachOnlineSubtitle(sub: OnlineSubtitle) {
+        val mediaController = controller ?: return
+        coroutineScope.launch {
+            seekingText = "Downloading ${sub.langDisplay}..."
+            val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
+            if (file != null && file.exists()) {
+                val subUri = Uri.fromFile(file)
+                val subConfig = ExoMediaItem.SubtitleConfiguration.Builder(subUri)
+                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
+                    .setLanguage(sub.lang)
+                    .setLabel("${sub.langDisplay} (Online)")
+                    .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                    .build()
+
+                val currentMediaItem = mediaController.currentMediaItem
+                if (currentMediaItem != null) {
+                    val currentPos = mediaController.currentPosition
+                    val isPlayingNow = mediaController.isPlaying
+                    val updatedMediaItem = currentMediaItem.buildUpon()
+                        .setSubtitleConfigurations(listOf(subConfig))
+                        .build()
+                    mediaController.setMediaItem(updatedMediaItem, currentPos)
+                    mediaController.prepare()
+                    mediaController.playWhenReady = isPlayingNow
+                    seekingText = "Subtitles: ${sub.langDisplay}"
+                }
+            } else {
+                seekingText = "Failed to download subtitle"
+            }
+        }
+    }
 
     fun openInExternalPlayer() {
         val streamUri = resolvedUri() ?: return
@@ -399,7 +435,12 @@ fun PlayerScreen(
         }
 
         if (showTrackSelector) {
-            TrackSelectorDialog(controller = controller, onDismiss = { showTrackSelector = false })
+            TrackSelectorDialog(
+                controller = controller,
+                videoTitle = title,
+                onSelectOnlineSubtitle = ::attachOnlineSubtitle,
+                onDismiss = { showTrackSelector = false }
+            )
         }
 
         if (showAutoPlayOverlay && nextTitle != null && onPlayNext != null) {
