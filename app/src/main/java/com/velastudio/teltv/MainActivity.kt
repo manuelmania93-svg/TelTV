@@ -615,16 +615,21 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(
-                        "player/{mediaId}?playlistId={playlistId}",
+                        "player/{mediaId}?playlistId={playlistId}&showName={showName}",
                         arguments = listOf(
                             navArgument("mediaId") { type = NavType.StringType },
-                            navArgument("playlistId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                            navArgument("playlistId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            navArgument("showName") { type = NavType.StringType; nullable = true; defaultValue = null }
                         )
                     ) { backStackEntry ->
                         val mediaId = URLDecoder.decode(backStackEntry.arguments?.getString("mediaId") ?: "", "UTF-8")
                         val playlistId = backStackEntry.arguments
                             ?.takeIf { it.containsKey("playlistId") }
                             ?.getString("playlistId")?.toLongOrNull()
+                        val passedShowName = backStackEntry.arguments
+                            ?.takeIf { it.containsKey("showName") }
+                            ?.getString("showName")
+                            ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
                         var resolved by remember { mutableStateOf<WatchStateEntity?>(null) }
                         var fileId by remember { mutableStateOf<Int?>(null) }
                         var title by remember { mutableStateOf(mediaId) }
@@ -694,19 +699,31 @@ class MainActivity : ComponentActivity() {
                             autoPlayByDefault = false,
                             onPlayPrevious = prevEntity?.let { prev ->
                                 {
-                                    val prevRoute = "player/${URLEncoder.encode(prev.mediaId, "UTF-8")}" +
-                                        (playlistId?.let { "?playlistId=$it" } ?: "")
+                                    val extraParams = buildString {
+                                        if (playlistId != null) append("?playlistId=$playlistId")
+                                        if (!finalShowName.isNullOrBlank()) {
+                                            append(if (isEmpty()) "?" else "&")
+                                            append("showName=${URLEncoder.encode(finalShowName, "UTF-8")}")
+                                        }
+                                    }
+                                    val prevRoute = "player/${URLEncoder.encode(prev.mediaId, "UTF-8")}$extraParams"
                                     navController.navigate(prevRoute) {
-                                        popUpTo("player/{mediaId}") { inclusive = true }
+                                        popUpTo("player/{mediaId}?playlistId={playlistId}&showName={showName}") { inclusive = true }
                                     }
                                 }
                             },
                             onPlayNext = nextEntity?.let { next ->
                                 {
-                                    val nextRoute = "player/${URLEncoder.encode(next.mediaId, "UTF-8")}" +
-                                        (playlistId?.let { "?playlistId=$it" } ?: "")
+                                    val extraParams = buildString {
+                                        if (playlistId != null) append("?playlistId=$playlistId")
+                                        if (!finalShowName.isNullOrBlank()) {
+                                            append(if (isEmpty()) "?" else "&")
+                                            append("showName=${URLEncoder.encode(finalShowName, "UTF-8")}")
+                                        }
+                                    }
+                                    val nextRoute = "player/${URLEncoder.encode(next.mediaId, "UTF-8")}$extraParams"
                                     navController.navigate(nextRoute) {
-                                        popUpTo("player/{mediaId}") { inclusive = true }
+                                        popUpTo("player/{mediaId}?playlistId={playlistId}&showName={showName}") { inclusive = true }
                                     }
                                 }
                             },

@@ -12,14 +12,11 @@ android {
         applicationId = "com.velastudio.teltv"
         minSdk = 21          // covers most Android TV boxes / sticks
         targetSdk = 34
-        versionCode = 30
-        versionName = "0.3.1"
+        versionCode = 31
+        versionName = "0.3.2"
     }
 
     val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-    val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-    val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
-    val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
 
             signingConfigs {
         create("release") {
