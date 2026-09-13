@@ -62,11 +62,26 @@ object AppUpdater {
 
                 val assets = json.optJSONArray("assets") ?: continue
                 var downloadUrl: String? = null
+                val targetName = if (BuildConfig.DEBUG) "debug" else "release"
+
+                // First pass: find exact matching APK (e.g. TelTV-release.apk)
                 for (i in 0 until assets.length()) {
                     val asset = assets.getJSONObject(i)
-                    if (asset.optString("name", "").endsWith(".apk")) {
+                    val name = asset.optString("name", "").lowercase()
+                    if (name.endsWith(".apk") && targetName in name) {
                         downloadUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
                         break
+                    }
+                }
+                // Fallback pass: any .apk if no specific build-type found
+                if (downloadUrl == null) {
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.getJSONObject(i)
+                        val name = asset.optString("name", "")
+                        if (name.endsWith(".apk")) {
+                            downloadUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                            break
+                        }
                     }
                 }
 
@@ -115,7 +130,9 @@ object AppUpdater {
 
                 val body = response.body ?: return@withContext false
                 val contentLength = body.contentLength()
-                val apkFile = File(context.cacheDir, "TelTV_update.apk")
+                val apkFile = File(context.cacheDir, "TelTV_update.apk").apply {
+                    if (exists()) delete()
+                }
 
                 body.byteStream().use { input ->
                     FileOutputStream(apkFile).use { output ->
