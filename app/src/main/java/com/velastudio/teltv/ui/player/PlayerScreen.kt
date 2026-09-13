@@ -66,8 +66,10 @@ fun PlayerScreen(
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
-    var autoPlayNext by remember(fileId, directUri) {
-        mutableStateOf(autoPlayByDefault)
+    val savedAutoPlay by prefs.autoPlayEnabled.collectAsState(initial = true)
+    var autoPlayNext by remember { mutableStateOf(true) }
+    LaunchedEffect(savedAutoPlay) {
+        autoPlayNext = savedAutoPlay
     }
     var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
 
@@ -421,10 +423,14 @@ fun PlayerScreen(
             autoPlayNext = autoPlayNext,
             playPauseModifier = Modifier.focusRequester(playPauseFocusRequester),
             onToggleAutoPlay = {
-                autoPlayNext = !autoPlayNext
+                val newState = !autoPlayNext
+                autoPlayNext = newState
+                coroutineScope.launch {
+                    prefs.setAutoPlayEnabled(newState)
+                }
                 controlsVisible = true
-                seekingText = if (autoPlayNext) "Autoplay: ON" else "Autoplay: OFF"
-                seekingIsForward = autoPlayNext
+                seekingText = if (newState) "Autoplay: ON" else "Autoplay: OFF"
+                seekingIsForward = newState
             }
         )
 
