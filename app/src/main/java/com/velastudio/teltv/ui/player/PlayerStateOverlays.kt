@@ -1,5 +1,8 @@
 package com.velastudio.teltv.ui.player
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+
 import com.velastudio.teltv.ui.player.PlaybackPrefs
 
 import androidx.compose.animation.AnimatedVisibility
