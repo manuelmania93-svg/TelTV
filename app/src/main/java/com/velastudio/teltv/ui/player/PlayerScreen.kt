@@ -253,6 +253,7 @@ fun PlayerScreen(
                 mediaController.seekTo(resumePositionMs)
                 mediaController.prepare()
                 mediaController.playWhenReady = true
+                mediaController.play()
             } else {
                 playerErrorMessage = "Couldn't find anything to play."
             }
@@ -349,7 +350,12 @@ fun PlayerScreen(
     }
 
     fun togglePlayPause() {
-        controller?.let { it.playWhenReady = !it.playWhenReady }
+        val mediaController = controller ?: return
+        if (mediaController.isPlaying) {
+            mediaController.pause()
+        } else {
+            mediaController.play()
+        }
         controlsVisible = true
     }
 

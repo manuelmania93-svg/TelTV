@@ -382,9 +382,11 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 runCatching { app.channelVideoRepository.preloadRemaining(chatId) }
                             }
-                            pinnedVideo = runCatching { app.telegramClient.getPinnedVideo(chatId) }
-                                .onFailure { Timber.w(it, "Failed to load pinned video for chat %d", chatId) }
-                                .getOrNull()
+                            pinnedVideo = if (chatId <= -100_000_000_000_000_000L) null else {
+                                runCatching { app.telegramClient.getPinnedVideo(chatId) }
+                                    .onFailure { Timber.w(it, "Failed to load pinned video for chat %d", chatId) }
+                                    .getOrNull()
+                            }
                             resumeFractions = app.database.watchStateDao().getForChat(chatId)
                                 .associate { state ->
                                     val fraction = when {
@@ -476,7 +478,7 @@ class MainActivity : ComponentActivity() {
                             resumeFractionFor = { mediaId -> resumeFractions[mediaId] },
                             onLoadMore = { scope.launch { app.channelVideoRepository.ensureNextPage(chatId) } },
                             onOpenItem = { media ->
-                                navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}")
+                                navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}?showName=${URLEncoder.encode(title, "UTF-8")}")
                             },
                             onPinVideo = { media ->
                                 scope.launch {
@@ -675,10 +677,18 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        var finalShowName by remember { mutableStateOf(passedShowName) }
+                        LaunchedEffect(playlistId) {
+                            if (passedShowName == null && playlistId != null) {
+                                finalShowName = app.database.playlistDao().getById(playlistId)?.name
+                            }
+                        }
+                        val searchTitle = if (finalShowName != null && !title.contains(finalShowName ?: "", ignoreCase = true)) "$finalShowName $title" else title
+
                         PlayerScreen(
                             fileId = fileId,
                             directUri = null,
-                            title = title,
+                            title = searchTitle,
                             resumePositionMs = resumeMs,
                             nextTitle = nextEntity?.title,
                             autoPlayByDefault = false,

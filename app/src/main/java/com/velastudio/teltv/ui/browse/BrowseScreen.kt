@@ -80,19 +80,7 @@ fun BrowseScreen(
         ) {
             Text(channelTitle, style = MaterialTheme.typography.headlineSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = { marathonModeEnabled = !marathonModeEnabled },
-                    colors = androidx.tv.material3.ButtonDefaults.colors(
-                        containerColor = if (marathonModeEnabled) androidx.compose.ui.graphics.Color(0xFF29B6F6) else androidx.compose.ui.graphics.Color(0xFF202735)
-                    )
-                ) {
-                    Icon(Icons.Filled.PlaylistPlay, contentDescription = "Marathon Mode")
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (marathonModeEnabled) "Marathon: Click to Start" else "Marathon Mode: OFF")
-                }
-                Button(onClick = { showMarathonDialog = true }) {
-                    Text(if (activeMarathonName != null) "Manage Marathon" else "Marathon Menu")
-                }
+                
                 Button(
                     onClick = onToggleShowPinned,
                     colors = androidx.tv.material3.ButtonDefaults.colors(
@@ -179,13 +167,7 @@ fun BrowseScreen(
                         thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
                     enableTmdb = !fastModeEnabled,
                         resumeFraction = resumeFractionFor(media.id),
-                        onClick = {
-                            if (marathonModeEnabled) {
-                                onStartMarathonFrom(media)
-                            } else {
-                                onOpenItem(media)
-                            }
-                        }
+                        onClick = { onOpenItem(media) }
                     )
                 } else {
                     PosterCardPlaceholder()

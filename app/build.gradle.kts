@@ -12,7 +12,7 @@ android {
         applicationId = "com.velastudio.teltv"
         minSdk = 21          // covers most Android TV boxes / sticks
         targetSdk = 34
-        versionCode = 29
+        versionCode = 30
         versionName = "0.3.1"
     }
 
