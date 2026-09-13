@@ -103,6 +103,24 @@ class ChannelVideoRepository(
     }
 
     /**
+     * Rapidly streams up to [maxBatches] * 100 videos into SQLite in the background
+     * without blocking UI rendering. Stops automatically once the folder is fully cached.
+     */
+    suspend fun preloadRemaining(chatId: Long, maxBatches: Int = 30) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            for (batch in 0 until maxBatches) {
+                val state = syncStateDao.get(chatId) ?: break
+                if (state.fullyLoaded) break
+                val countBefore = state.itemCount
+                ensureNextPage(chatId)
+                val stateAfter = syncStateDao.get(chatId) ?: break
+                if (stateAfter.fullyLoaded || stateAfter.itemCount == countBefore) break
+                kotlinx.coroutines.delay(25) // Smooth 25ms pacing to keep TDLib pipeline responsive
+            }
+        }
+    }
+
+    /**
      * Fetches the newest page from Telegram and merges it into the local cache two ways:
      *
      * 1. **New items** (messageId not yet in Room): prepended at positions 0..N-1, with all

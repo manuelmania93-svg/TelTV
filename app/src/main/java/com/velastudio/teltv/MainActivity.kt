@@ -376,6 +376,11 @@ class MainActivity : ComponentActivity() {
                                 app.channelVideoRepository.refreshNewest(chatId)
                                 app.channelVideoRepository.ensureNextPage(chatId)
                             }.onFailure { Timber.w(it, "Failed to load channel videos for chatId=%d", chatId) }
+
+                            // Silently pre-load up to thousands of remaining videos into Room in the background
+                            scope.launch {
+                                runCatching { app.channelVideoRepository.preloadRemaining(chatId) }
+                            }
                             pinnedVideo = runCatching { app.telegramClient.getPinnedVideo(chatId) }
                                 .onFailure { Timber.w(it, "Failed to load pinned video for chat %d", chatId) }
                                 .getOrNull()
