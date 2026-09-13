@@ -55,27 +55,29 @@ object OnlineSubtitleProvider {
     suspend fun searchSubtitles(rawTitle: String): List<OnlineSubtitle> = withContext(Dispatchers.IO) {
         try {
             val cleanTitle = MediaTitleCleaner.clean(rawTitle)
+            val sig = HybridEpisodeMatcher.parseSignature(rawTitle)
             val seasonMatch = SEASON_EPISODE_REGEX.find(cleanTitle)
 
-            val isSeries = seasonMatch != null
-            val seasonNum = seasonMatch?.let {
+            val isSeries = sig != null || seasonMatch != null
+            val seasonNum = sig?.season ?: seasonMatch?.let {
                 it.groups[1]?.value?.toIntOrNull() ?: it.groups[3]?.value?.toIntOrNull()
             } ?: 1
-            val episodeNum = seasonMatch?.let {
+            val episodeNum = sig?.episode ?: seasonMatch?.let {
                 it.groups[2]?.value?.toIntOrNull() ?: it.groups[4]?.value?.toIntOrNull()
             } ?: 1
 
-            // Strip season/episode/year from title for catalog search
             var searchTitle = cleanTitle
-            if (isSeries && seasonMatch != null) {
+            if (seasonMatch != null) {
                 searchTitle = cleanTitle.substring(0, seasonMatch.range.first).trim()
+            } else if (sig != null) {
+                searchTitle = cleanTitle.replace(Regex("(?i)\\b(?:ep|episode|folge|part|teil|chapter)?\\s*[#-]?[\\s]*0*" + episodeNum + "\\b"), "").trim()
             } else {
                 val yearMatch = YEAR_REGEX.find(cleanTitle)
                 if (yearMatch != null) {
                     searchTitle = cleanTitle.substring(0, yearMatch.range.first).trim()
                 }
             }
-            searchTitle = searchTitle.replace(Regex("[._\\-]+"), " ").trim()
+            searchTitle = searchTitle.replace(Regex("[\[\]()._\\-]+"), " ").trim()
             if (searchTitle.isBlank()) searchTitle = cleanTitle
 
             // Step 1: Query Cinemeta for IMDb ID
@@ -100,7 +102,7 @@ object OnlineSubtitleProvider {
                 ?: return@withContext emptyList()
 
             // Step 2: Query OpenSubtitles v3 for subtitles list
-            val subUrl = if (isSeries) {
+            var subUrl = if (isSeries) {
                 "https://opensubtitles-v3.strem.io/subtitles/series/$imdbId:$seasonNum:$episodeNum.json"
             } else {
                 "https://opensubtitles-v3.strem.io/subtitles/movie/$imdbId.json"

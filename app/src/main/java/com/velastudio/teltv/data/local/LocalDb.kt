@@ -200,6 +200,9 @@ interface VideoIndexDao {
     @Query("SELECT * FROM video_index WHERE chatId = :chatId AND messageId > :currentMessageId ORDER BY messageId ASC LIMIT 1")
     suspend fun getNextInChannel(chatId: Long, currentMessageId: Long): VideoIndexEntity?
 
+    @Query("SELECT * FROM video_index WHERE chatId = :chatId AND messageId < :currentMessageId ORDER BY messageId DESC LIMIT 1")
+    suspend fun getPreviousInChannel(chatId: Long, currentMessageId: Long): VideoIndexEntity?
+
     /** Shifts all existing positions down to make room for new items prepended at the top. */
     @Query("UPDATE video_index SET position = position + :shift WHERE chatId = :chatId")
     suspend fun shiftPositions(chatId: Long, shift: Int)
@@ -267,6 +270,9 @@ interface PlaylistDao {
 
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId AND position > :position ORDER BY position ASC LIMIT 1")
     suspend fun nextItem(playlistId: Long, position: Int): PlaylistItemEntity?
+
+    @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId AND position < :position ORDER BY position DESC LIMIT 1")
+    suspend fun previousItem(playlistId: Long, position: Int): PlaylistItemEntity?
 
     @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId AND mediaId = :mediaId")
     suspend fun removeItem(playlistId: Long, mediaId: String)

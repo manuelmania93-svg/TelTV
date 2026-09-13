@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Subtitles
@@ -48,6 +49,7 @@ fun PlaybackControlsOverlay(
     onPlayPause: () -> Unit,
     onSkipBack: () -> Unit,
     onSkipForward: () -> Unit,
+    onPlayPrevious: (() -> Unit)? = null,
     onPlayNext: (() -> Unit)? = null,
     onOpenTracks: () -> Unit,
     onCycleAspectRatio: () -> Unit,
@@ -118,6 +120,14 @@ fun PlaybackControlsOverlay(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (onPlayPrevious != null) {
+                        ControlButton(
+                            icon = Icons.Filled.SkipPrevious,
+                            contentDescription = "Previous Episode",
+                            onClick = onPlayPrevious
+                        )
+                        Spacer(Modifier.width(32.dp))
+                    }
                     ControlButton(
                         icon = if (skipIncrementMs >= 10_000) Icons.Filled.Replay10 else Icons.Filled.Replay5,
                         contentDescription = "Skip back",

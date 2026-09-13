@@ -95,7 +95,7 @@ class ChannelVideoRepository(
                 state.copy(
                     oldestLoadedMessageId = if (oldestMessageId > 0L) oldestMessageId else state.oldestLoadedMessageId,
                     itemCount = state.itemCount + newItems.size,
-                    fullyLoaded = fetched.size < deviceProfile.pageSize,
+                    fullyLoaded = fetched.isEmpty(),
                     lastSyncedEpochSec = System.currentTimeMillis() / 1000
                 )
             )
@@ -106,16 +106,23 @@ class ChannelVideoRepository(
      * Rapidly streams up to [maxBatches] * 100 videos into SQLite in the background
      * without blocking UI rendering. Stops automatically once the folder is fully cached.
      */
-    suspend fun preloadRemaining(chatId: Long, maxBatches: Int = 30) {
+    suspend fun preloadRemaining(chatId: Long, maxBatches: Int = 100) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var consecutiveStalls = 0
             for (batch in 0 until maxBatches) {
                 val state = syncStateDao.get(chatId) ?: break
                 if (state.fullyLoaded) break
                 val countBefore = state.itemCount
                 ensureNextPage(chatId)
                 val stateAfter = syncStateDao.get(chatId) ?: break
-                if (stateAfter.fullyLoaded || stateAfter.itemCount == countBefore) break
-                kotlinx.coroutines.delay(25) // Smooth 25ms pacing to keep TDLib pipeline responsive
+                if (stateAfter.fullyLoaded) break
+                if (stateAfter.itemCount == countBefore) {
+                    consecutiveStalls++
+                    if (consecutiveStalls >= 2) break
+                } else {
+                    consecutiveStalls = 0
+                }
+                kotlinx.coroutines.delay(25)
             }
         }
     }

@@ -105,9 +105,46 @@ object HybridEpisodeMatcher {
         }
 
         // Step 3: Timeline Fallback (The Bridge)
-        // - Naruto 220 -> Naruto Shippuden 001
-        // - Wrestling Part 1 -> Part 2
-        // - Custom dates / event titles
         return dao.getNextInChannel(current.chatId, current.messageId)
+    }
+
+    suspend fun findPrevious(
+        current: VideoIndexEntity,
+        dao: VideoIndexDao
+    ): VideoIndexEntity? {
+        val currentSig = parseSignature(current.title)
+
+        if (currentSig != null) {
+            val candidates = dao.getAllForChat(current.chatId)
+
+            // Step 1: Look for same show stem + previous episode (e.g. Naruto 51 -> 50)
+            if (currentSig.episode > 1) {
+                val prevInSeries = candidates.firstOrNull { candidate ->
+                    val candSig = parseSignature(candidate.title)
+                    candSig != null &&
+                    candSig.stem == currentSig.stem &&
+                    candSig.season == currentSig.season &&
+                    candSig.episode == currentSig.episode - 1
+                }
+                if (prevInSeries != null) return prevInSeries
+            }
+
+            // Step 2: Previous Season Finale (e.g. S02E01 -> S01E[max])
+            if (currentSig.season != null && currentSig.season > 1) {
+                val prevSeasonCandidates = candidates.filter { candidate ->
+                    val candSig = parseSignature(candidate.title)
+                    candSig != null &&
+                    candSig.stem == currentSig.stem &&
+                    candSig.season == currentSig.season - 1
+                }
+                val prevSeasonFinale = prevSeasonCandidates.maxByOrNull {
+                    parseSignature(it.title)?.episode ?: 0
+                }
+                if (prevSeasonFinale != null) return prevSeasonFinale
+            }
+        }
+
+        // Step 3: Timeline Fallback (previous uploaded video in channel)
+        return dao.getPreviousInChannel(current.chatId, current.messageId)
     }
 }

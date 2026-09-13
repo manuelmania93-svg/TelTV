@@ -647,16 +647,22 @@ class MainActivity : ComponentActivity() {
                         }
 
                         var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
+                        var prevEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
                         LaunchedEffect(mediaId, playlistId) {
                             val cur = app.database.videoIndexDao().getByMediaId(mediaId)
+                            val playlistItems = if (playlistId != null) app.database.playlistDao().getItems(playlistId) else emptyList()
+                            val curPos = playlistItems.firstOrNull { it.mediaId == mediaId }?.position ?: -1
                             nextEntity = if (playlistId != null) {
-                                app.database.playlistDao().nextItem(
-                                    playlistId,
-                                    app.database.playlistDao().getItems(playlistId)
-                                        .firstOrNull { it.mediaId == mediaId }?.position ?: -1
-                                )?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
+                                app.database.playlistDao().nextItem(playlistId, curPos)?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
                             } else if (cur != null) {
                                 com.velastudio.teltv.util.HybridEpisodeMatcher.findNext(cur, app.database.videoIndexDao())
+                            } else {
+                                null
+                            }
+                            prevEntity = if (playlistId != null) {
+                                app.database.playlistDao().previousItem(playlistId, curPos)?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
+                            } else if (cur != null) {
+                                com.velastudio.teltv.util.HybridEpisodeMatcher.findPrevious(cur, app.database.videoIndexDao())
                             } else {
                                 null
                             }
@@ -669,6 +675,15 @@ class MainActivity : ComponentActivity() {
                             resumePositionMs = resumeMs,
                             nextTitle = nextEntity?.title,
                             autoPlayByDefault = false,
+                            onPlayPrevious = prevEntity?.let { prev ->
+                                {
+                                    val prevRoute = "player/${URLEncoder.encode(prev.mediaId, "UTF-8")}" +
+                                        (playlistId?.let { "?playlistId=$it" } ?: "")
+                                    navController.navigate(prevRoute) {
+                                        popUpTo("player/{mediaId}") { inclusive = true }
+                                    }
+                                }
+                            },
                             onPlayNext = nextEntity?.let { next ->
                                 {
                                     val nextRoute = "player/${URLEncoder.encode(next.mediaId, "UTF-8")}" +
