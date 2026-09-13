@@ -1,8 +1,9 @@
-# TelTV — Android Smart TV app for your Telegram library
+# TelTV — Android Smart TV app for streaming your Telegram library
 
-A from-scratch Android TV app in the spirit of VelaTV, connected directly to **your own Telegram
-account** (not a bot, not a specific channel) — with better pinned-chat/folder discovery, ExoPlayer
-streaming that seeks instantly instead of downloading whole files, and automatic cache management.
+An Android TV app for your Telegram library, inspired by testing multiple Telegram apps with
+streaming features. TelTV connects directly to **your own Telegram account** (not a bot and not a
+specific channel), with pinned-chat and folder discovery, ExoPlayer streaming that seeks
+instantly instead of downloading whole files, and automatic cache management.
 
 ## What's actually in this scaffold vs. what you still need to do
 
@@ -72,7 +73,7 @@ app/src/main/java/org/drinkless/tdlib/TdApi.java
 Android TV emulator: Android Studio → Device Manager → Create Device → TV category.
 Real device: enable Developer Options + ADB debugging on your TV box, `adb connect <ip>`.
 
-## How the "better than VelaTV" pieces work
+## How TelTV's streaming and browsing pieces work
 
 - **Pinned channels + folders** (`TelegramClient.getPinnedChannels()` /
   `getChannelsInFolders()`): reads directly from your account's real chat list and chat-folder
@@ -88,9 +89,9 @@ Real device: enable Developer Options + ADB debugging on your TV box, `adb conne
   TDLib's own `OptimizeStorage`, which already knows every file it has downloaded, its size, and
   last-access time. "Clear cache now" = optimize down to 0 bytes. Automatic cleanup is emergency
   only: it clears the cache when the TV has less than 512 MB of usable storage remaining.
-- **NAS/WebDAV/local** (`SmbSourceClient.kt`, `WebDavSourceClient.kt`): same fields as VelaTV's
-  "Add a source" flow (host/port/share/folder for SMB; server URL/user/pass for WebDAV), kept as
-  a secondary source type alongside your Telegram account.
+- **NAS/WebDAV/local** (`SmbSourceClient.kt`, `WebDavSourceClient.kt`): supports host/port/share/
+  folder for SMB and server URL/user/pass for WebDAV, kept as secondary source types alongside
+  your Telegram account.
 
 ## What's new: performance + the features a real Telegram-TV player needs
 

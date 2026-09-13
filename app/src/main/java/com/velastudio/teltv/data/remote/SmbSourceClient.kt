@@ -16,9 +16,8 @@ import java.util.Properties
 private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "avi", "mov", "webm", "m4v", "ts")
 
 /**
- * Browses a Windows share / NAS over SMB, same fields as VelaTV's "Network share (NAS)"
- * screen: server address, port, share name, optional subfolder, username/password/domain.
- * Guest access is used when username is blank.
+ * Browses a Windows share / NAS over SMB using server address, port, share name,
+ * optional subfolder, username/password/domain. Guest access is used when username is blank.
  */
 class SmbSourceClient {
 
@@ -76,7 +75,7 @@ class SmbSourceClient {
             results
         }
 
-    /** "Test and connect" support, same as VelaTV's connection test button. */
+    /** Checks whether the configured share is reachable. */
     suspend fun testConnection(source: MediaSource): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val ctx = buildContext(source)

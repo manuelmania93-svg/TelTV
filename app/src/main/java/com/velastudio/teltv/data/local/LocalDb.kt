@@ -41,7 +41,7 @@ data class WatchStateEntity(
     val finished: Boolean = false
 )
 
-/** Local mirror of a "favorite"/watchlist item, same idea as VelaTV's Watchlist tab. */
+/** Locally persisted favorite/watchlist item. */
 @Entity(tableName = "watchlist")
 data class WatchlistEntity(
     @PrimaryKey val mediaId: String,

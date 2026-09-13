@@ -202,7 +202,7 @@ class TelegramClient(private val context: Context) {
         } ?: cont.resumeWithException(IllegalStateException("TDLib client not started"))
     }
 
-    // ---- Pinned chats + folder discovery (this is the "better than VelaTV" browsing story) ----
+    // ---- Pinned chats + folder discovery ----
 
     /**
      * All chat folders the user has configured in Telegram (e.g. "Movies", "Anime", "Work").

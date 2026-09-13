@@ -125,7 +125,7 @@ dependencies {
     // Poster / thumbnail images
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    // Direct sources like VelaTV: NAS (SMB) + WebDAV, in addition to Telegram
+    // Direct NAS (SMB) and WebDAV sources, in addition to Telegram
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     implementation("com.github.thegrizzlylabs:sardine-android:0.8")
 

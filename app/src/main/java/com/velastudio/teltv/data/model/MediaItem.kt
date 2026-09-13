@@ -27,7 +27,7 @@ data class MediaCategory(
     val itemCount: Int
 )
 
-/** A configured external source, mirrors VelaTV's "Add a source" flow but stored locally. */
+/** A configured external source stored locally. */
 data class MediaSource(
     val id: String,
     val type: SourceType,

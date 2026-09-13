@@ -10,7 +10,7 @@ import timber.log.Timber
 
 private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "avi", "mov", "webm", "m4v", "ts")
 
-/** Nextcloud / ownCloud / any generic WebDAV server, same fields as VelaTV's "Private cloud". */
+/** Nextcloud, ownCloud, or any generic WebDAV server. */
 class WebDavSourceClient {
 
     private fun client(source: MediaSource): OkHttpSardine {
