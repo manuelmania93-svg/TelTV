@@ -208,8 +208,12 @@ object OnlineSubtitleProvider {
                 } else line
             } else line
         }
-        shiftedFile.writeText(shiftedLines.joinToString("
-"))
+        shiftedFile.bufferedWriter().use { writer ->
+            for (line in shiftedLines) {
+                writer.write(line)
+                writer.newLine()
+            }
+        }
         return shiftedFile
     }
 }
