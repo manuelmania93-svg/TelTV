@@ -656,7 +656,13 @@ class MainActivity : ComponentActivity() {
                             nextEntity = if (playlistId != null) {
                                 app.database.playlistDao().nextItem(playlistId, curPos)?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
                             } else if (cur != null) {
-                                com.velastudio.teltv.util.HybridEpisodeMatcher.findNext(cur, app.database.videoIndexDao())
+                                var foundNext = com.velastudio.teltv.util.HybridEpisodeMatcher.findNext(cur, app.database.videoIndexDao())
+                                if (foundNext == null) {
+                                    // Next episode might be on the next Telegram batch; prefetch into Room and retry
+                                    runCatching { app.channelVideoRepository.ensureNextPage(cur.chatId) }
+                                    foundNext = com.velastudio.teltv.util.HybridEpisodeMatcher.findNext(cur, app.database.videoIndexDao())
+                                }
+                                foundNext
                             } else {
                                 null
                             }

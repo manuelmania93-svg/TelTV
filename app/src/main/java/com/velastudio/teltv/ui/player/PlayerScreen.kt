@@ -67,6 +67,7 @@ fun PlayerScreen(
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
+    var autoPlayTriggered by remember { mutableStateOf(false) }
     val savedAutoPlay by prefs.autoPlayEnabled.collectAsState(initial = true)
     var autoPlayNext by remember { mutableStateOf(true) }
     LaunchedEffect(savedAutoPlay) {
@@ -284,12 +285,22 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(controller) {
+    LaunchedEffect(controller, isPlaying, autoPlayNext, onPlayNext) {
         val mediaController = controller ?: return@LaunchedEffect
         while (true) {
             delay(POSITION_SAVE_INTERVAL_MS)
-            if (mediaController.duration > 0) {
-                onPositionUpdate(mediaController.currentPosition, mediaController.duration)
+            val dur = mediaController.duration
+            val pos = mediaController.currentPosition
+            if (dur > 0) {
+                onPositionUpdate(pos, dur)
+                // Smart Autoplay trigger: If within last 12 seconds of a video (>1 min duration)
+                if (dur > 60_000L && pos > 0L) {
+                    val remaining = dur - pos
+                    if (remaining in 1..12_000L && autoPlayNext && onPlayNext != null && !showAutoPlayOverlay && !autoPlayTriggered) {
+                        autoPlayTriggered = true
+                        showAutoPlayOverlay = true
+                    }
+                }
             }
         }
     }
@@ -539,7 +550,7 @@ fun PlayerScreen(
 
         if (showAutoPlayOverlay && nextTitle != null && onPlayNext != null) {
             AutoPlayCountdownOverlay(
-                nextTitle = MediaTitleCleaner.clean(nextTitle),
+                nextTitle = nextTitle?.let { MediaTitleCleaner.clean(it) } ?: "Next Episode",
                 onPlayNow = {
                     showAutoPlayOverlay = false
                     onPlayNext()
