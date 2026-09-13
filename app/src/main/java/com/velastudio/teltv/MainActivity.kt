@@ -34,6 +34,7 @@ import com.velastudio.teltv.ui.search.SearchScreen
 import com.velastudio.teltv.ui.settings.AppUpdateSection
 import com.velastudio.teltv.ui.settings.CacheSettingsSection
 import com.velastudio.teltv.ui.settings.AppInfoSection
+import com.velastudio.teltv.ui.settings.PerformanceSettingsSection
 import com.velastudio.teltv.ui.settings.PlaybackSettingsSection
 import com.velastudio.teltv.ui.settings.PlaylistSettingsSection
 import com.velastudio.teltv.ui.player.PlaybackPrefs
@@ -798,7 +799,7 @@ class MainActivity : ComponentActivity() {
                             item {
                             PerformanceSettingsSection(
                                 fastModeEnabled = fastModeEnabled,
-                                onToggleFastMode = { scope.launch { playbackPrefs.setFastModeEnabled(it) } }
+                                onToggleFastMode = { enabled -> scope.launch { playbackPrefs.setFastModeEnabled(enabled) } }
                             )
                             }
                             item {
