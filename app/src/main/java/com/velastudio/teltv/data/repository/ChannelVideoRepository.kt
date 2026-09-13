@@ -64,20 +64,23 @@ class ChannelVideoRepository(
      * one more page from Telegram and merges it into Room; a no-op once [ChannelSyncStateEntity
      * .fullyLoaded] is true. Safe to call repeatedly/concurrently -- guarded per-channel.
      */
-    suspend fun ensureNextPage(chatId: Long) {
+    suspend fun ensureNextPage(chatId: Long, forceContinue: Boolean = false) {
         val lock = lockFor(chatId)
-        if (lock.isLocked) return // a fetch for this channel is already in flight
+        if (lock.isLocked) return
         lock.withLock {
             val state = syncStateDao.get(chatId) ?: ChannelSyncStateEntity(chatId = chatId)
-            if (state.fullyLoaded) return@withLock
+            if (state.fullyLoaded && !forceContinue) return@withLock
 
-            val fetched = telegram.getVideoMessages(
+            val page = telegram.getVideoMessages(
                 chatId = chatId,
                 fromMessageId = state.oldestLoadedMessageId,
                 limit = deviceProfile.pageSize
             )
+            val fetched = page.items
             if (fetched.isEmpty()) {
-                syncStateDao.upsert(state.copy(fullyLoaded = true))
+                if (page.nextFromMessageId == 0L) {
+                    syncStateDao.upsert(state.copy(fullyLoaded = true))
+                }
                 return@withLock
             }
 
@@ -90,12 +93,12 @@ class ChannelVideoRepository(
                 videoIndexDao.insertAll(entities)
             }
 
-            val oldestMessageId = fetched.minOf { it.id.substringAfterLast(':').toLongOrNull() ?: 0L }
+            val nextCursor = if (page.nextFromMessageId != 0L) page.nextFromMessageId else (fetched.minOfOrNull { it.id.substringAfterLast(':').toLongOrNull() ?: 0L } ?: 0L)
             syncStateDao.upsert(
                 state.copy(
-                    oldestLoadedMessageId = if (oldestMessageId > 0L) oldestMessageId else state.oldestLoadedMessageId,
+                    oldestLoadedMessageId = if (nextCursor > 0L) nextCursor else state.oldestLoadedMessageId,
                     itemCount = state.itemCount + newItems.size,
-                    fullyLoaded = fetched.isEmpty(),
+                    fullyLoaded = page.nextFromMessageId == 0L && fetched.isEmpty(),
                     lastSyncedEpochSec = System.currentTimeMillis() / 1000
                 )
             )
@@ -106,23 +109,23 @@ class ChannelVideoRepository(
      * Rapidly streams up to [maxBatches] * 100 videos into SQLite in the background
      * without blocking UI rendering. Stops automatically once the folder is fully cached.
      */
-    suspend fun preloadRemaining(chatId: Long, maxBatches: Int = 100) {
+    suspend fun preloadRemaining(chatId: Long, maxBatches: Int = 300) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             var consecutiveStalls = 0
             for (batch in 0 until maxBatches) {
-                val state = syncStateDao.get(chatId) ?: break
-                if (state.fullyLoaded) break
-                val countBefore = state.itemCount
-                ensureNextPage(chatId)
+                val state = syncStateDao.get(chatId)
+                val force = (state?.fullyLoaded == true && state.itemCount < 1500)
+                val countBefore = state?.itemCount ?: 0
+                ensureNextPage(chatId, forceContinue = force)
                 val stateAfter = syncStateDao.get(chatId) ?: break
-                if (stateAfter.fullyLoaded) break
+                if (stateAfter.fullyLoaded && !force) break
                 if (stateAfter.itemCount == countBefore) {
                     consecutiveStalls++
-                    if (consecutiveStalls >= 2) break
+                    if (consecutiveStalls >= 3) break
                 } else {
                     consecutiveStalls = 0
                 }
-                kotlinx.coroutines.delay(25)
+                kotlinx.coroutines.delay(20)
             }
         }
     }
@@ -149,7 +152,7 @@ class ChannelVideoRepository(
             if (videoIndexDao.count(chatId) == 0) return@withLock // nothing cached yet; let ensureNextPage handle first load
 
             val fetched = runCatching {
-                telegram.getVideoMessages(chatId = chatId, fromMessageId = 0L, limit = deviceProfile.pageSize)
+                telegram.getVideoMessages(chatId = chatId, fromMessageId = 0L, limit = deviceProfile.pageSize).items
             }.onFailure { Timber.w(it, "refreshNewest failed for chatId=%d", chatId) }
                 .getOrDefault(emptyList())
             if (fetched.isEmpty()) return@withLock

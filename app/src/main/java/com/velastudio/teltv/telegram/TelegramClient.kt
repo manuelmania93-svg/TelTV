@@ -38,6 +38,12 @@ import java.util.concurrent.TimeUnit
  *   3. Drop the .so files into app/src/main/jniLibs/<abi>/ and the generated Java sources
  *      alongside this file (or as a module) so `org.drinkless.tdlib.*` resolves.
  */
+
+data class VideoMessagesResult(
+    val items: List<MediaItem>,
+    val nextFromMessageId: Long
+)
+
 class TelegramClient(private val context: Context) {
     suspend fun getFreshFileId(chatId: Long, messageId: Long): Int? = suspendCancellableCoroutine { cont ->
         val c = client ?: return@suspendCancellableCoroutine cont.resume(null)
@@ -436,7 +442,7 @@ class TelegramClient(private val context: Context) {
         }.getOrDefault(false)
     }
 
-    suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40, topicId: Int = 0): List<MediaItem> {
+    suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40, topicId: Int = 0): VideoMessagesResult {
         val (realChatId, resolvedTopicId) = if (chatId <= -100_000_000_000_000_000L) {
             val raw = kotlin.math.abs(chatId)
             val tId = (raw % 100_000L).toInt()
@@ -446,28 +452,20 @@ class TelegramClient(private val context: Context) {
             chatId to topicId
         }
         val topic = if (resolvedTopicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(resolvedTopicId) else null
-        val offset = if (fromMessageId != 0L) 1 else 0
         val result = runCatching {
             send(
                 TdApi.SearchChatMessages(
-                    realChatId, topic, "", null, fromMessageId, offset, limit,
+                    realChatId, topic, "", null, fromMessageId, 0, limit,
                     TdApi.SearchMessagesFilterVideo()
                 )
             ) as? TdApi.FoundChatMessages
         }.onFailure { Timber.w(it, "SearchChatMessages failed for chatId=%d topicId=%d", realChatId, resolvedTopicId) }
-            .getOrNull() ?: return emptyList()
+            .getOrNull() ?: return VideoMessagesResult(emptyList(), 0L)
 
-        return result.messages.filter { it.id != fromMessageId }.mapNotNull { msg ->
+        val items = result.messages.filter { it.id != fromMessageId }.mapNotNull { msg ->
             val msgVideo = msg.content as? TdApi.MessageVideo ?: return@mapNotNull null
             val video = msgVideo.video
-            // Thumbnail is a tiny (a few KB) JPEG TDLib already has the file descriptor for --
-            // we don't download it here, just remember its file id. The browse grid downloads
-            // (and cancels) these lazily and at a low priority, see downloadThumbnail() below.
             val thumbFileId = video.thumbnail?.file?.id
-            // Caption is the right primary title source: most media channels put the human-readable
-            // name there (e.g. "The Dark Knight (2008)"), while video.fileName is frequently blank
-            // or a meaningless upload artifact like "video.mp4" or "output_20240101.mp4".
-            // Priority: caption text -> original filename -> "Video <messageId>" last resort.
             val title = msgVideo.caption?.text.orEmpty()
                 .ifBlank { video.fileName }
                 .ifBlank { "Video ${msg.id}" }
@@ -476,7 +474,7 @@ class TelegramClient(private val context: Context) {
                 sourceType = SourceType.TELEGRAM,
                 title = title,
                 subtitle = null,
-                category = null, // filled in by the UI layer from the folder/chat name
+                category = null,
                 durationMs = video.duration * 1000L,
                 sizeBytes = video.video.size.toLong(),
                 thumbnailUrl = thumbFileId?.let { "tdlib://thumb/$it" },
@@ -484,6 +482,8 @@ class TelegramClient(private val context: Context) {
                 addedAtEpochSec = msg.date.toLong()
             )
         }
+        val nextId = if (result.nextFromMessageId != 0L) result.nextFromMessageId else (result.messages.lastOrNull()?.id ?: 0L)
+        return VideoMessagesResult(items, nextId)
     }
 
     /**
