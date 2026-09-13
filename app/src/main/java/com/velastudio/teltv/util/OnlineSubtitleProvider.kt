@@ -77,7 +77,7 @@ object OnlineSubtitleProvider {
                     searchTitle = cleanTitle.substring(0, yearMatch.range.first).trim()
                 }
             }
-            searchTitle = searchTitle.replace(Regex("[\[\]()._\\-]+"), " ").trim()
+            searchTitle = searchTitle.replace(Regex("""[[\]()._\-]+"""), " ").trim()
             if (searchTitle.isBlank()) searchTitle = cleanTitle
 
             // Step 1: Query Cinemeta for IMDb ID
