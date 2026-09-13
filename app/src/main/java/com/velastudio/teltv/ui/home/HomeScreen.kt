@@ -71,6 +71,7 @@ fun HomeScreen(
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<com.velastudio.teltv.util.UpdateInfo?>(null) }
+    var dismissedVersion by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
     var filterMode by remember { mutableStateOf(HomeFilterMode.ALL) }
@@ -82,7 +83,10 @@ fun HomeScreen(
     }
 
     LaunchedEffect(Unit) {
-        updateInfo = com.velastudio.teltv.util.AppUpdater.checkForUpdate()
+        val info = com.velastudio.teltv.util.AppUpdater.checkForUpdate()
+        if (info != null && info.versionName != dismissedVersion) {
+            updateInfo = info
+        }
     }
 
     LazyColumn(
@@ -322,7 +326,10 @@ fun HomeScreen(
                     isDownloading = false
                 }
             },
-            onDismiss = { updateInfo = null }
+            onDismiss = {
+                dismissedVersion = updateInfo?.versionName
+                updateInfo = null
+            }
         )
     }
 
@@ -424,6 +431,7 @@ fun UpdateAvailableDialog(
     onDismiss: () -> Unit
 ) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        androidx.activity.compose.BackHandler(onBack = onDismiss)
         Card(onClick = {}) {
             Column(Modifier.padding(24.dp)) {
                 Text("Update Available (v${updateInfo.versionName})", style = MaterialTheme.typography.titleLarge)

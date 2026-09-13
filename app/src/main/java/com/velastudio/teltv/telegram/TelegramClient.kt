@@ -446,17 +446,18 @@ class TelegramClient(private val context: Context) {
             chatId to topicId
         }
         val topic = if (resolvedTopicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(resolvedTopicId) else null
+        val offset = if (fromMessageId != 0L) 1 else 0
         val result = runCatching {
             send(
                 TdApi.SearchChatMessages(
-                    realChatId, topic, "", null, fromMessageId, 0, limit,
+                    realChatId, topic, "", null, fromMessageId, offset, limit,
                     TdApi.SearchMessagesFilterVideo()
                 )
             ) as? TdApi.FoundChatMessages
         }.onFailure { Timber.w(it, "SearchChatMessages failed for chatId=%d topicId=%d", realChatId, resolvedTopicId) }
             .getOrNull() ?: return emptyList()
 
-        return result.messages.mapNotNull { msg ->
+        return result.messages.filter { it.id != fromMessageId }.mapNotNull { msg ->
             val msgVideo = msg.content as? TdApi.MessageVideo ?: return@mapNotNull null
             val video = msgVideo.video
             // Thumbnail is a tiny (a few KB) JPEG TDLib already has the file descriptor for --

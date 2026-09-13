@@ -22,6 +22,26 @@ object AppUpdater {
     private val client = OkHttpClient.Builder().build()
     private const val GITHUB_REPO = "manuelmania93-svg/TelTV"
 
+    fun cleanVersion(raw: String): String {
+        return raw.replace(Regex("(?i)teltv"), "")
+            .trim()
+            .trimStart('v', 'V', ' ')
+            .trim()
+    }
+
+    private fun isNewer(remoteVer: String, currentVer: String): Boolean {
+        val rParts = remoteVer.split(".").mapNotNull { it.toIntOrNull() }
+        val cParts = currentVer.split(".").mapNotNull { it.toIntOrNull() }
+        val maxLen = maxOf(rParts.size, cParts.size)
+        for (i in 0 until maxLen) {
+            val r = rParts.getOrElse(i) { 0 }
+            val c = cParts.getOrElse(i) { 0 }
+            if (r > c) return true
+            if (r < c) return false
+        }
+        return false
+    }
+
     suspend fun checkForUpdate(force: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
             val releaseUrls = listOf(
@@ -29,9 +49,17 @@ object AppUpdater {
                 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/rolling-release"
             )
 
+            val currentVersion = cleanVersion(BuildConfig.VERSION_NAME)
+
             for (url in releaseUrls) {
                 val json = fetchRelease(url) ?: continue
-                val tagName = json.optString("tag_name", "").removePrefix("v").trim()
+                val rawTagName = json.optString("tag_name", "")
+                val rawReleaseName = json.optString("name", "")
+                val tagName = cleanVersion(rawTagName)
+                val versionInRelease = cleanVersion(rawReleaseName)
+
+                val remoteVersion = if (versionInRelease.isNotBlank()) versionInRelease else tagName
+
                 val assets = json.optJSONArray("assets") ?: continue
                 var downloadUrl: String? = null
                 for (i in 0 until assets.length()) {
@@ -43,14 +71,13 @@ object AppUpdater {
                 }
 
                 if (downloadUrl != null) {
-                    val currentVersion = BuildConfig.VERSION_NAME
-                    val releaseName = json.optString("name", "")
-                    val versionInRelease = releaseName.removePrefix("TelTV").removePrefix("v").trim()
-                    if (!force && (versionInRelease == currentVersion || tagName == currentVersion || (tagName == "rolling-release" && (versionInRelease.isBlank() || versionInRelease == currentVersion)))) {
-                        return@withContext null
+                    if (!force) {
+                        if (remoteVersion.isBlank() || !isNewer(remoteVersion, currentVersion)) {
+                            return@withContext null
+                        }
                     }
                     return@withContext UpdateInfo(
-                        if (versionInRelease.isNotBlank()) versionInRelease else tagName,
+                        remoteVersion,
                         downloadUrl,
                         json.optString("body", "Continuous release update with latest fixes.")
                     )

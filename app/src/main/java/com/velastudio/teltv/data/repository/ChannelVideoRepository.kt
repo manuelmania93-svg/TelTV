@@ -50,7 +50,7 @@ class ChannelVideoRepository(
             config = PagingConfig(
                 pageSize = deviceProfile.pageSize,
                 prefetchDistance = deviceProfile.prefetchDistance,
-                enablePlaceholders = true,
+                enablePlaceholders = false,
                 initialLoadSize = deviceProfile.pageSize
             ),
             pagingSourceFactory = {
@@ -71,37 +71,30 @@ class ChannelVideoRepository(
             val state = syncStateDao.get(chatId) ?: ChannelSyncStateEntity(chatId = chatId)
             if (state.fullyLoaded) return@withLock
 
-            val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
-                val raw = kotlin.math.abs(chatId)
-                val tId = (raw % 100_000L).toInt()
-                val cId = -(raw / 100_000L)
-                cId to tId
-            } else {
-                chatId to 0
-            }
             val fetched = telegram.getVideoMessages(
-                chatId = realChatId,
+                chatId = chatId,
                 fromMessageId = state.oldestLoadedMessageId,
-                limit = deviceProfile.pageSize,
-                topicId = topicId
+                limit = deviceProfile.pageSize
             )
             if (fetched.isEmpty()) {
                 syncStateDao.upsert(state.copy(fullyLoaded = true))
                 return@withLock
             }
 
-            val startPosition = state.itemCount
-            val entities = fetched.mapIndexed { i, item ->
-                item.toEntity(chatId = chatId, position = startPosition + i)
+            val newItems = fetched.filter { videoIndexDao.getByMediaId(it.id) == null }
+            if (newItems.isNotEmpty()) {
+                val startPosition = state.itemCount
+                val entities = newItems.mapIndexed { i, item ->
+                    item.toEntity(chatId = chatId, position = startPosition + i)
+                }
+                videoIndexDao.insertAll(entities)
             }
-            videoIndexDao.insertAll(entities)
 
-            val oldestMessageId = entities.minOf { it.messageId }
+            val oldestMessageId = fetched.minOf { it.id.substringAfterLast(':').toLongOrNull() ?: 0L }
             syncStateDao.upsert(
                 state.copy(
-                    oldestLoadedMessageId = oldestMessageId,
-                    itemCount = state.itemCount + entities.size,
-                    // Telegram returned fewer than a full page -- that's the end of the channel.
+                    oldestLoadedMessageId = if (oldestMessageId > 0L) oldestMessageId else state.oldestLoadedMessageId,
+                    itemCount = state.itemCount + newItems.size,
                     fullyLoaded = fetched.size < deviceProfile.pageSize,
                     lastSyncedEpochSec = System.currentTimeMillis() / 1000
                 )
@@ -130,17 +123,8 @@ class ChannelVideoRepository(
         lock.withLock {
             if (videoIndexDao.count(chatId) == 0) return@withLock // nothing cached yet; let ensureNextPage handle first load
 
-            val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
-                val raw = kotlin.math.abs(chatId)
-                val tId = (raw % 100_000L).toInt()
-                val cId = -(raw / 100_000L)
-                cId to tId
-            } else {
-                chatId to 0
-            }
-
             val fetched = runCatching {
-                telegram.getVideoMessages(chatId = realChatId, fromMessageId = 0L, limit = deviceProfile.pageSize, topicId = topicId)
+                telegram.getVideoMessages(chatId = chatId, fromMessageId = 0L, limit = deviceProfile.pageSize)
             }.onFailure { Timber.w(it, "refreshNewest failed for chatId=%d", chatId) }
                 .getOrDefault(emptyList())
             if (fetched.isEmpty()) return@withLock

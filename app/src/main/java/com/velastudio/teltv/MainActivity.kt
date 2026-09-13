@@ -384,7 +384,7 @@ class MainActivity : ComponentActivity() {
                                 .associate { it.mediaId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f) }
                         }
 
-                        var isAscending by remember { mutableStateOf(false) } // Default to Oldest First (Ep 1)
+                        var isAscending by remember { mutableStateOf(true) } // Default to Newest First
                         val marathonName = "$title Marathon"
                         var activeMarathon by remember { mutableStateOf<com.velastudio.teltv.data.local.PlaylistEntity?>(null) }
 

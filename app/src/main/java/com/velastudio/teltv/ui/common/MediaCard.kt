@@ -184,6 +184,7 @@ fun PosterCardPlaceholder() {
             .height(POSTER_CARD_HEIGHT)
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFF161D27))
+            .focusable()
     )
 }
 
