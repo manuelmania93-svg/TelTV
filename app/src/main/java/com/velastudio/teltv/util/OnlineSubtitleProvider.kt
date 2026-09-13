@@ -172,4 +172,44 @@ object OnlineSubtitleProvider {
             null
         }
     }
+
+    private val TIME_REGEX = Regex("(\\d{2}):(\\d{2}):(\\d{2})[,.](\\d{3})")
+
+    private fun parseSrtTime(timeStr: String): Long {
+        val match = TIME_REGEX.find(timeStr) ?: return 0L
+        val hours = match.groupValues[1].toLong()
+        val minutes = match.groupValues[2].toLong()
+        val seconds = match.groupValues[3].toLong()
+        val millis = match.groupValues[4].toLong()
+        return (hours * 3600 + minutes * 60 + seconds) * 1000 + millis
+    }
+
+    private fun formatSrtTime(totalMs: Long): String {
+        val ms = (totalMs % 1000).coerceAtLeast(0)
+        val totalSeconds = (totalMs / 1000).coerceAtLeast(0)
+        val s = totalSeconds % 60
+        val totalMinutes = totalSeconds / 60
+        val m = totalMinutes % 60
+        val h = totalMinutes / 60
+        return "%02d:%02d:%02d,%03d".format(h, m, s, ms)
+    }
+
+    fun shiftSubtitle(file: File, offsetMs: Long): File {
+        if (offsetMs == 0L || !file.exists()) return file
+        val shiftedFile = File(file.parentFile, "${file.nameWithoutExtension}_shift_${offsetMs}.srt")
+        val lines = file.readLines()
+        val shiftedLines = lines.map { line ->
+            if (line.contains("-->")) {
+                val parts = line.split("-->")
+                if (parts.size == 2) {
+                    val start = (parseSrtTime(parts[0].trim()) + offsetMs).coerceAtLeast(0L)
+                    val end = (parseSrtTime(parts[1].trim()) + offsetMs).coerceAtLeast(0L)
+                    "${formatSrtTime(start)} --> ${formatSrtTime(end)}"
+                } else line
+            } else line
+        }
+        shiftedFile.writeText(shiftedLines.joinToString("
+"))
+        return shiftedFile
+    }
 }

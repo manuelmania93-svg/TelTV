@@ -384,9 +384,15 @@ class MainActivity : ComponentActivity() {
                             pinnedVideo = runCatching { app.telegramClient.getPinnedVideo(chatId) }
                                 .onFailure { Timber.w(it, "Failed to load pinned video for chat %d", chatId) }
                                 .getOrNull()
-                            resumeFractions = app.database.watchStateDao().recentlyWatched(limit = 200)
-                                .filter { it.mediaId.startsWith("tg:$chatId:") }
-                                .associate { it.mediaId to (if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f) }
+                            resumeFractions = app.database.watchStateDao().getForChat(chatId)
+                                .associate { state ->
+                                    val fraction = when {
+                                        state.finished -> 1.0f
+                                        state.durationMs > 0 -> (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
+                                        else -> 0f
+                                    }
+                                    state.mediaId to fraction
+                                }
                         }
 
                         var isAscending by remember { mutableStateOf(true) } // Default to Newest First

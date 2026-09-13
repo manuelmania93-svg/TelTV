@@ -131,16 +131,38 @@ fun PosterCard(
                 )
             }
 
-            // Resume progress bar
-            if (resumeFraction != null && resumeFraction > 0.02f) {
+            // Watched indicator badge
+            if (resumeFraction != null && resumeFraction >= 0.90f) {
+                Text(
+                    text = "✓ Watched",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .background(Color(0xFF1B5E20).copy(alpha = 0.9f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+
+            // High-contrast resume progress bar
+            if (resumeFraction != null && resumeFraction in 0.02f..0.89f) {
                 Box(
                     Modifier
                         .align(Alignment.BottomStart)
-                        .padding(bottom = 75.dp)
-                        .fillMaxWidth(resumeFraction.coerceIn(0f, 1f))
+                        .padding(bottom = 85.dp)
+                        .fillMaxWidth()
                         .height(4.dp)
-                        .background(Color(0xFF29B6F6))
-                )
+                        .background(Color.Black.copy(alpha = 0.6f))
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(resumeFraction.coerceIn(0f, 1f))
+                            .background(Color(0xFFE50914))
+                    )
+                }
             }
 
             // Title and metadata container

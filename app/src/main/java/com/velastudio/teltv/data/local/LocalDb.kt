@@ -139,6 +139,9 @@ interface WatchStateDao {
     @Query("SELECT * FROM watch_state ORDER BY lastWatchedEpochSec DESC LIMIT :limit")
     suspend fun recentlyWatched(limit: Int = 20): List<WatchStateEntity>
 
+    @Query("SELECT * FROM watch_state WHERE mediaId LIKE 'tg:' || :chatId || ':%'")
+    suspend fun getForChat(chatId: Long): List<WatchStateEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: WatchStateEntity)
 

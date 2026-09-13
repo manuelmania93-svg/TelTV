@@ -1,5 +1,7 @@
 package com.velastudio.teltv.ui.player
 
+import com.velastudio.teltv.ui.player.PlaybackPrefs
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -188,9 +190,13 @@ fun TrackSelectorDialog(
     controller: MediaController?,
     videoTitle: String = "",
     onSelectOnlineSubtitle: (OnlineSubtitle) -> Unit = {},
+    syncOffsetMs: Long = 0L,
+    onAdjustSyncOffset: (Long) -> Unit = {},
+    prefs: PlaybackPrefs? = null,
     onDismiss: () -> Unit
 ) {
     if (controller == null) return
+    val coroutineScope = rememberCoroutineScope()
 
     val currentTracks = controller.currentTracks
     val audioTracks = remember(currentTracks) {
@@ -251,12 +257,12 @@ fun TrackSelectorDialog(
     ) {
         Column(
             modifier = Modifier
-                .width(480.dp)
+                .width(500.dp)
                 .background(Color(0xFF222222), RoundedCornerShape(16.dp))
                 .padding(24.dp)
         ) {
             Text("Audio & Subtitles", style = MaterialTheme.typography.titleLarge, color = Color.White)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = { selectedTab = 0 }) {
@@ -270,7 +276,96 @@ fun TrackSelectorDialog(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
+
+            // Subtitle Tuning Panel (Sync Offset & Styling) shown for Embedded & Online tabs
+            if (selectedTab == 1 || selectedTab == 2) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Sync: ${if (syncOffsetMs >= 0) "+${syncOffsetMs}ms" else "${syncOffsetMs}ms"}",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(onClick = { onAdjustSyncOffset(syncOffsetMs - 250L) }) { Text("-250ms") }
+                            Button(onClick = { onAdjustSyncOffset(0L) }) { Text("0s") }
+                            Button(onClick = { onAdjustSyncOffset(syncOffsetMs + 250L) }) { Text("+250ms") }
+                        }
+                    }
+
+                    if (prefs != null) {
+                        val subSize by prefs.subtitleSize.collectAsState(initial = "LARGE")
+                        val subColor by prefs.subtitleColor.collectAsState(initial = "WHITE")
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Color:", color = Color.LightGray, fontSize = 12.sp)
+                                Button(onClick = {
+                                    coroutineScope.launch {
+                                        prefs.setSubtitleColor(if (subColor == "WHITE") "YELLOW" else "WHITE")
+                                    }
+                                }) {
+                                    Text(if (subColor == "YELLOW") "● Yellow" else "○ White")
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Size:", color = Color.LightGray, fontSize = 12.sp)
+                                Button(onClick = {
+                                    val next = when (subSize) {
+                                        "NORMAL" -> "LARGE"
+                                        "LARGE" -> "XLARGE"
+                                        else -> "NORMAL"
+                                    }
+                                    coroutineScope.launch { prefs.setSubtitleSize(next) }
+                                }) {
+                                    Text(subSize)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            } else if (selectedTab == 0 && prefs != null) {
+                // Dialogue Boost toggle for Audio tab
+                val dialogueBoost by prefs.dialogueBoostEnabled.collectAsState(initial = false)
+                androidx.tv.material3.Card(
+                    onClick = { coroutineScope.launch { prefs.setDialogueBoostEnabled(!dialogueBoost) } },
+                    colors = androidx.tv.material3.CardDefaults.colors(
+                        containerColor = if (dialogueBoost) Color(0xFF2E7D32).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.06f),
+                        focusedContainerColor = if (dialogueBoost) Color(0xFF43A047) else Color(0xFF29B6F6)
+                    ),
+                    shape = androidx.tv.material3.CardDefaults.shape(RoundedCornerShape(8.dp)),
+                    scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.02f),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Dialogue Boost (Night Mode)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Normalizes volume & clarifies speech", color = Color.LightGray, fontSize = 11.sp)
+                        }
+                        Text(if (dialogueBoost) "ON" else "OFF", color = if (dialogueBoost) Color(0xFF81C784) else Color.Gray, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
 
             if (selectedTab == 2) {
                 if (isLoadingOnlineSubs) {
@@ -287,7 +382,7 @@ fun TrackSelectorDialog(
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.heightIn(max = 280.dp),
+                        modifier = Modifier.heightIn(max = 240.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(onlineSubtitles) { sub ->
@@ -315,7 +410,7 @@ fun TrackSelectorDialog(
                                         Text(sub.langDisplay, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                         Text(sub.fileName, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
                                     }
-                                    Icon(Icons.Filled.Check, contentDescription = "Select", tint = Color.White.copy(alpha = 0.7f))
+                                    Icon(Icons.Filled.Check, contentDescription = "Download & Select", tint = Color.White.copy(alpha = 0.7f))
                                 }
                             }
                         }
@@ -324,7 +419,7 @@ fun TrackSelectorDialog(
             } else {
                 val activeList = if (selectedTab == 0) audioTracks else subtitleTracks
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 280.dp),
+                    modifier = Modifier.heightIn(max = 240.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(activeList) { track ->
@@ -378,7 +473,7 @@ fun TrackSelectorDialog(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             OutlinedButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
                 Text("Close")
             }

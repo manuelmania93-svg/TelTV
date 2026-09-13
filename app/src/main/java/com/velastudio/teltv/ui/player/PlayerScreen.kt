@@ -73,6 +73,53 @@ fun PlayerScreen(
     }
     var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
 
+    // Subtitle styling & audio enhancements
+    val subSize by prefs.subtitleSize.collectAsState(initial = "LARGE")
+    val subColor by prefs.subtitleColor.collectAsState(initial = "WHITE")
+    val dialogueBoost by prefs.dialogueBoostEnabled.collectAsState(initial = false)
+    var loudnessEnhancer by remember { mutableStateOf<android.media.audiofx.LoudnessEnhancer?>(null) }
+
+    var activeSubtitleFile by remember { mutableStateOf<java.io.File?>(null) }
+    var activeSubtitleLang by remember { mutableStateOf("en") }
+    var activeSubtitleLabel by remember { mutableStateOf("Online") }
+    var subtitleSyncOffsetMs by remember { mutableStateOf(0L) }
+
+    val subFontSize = when (subSize) {
+        "NORMAL" -> 0.050f
+        "XLARGE" -> 0.082f
+        else -> 0.065f
+    }
+    val subFontColor = when (subColor) {
+        "YELLOW" -> android.graphics.Color.parseColor("#FFE500")
+        else -> android.graphics.Color.WHITE
+    }
+
+    LaunchedEffect(dialogueBoost) {
+        try {
+            if (dialogueBoost) {
+                if (loudnessEnhancer == null) {
+                    val enhancer = android.media.audiofx.LoudnessEnhancer(0)
+                    enhancer.setTargetGain(1200)
+                    enhancer.enabled = true
+                    loudnessEnhancer = enhancer
+                }
+            } else {
+                loudnessEnhancer?.enabled = false
+                loudnessEnhancer?.release()
+                loudnessEnhancer = null
+            }
+        } catch (e: Exception) {
+            timber.log.Timber.w(e, "LoudnessEnhancer not available")
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = null
+        }
+    }
+
     // Seeking feedback state
     var seekingText by remember { mutableStateOf<String?>(null) }
     var seekingIsForward by remember { mutableStateOf(true) }
@@ -81,35 +128,57 @@ fun PlayerScreen(
     fun resolvedUri(): String? =
         directUri ?: fileId?.let { TdLibAwareDataSourceFactory.uriForFile(it).toString() }
 
+    fun applySubtitleFile(file: java.io.File, lang: String, label: String, offsetMs: Long = 0L) {
+        val mediaController = controller ?: return
+        val targetFile = if (offsetMs != 0L) {
+            OnlineSubtitleProvider.shiftSubtitle(file, offsetMs)
+        } else file
+
+        if (targetFile.exists()) {
+            val subUri = Uri.fromFile(targetFile)
+            val subConfig = ExoMediaItem.SubtitleConfiguration.Builder(subUri)
+                .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
+                .setLanguage(lang)
+                .setLabel(label)
+                .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                .build()
+
+            val currentMediaItem = mediaController.currentMediaItem
+            if (currentMediaItem != null) {
+                val currentPos = mediaController.currentPosition
+                val isPlayingNow = mediaController.isPlaying
+                val updatedMediaItem = currentMediaItem.buildUpon()
+                    .setSubtitleConfigurations(listOf(subConfig))
+                    .build()
+                mediaController.setMediaItem(updatedMediaItem, currentPos)
+                mediaController.prepare()
+                mediaController.playWhenReady = isPlayingNow
+                seekingText = if (offsetMs != 0L) "Sync: ${if (offsetMs > 0) "+${offsetMs}ms" else "${offsetMs}ms"}" else "Subtitles: $label"
+            }
+        }
+    }
+
     fun attachOnlineSubtitle(sub: OnlineSubtitle) {
         val mediaController = controller ?: return
         coroutineScope.launch {
             seekingText = "Downloading ${sub.langDisplay}..."
             val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
             if (file != null && file.exists()) {
-                val subUri = Uri.fromFile(file)
-                val subConfig = ExoMediaItem.SubtitleConfiguration.Builder(subUri)
-                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
-                    .setLanguage(sub.lang)
-                    .setLabel("${sub.langDisplay} (Online)")
-                    .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
-                    .build()
-
-                val currentMediaItem = mediaController.currentMediaItem
-                if (currentMediaItem != null) {
-                    val currentPos = mediaController.currentPosition
-                    val isPlayingNow = mediaController.isPlaying
-                    val updatedMediaItem = currentMediaItem.buildUpon()
-                        .setSubtitleConfigurations(listOf(subConfig))
-                        .build()
-                    mediaController.setMediaItem(updatedMediaItem, currentPos)
-                    mediaController.prepare()
-                    mediaController.playWhenReady = isPlayingNow
-                    seekingText = "Subtitles: ${sub.langDisplay}"
-                }
+                activeSubtitleFile = file
+                activeSubtitleLang = sub.lang
+                activeSubtitleLabel = sub.langDisplay
+                subtitleSyncOffsetMs = 0L
+                applySubtitleFile(file, sub.lang, sub.langDisplay, 0L)
             } else {
                 seekingText = "Failed to download subtitle"
             }
+        }
+    }
+
+    fun adjustSubtitleSync(newOffset: Long) {
+        subtitleSyncOffsetMs = newOffset
+        activeSubtitleFile?.let { file ->
+            applySubtitleFile(file, activeSubtitleLang, activeSubtitleLabel, newOffset)
         }
     }
 
@@ -404,6 +473,19 @@ fun PlayerScreen(
                     2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
                     else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
+                view.subtitleView?.apply {
+                    setFractionalTextSize(subFontSize)
+                    setStyle(
+                        androidx.media3.ui.CaptionStyleCompat(
+                            subFontColor,
+                            android.graphics.Color.parseColor("#99000000"),
+                            android.graphics.Color.TRANSPARENT,
+                            androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                            android.graphics.Color.BLACK,
+                            android.graphics.Typeface.DEFAULT_BOLD
+                        )
+                    )
+                }
             }
         )
 
@@ -417,6 +499,7 @@ fun PlayerScreen(
             onPlayPause = ::togglePlayPause,
             onSkipBack = { seekRelative(forward = false) },
             onSkipForward = { seekRelative(forward = true) },
+            onPlayNext = onPlayNext,
             onOpenTracks = { showTrackSelector = true },
             onCycleAspectRatio = ::cycleAspectRatio,
             onOpenExternal = ::openInExternalPlayer,
@@ -445,6 +528,9 @@ fun PlayerScreen(
                 controller = controller,
                 videoTitle = title,
                 onSelectOnlineSubtitle = ::attachOnlineSubtitle,
+                syncOffsetMs = subtitleSyncOffsetMs,
+                onAdjustSyncOffset = ::adjustSubtitleSync,
+                prefs = prefs,
                 onDismiss = { showTrackSelector = false }
             )
         }

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Subtitles
@@ -47,6 +48,7 @@ fun PlaybackControlsOverlay(
     onPlayPause: () -> Unit,
     onSkipBack: () -> Unit,
     onSkipForward: () -> Unit,
+    onPlayNext: (() -> Unit)? = null,
     onOpenTracks: () -> Unit,
     onCycleAspectRatio: () -> Unit,
     onOpenExternal: () -> Unit,
@@ -135,6 +137,14 @@ fun PlaybackControlsOverlay(
                         contentDescription = "Skip forward",
                         onClick = onSkipForward
                     )
+                    if (onPlayNext != null) {
+                        Spacer(Modifier.width(32.dp))
+                        ControlButton(
+                            icon = Icons.Filled.SkipNext,
+                            contentDescription = "Next Episode",
+                            onClick = onPlayNext
+                        )
+                    }
                     Spacer(Modifier.width(32.dp))
                     Button(
                         onClick = onToggleAutoPlay,
