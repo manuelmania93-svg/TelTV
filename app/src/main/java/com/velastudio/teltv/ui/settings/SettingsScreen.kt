@@ -395,3 +395,57 @@ fun AppUpdateSection() {
         }
     }
 }
+
+
+@Composable
+fun PerformanceSettingsSection(
+    fastModeEnabled: Boolean,
+    onToggleFastMode: (Boolean) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(TelTvPanel)
+            .padding(24.dp)
+    ) {
+        Column {
+            Text(
+                "Performance & Memory",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Disables image thumbnails and background poster lookups. Greatly reduces RAM consumption and makes scrolling 1,000+ episode series instantaneous on low-RAM TV sticks.",
+                color = TelTvMuted,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        "Fast Mode (Disable Thumbnails)",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        if (fastModeEnabled) "ON (Minimal RAM & instant 60 FPS scrolling)" else "OFF (Thumbnails active)",
+                        color = if (fastModeEnabled) TelTvYellow else TelTvMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Switch(
+                    checked = fastModeEnabled,
+                    onCheckedChange = onToggleFastMode
+                )
+            }
+        }
+    }
+}

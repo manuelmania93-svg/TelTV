@@ -42,6 +42,7 @@ fun BrowseScreen(
     onToggleSort: () -> Unit,
     pagingFlow: Flow<androidx.paging.PagingData<MediaItem>>,
     thumbnailLoader: ThumbnailLoader,
+    fastModeEnabled: Boolean = false,
     deviceProfile: DeviceCapabilities.Profile,
     resumeFractionFor: (mediaId: String) -> Float?,
     onLoadMore: () -> Unit,
@@ -106,7 +107,8 @@ fun BrowseScreen(
                     title = pinned.title,
                     subtitle = "Pinned in this channel",
                     thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),
-                    thumbnailLoader = thumbnailLoader,
+                    thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
+                    enableTmdb = !fastModeEnabled,
                     onClick = { onOpenItem(pinned) }
                 )
             }
@@ -159,7 +161,8 @@ fun BrowseScreen(
                         title = media.title,
                         subtitle = media.subtitle,
                         thumbnailFileId = parseThumbnailFileId(media.thumbnailUrl),
-                        thumbnailLoader = thumbnailLoader,
+                        thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
+                    enableTmdb = !fastModeEnabled,
                         resumeFraction = resumeFractionFor(media.id),
                         onClick = {
                             if (marathonModeEnabled) {

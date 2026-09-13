@@ -32,9 +32,9 @@ object DeviceCapabilities {
     private val CONSTRAINED = Profile(
         isConstrained = true,
         pageSize = 100,
-        prefetchDistance = 60,
+        prefetchDistance = 20,
         gridColumns = 3,
-        imageMemoryCacheBytes = 12L * 1024 * 1024,
+        imageMemoryCacheBytes = 8L * 1024 * 1024,
         thumbnailMaxDimensionPx = 200,
         searchDebounceMs = 450L
     )

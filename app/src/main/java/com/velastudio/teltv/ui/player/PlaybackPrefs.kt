@@ -17,6 +17,7 @@ class PlaybackPrefs(private val context: Context) {
         val KEY_SKIP_MS = longPreferencesKey("skip_increment_ms")
         val KEY_AUTOPLAY = booleanPreferencesKey("autoplay_enabled")
         val KEY_DIALOGUE_BOOST = booleanPreferencesKey("dialogue_boost")
+        val KEY_FAST_MODE = booleanPreferencesKey("fast_mode_enabled")
         val KEY_SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
         val KEY_SUBTITLE_COLOR = stringPreferencesKey("subtitle_color")
         const val DEFAULT_SKIP_MS = 10_000L
@@ -62,4 +63,13 @@ class PlaybackPrefs(private val context: Context) {
     suspend fun setSkipIncrementMs(ms: Long) {
         context.playbackDataStore.edit { it[KEY_SKIP_MS] = ms }
     }
+
+    val fastModeEnabled: Flow<Boolean> = context.playbackDataStore.data.map {
+        it[KEY_FAST_MODE] ?: false
+    }
+
+    suspend fun setFastModeEnabled(enabled: Boolean) {
+        context.playbackDataStore.edit { it[KEY_FAST_MODE] = enabled }
+    }
+
 }

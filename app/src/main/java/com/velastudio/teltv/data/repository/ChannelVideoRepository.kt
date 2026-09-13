@@ -125,7 +125,7 @@ class ChannelVideoRepository(
                 } else {
                     consecutiveStalls = 0
                 }
-                kotlinx.coroutines.delay(20)
+                kotlinx.coroutines.delay(120)
             }
         }
     }

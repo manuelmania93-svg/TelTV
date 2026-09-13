@@ -724,6 +724,7 @@ class MainActivity : ComponentActivity() {
                         val autoClearEnabled by cachePrefs.autoClearEnabled.collectAsState(initial = true)
                         val playbackPrefs = remember { PlaybackPrefs(app) }
                         val skipMs by playbackPrefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
+                        val fastModeEnabled by playbackPrefs.fastModeEnabled.collectAsState(initial = false)
 
                         LaunchedEffect(Unit) {
                             cacheSize = runCatching {
@@ -792,6 +793,12 @@ class MainActivity : ComponentActivity() {
                             PlaybackSettingsSection(
                                 skipIncrementMs = skipMs,
                                 onSkipIncrementChanged = { scope.launch { playbackPrefs.setSkipIncrementMs(it) } }
+                            )
+                            }
+                            item {
+                            PerformanceSettingsSection(
+                                fastModeEnabled = fastModeEnabled,
+                                onToggleFastMode = { scope.launch { playbackPrefs.setFastModeEnabled(it) } }
                             )
                             }
                             item {
