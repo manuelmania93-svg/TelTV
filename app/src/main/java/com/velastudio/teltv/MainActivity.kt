@@ -219,7 +219,7 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(cacheClearedSignal) {
                             if (cacheClearedSignal == 0) return@LaunchedEffect
                             val remaining = runCatching {
-                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).getCurrentSizeBytes()
+                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).getCurrentSizeBytes()
                             }.onFailure { Timber.w(it, "Could not read cache size after quick clear") }
                                 .getOrDefault(-1L)
                             Timber.i("Quick cache clear done; remaining bytes=%d", remaining)
@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
                             onQuickClearCache = {
                                 scope.launch {
                                     runCatching {
-                                        com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).clearAllNow()
+                                        com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).clearAllNow()
                                     }.onFailure { Timber.e(it, "Quick cache clear failed") }
                                         .onSuccess { cacheClearedSignal++ }
                                 }
@@ -785,13 +785,14 @@ class MainActivity : ComponentActivity() {
                         // DataStore that CacheTrimWorker reads in the background -- previously
                         // this was local `remember` state that the worker never saw.
                         val autoClearEnabled by cachePrefs.autoClearEnabled.collectAsState(initial = true)
+                        val cacheLimitBytes by cachePrefs.limitBytes.collectAsState(initial = com.velastudio.teltv.telegram.CacheManager.DEFAULT_LIMIT_BYTES)
                         val playbackPrefs = remember { PlaybackPrefs(app) }
                         val skipMs by playbackPrefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
                         val fastModeEnabled by playbackPrefs.fastModeEnabled.collectAsState(initial = false)
 
                         LaunchedEffect(Unit) {
                             cacheSize = runCatching {
-                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).getCurrentSizeBytes()
+                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).getCurrentSizeBytes()
                             }.onFailure { Timber.e(it, "Failed to read cache size") }
                                 .getOrDefault(0L)
                             freeStorage = app.filesDir.usableSpace
@@ -812,13 +813,15 @@ class MainActivity : ComponentActivity() {
                                 currentSizeBytes = cacheSize,
                                 freeStorageBytes = freeStorage,
                                 totalStorageBytes = totalStorage,
+                                cacheLimitBytes = cacheLimitBytes,
                                 autoClearEnabled = autoClearEnabled,
                                 onToggleAutoClear = { scope.launch { cachePrefs.setAutoClearEnabled(it) } },
+                                onSelectLimit = { scope.launch { cachePrefs.setLimitBytes(it) } },
                                 onClearNow = {
                                     scope.launch {
-                                        com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).clearAllNow()
+                                        com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).clearAllNow()
                                         cacheSize = runCatching {
-                                            com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute).getCurrentSizeBytes()
+                                            com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).getCurrentSizeBytes()
                                         }.getOrDefault(0L)
                                         freeStorage = app.filesDir.usableSpace
                                         totalStorage = app.filesDir.totalSpace

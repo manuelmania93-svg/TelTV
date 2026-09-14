@@ -74,8 +74,10 @@ fun CacheSettingsSection(
     currentSizeBytes: Long,
     freeStorageBytes: Long,
     totalStorageBytes: Long,
+    cacheLimitBytes: Long,
     autoClearEnabled: Boolean,
     onToggleAutoClear: (Boolean) -> Unit,
+    onSelectLimit: (Long) -> Unit,
     onClearNow: () -> Unit
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -106,6 +108,24 @@ fun CacheSettingsSection(
                     value = "${formatGigabytes(freeStorageBytes)} / ${formatGigabytes(totalStorageBytes)}",
                     valueColor = Color.White
                 )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
+            Text("Max Streaming Cache Limit", color = TelTvMuted, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val limits = listOf(
+                    500L * 1024 * 1024 to "500 MB",
+                    1024L * 1024 * 1024 to "1 GB",
+                    2L * 1024 * 1024 * 1024 to "2 GB",
+                    5L * 1024 * 1024 * 1024 to "5 GB"
+                )
+                limits.forEach { (limit, label) ->
+                    SkipChoiceButton(label = label, selected = cacheLimitBytes == limit) {
+                        onSelectLimit(limit)
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))
