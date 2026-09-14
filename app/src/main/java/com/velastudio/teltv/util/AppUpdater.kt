@@ -2,6 +2,9 @@ package com.velastudio.teltv.util
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.velastudio.teltv.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -64,13 +67,23 @@ object AppUpdater {
                 var downloadUrl: String? = null
                 val targetName = if (BuildConfig.DEBUG) "debug" else "release"
 
-                // First pass: find exact matching APK (e.g. TelTV-release.apk)
+                // First pass: strictly target signed TelTV-release.apk
                 for (i in 0 until assets.length()) {
                     val asset = assets.getJSONObject(i)
                     val name = asset.optString("name", "").lowercase()
-                    if (name.endsWith(".apk") && targetName in name) {
+                    if (name == "teltv-release.apk") {
                         downloadUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
                         break
+                    }
+                }
+                if (downloadUrl == null) {
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.getJSONObject(i)
+                        val name = asset.optString("name", "").lowercase()
+                        if (name.endsWith(".apk") && targetName in name) {
+                            downloadUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
+                            break
+                        }
                     }
                 }
                 // Fallback pass: any .apk if no specific build-type found
@@ -151,17 +164,25 @@ object AppUpdater {
                 }
 
                 withContext(Dispatchers.Main) {
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        apkFile
-                    )
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "application/vnd.android.package-archive")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+                        val permIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(permIntent)
+                    } else {
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            apkFile
+                        )
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, "application/vnd.android.package-archive")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
                     }
-                    context.startActivity(intent)
                 }
             }
             true
