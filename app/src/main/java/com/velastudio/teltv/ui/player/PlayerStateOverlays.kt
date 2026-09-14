@@ -201,7 +201,19 @@ fun TrackSelectorDialog(
     if (controller == null) return
     val coroutineScope = rememberCoroutineScope()
 
-    val currentTracks = controller.currentTracks
+    var currentTracks by remember { mutableStateOf(controller.currentTracks) }
+    androidx.compose.runtime.DisposableEffect(controller) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                currentTracks = tracks
+            }
+        }
+        controller.addListener(listener)
+        onDispose {
+            controller.removeListener(listener)
+        }
+    }
+
     val audioTracks = remember(currentTracks) {
         val list = mutableListOf<TrackItem>()
         for (group in currentTracks.groups) {
@@ -449,7 +461,7 @@ fun TrackSelectorDialog(
                                             .build()
                                     }
                                 }
-                                onDismiss()
+                                // Removed onDismiss() so user can verify checkmark move and set both Audio & Subs
                             },
                             colors = androidx.tv.material3.CardDefaults.colors(
                                 containerColor = if (track.isSelected) Color.White.copy(alpha = 0.15f) else Color.Transparent,
