@@ -804,8 +804,16 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             },
-                            onPlaybackEnded = { navController.popBackStack() },
-                            onBack = { navController.popBackStack() }
+                            onPlaybackEnded = { 
+                                if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                    navController.popBackStack()
+                                }
+                            },
+                            onBack = { 
+                                if (navController.currentBackStackEntry?.lifecycle?.currentState == androidx.lifecycle.Lifecycle.State.RESUMED) {
+                                    navController.popBackStack()
+                                }
+                            }
                         )
                         }
                     }
