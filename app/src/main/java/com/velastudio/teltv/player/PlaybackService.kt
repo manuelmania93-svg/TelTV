@@ -66,6 +66,7 @@ class PlaybackService : MediaSessionService() {
         }.apply {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             setEnableDecoderFallback(true)
+            forceDisableMediaCodecAsynchronousQueueing()
             setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
                 val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
                 if (mimeType.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true)) {
