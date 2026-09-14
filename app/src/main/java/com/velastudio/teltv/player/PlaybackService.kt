@@ -4,7 +4,6 @@ import android.os.Build
 import android.media.MediaCodecList
 import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
-
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -39,48 +38,45 @@ class PlaybackService : MediaSessionService() {
         val dataSourceFactory = TdLibAwareDataSourceFactory(app.telegramClient, this)
         val constrained = app.deviceProfile.isConstrained
 
-        // Keep the decoder buffer small on low-memory TVs while retaining a larger cushion on
-        // devices that can afford it.
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ if (constrained) 10_000 else 15_000,
-                /* maxBufferMs = */ if (constrained) 25_000 else 35_000,
-                /* bufferForPlaybackMs = */ 1_500,
-                /* bufferForPlaybackAfterRebufferMs = */ if (constrained) 2_000 else 2_500
+                if (constrained) 10_000 else 15_000,
+                if (constrained) 25_000 else 35_000,
+                1_500,
+                if (constrained) 2_000 else 2_500
             )
             .setTargetBufferBytes(if (constrained) 24 * 1024 * 1024 else 35 * 1024 * 1024)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        // Audio Passthrough (Bitstream) for Soundbars & AV Receivers
         val audioCapabilities = AudioCapabilities.getCapabilities(this)
-        val renderersFactory = object : DefaultRenderersFactory(this) {
+        val renderersFactory = object : DefaultRenderersFactory(this) {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py} 
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean
-            ): AudioSink {
+            ): AudioSink {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py} 
                 return DefaultAudioSink.Builder(context)
                     .setAudioCapabilities(audioCapabilities)
-                    .setEnableFloatOutput(false) // Safe PCM output for legacy audio streams
+                    .setEnableFloatOutput(false)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                     .build()
-            }
+            
         }.apply {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             setEnableDecoderFallback(true)
             forceDisableMediaCodecAsynchronousQueueing()
-                        setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+            setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
                 val defaultDecoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
                 if (mimeType.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true)) {
                     val custom = mutableListOf<MediaCodecInfo>()
-                    try {
+                    try {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py} 
                         val mcl = MediaCodecList(MediaCodecList.ALL_CODECS)
-                        for (info in mcl.codecInfos) {
+                        for (info in mcl.codecInfos) {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py} 
                             if (info.isEncoder) continue
-                            for (t in info.supportedTypes) {
-                                if (t.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true) && info.name.equals("c2.android.mp3.decoder", ignoreCase = true) == false) {
-                                    val caps = try { info.getCapabilitiesForType(mimeType) } catch (e: Exception) { null }
+                            for (t in info.supportedTypes) {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py} 
+                                if (t.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true) && !info.name.equals("c2.android.mp3.decoder", ignoreCase = true)) {
+                                    val caps = try {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py}  info.getCapabilitiesForType(mimeType)  catch (e: Exception) {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py}  null 
                                     val isHw = if (Build.VERSION.SDK_INT >= 29) info.isHardwareAccelerated else false
                                     val isSw = if (Build.VERSION.SDK_INT >= 29) info.isSoftwareOnly else true
                                     val isVendor = if (Build.VERSION.SDK_INT >= 29) info.isVendor else false
@@ -89,23 +85,19 @@ class PlaybackService : MediaSessionService() {
                             }
                         }
                     } catch (e: Exception) { Timber.w(e, "MediaCodecList query failed") }
-                    
+
                     if (custom.none { it.name.equals("OMX.google.mp3.decoder", ignoreCase = true) }) {
                         custom.add(0, MediaCodecInfo.newInstance("OMX.google.mp3.decoder", mimeType, mimeType, null, false, true, false, false, false))
                     }
                     val c2 = defaultDecoders.filter { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) }
-                    val others = defaultDecoders.filter { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) == false }
-                    (custom + others + c2).distinctBy { it.name }
-                } else {
+                    val others = defaultDecoders.filter { !it.name.equals("c2.android.mp3.decoder", ignoreCase = true) }
+                    (custom + others + c2).distinctBy {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py}  it.name 
+                 else {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py} 
                     defaultDecoders
                 }
-            } else {
-                    decoders
-                }
-            }
+            
         }
 
-        // Track selector: Never downmix 5.1/7.1 audio to stereo on soundbars
         val trackSelector = DefaultTrackSelector(this).apply {
             parameters = buildUponParameters()
                 .setConstrainAudioChannelCountToDeviceCapabilities(false)
@@ -123,45 +115,32 @@ class PlaybackService : MediaSessionService() {
                     .setAllowedCapturePolicy(C.ALLOW_CAPTURE_BY_ALL)
                     .setSpatializationBehavior(C.SPATIALIZATION_BEHAVIOR_AUTO)
                     .build(),
-                /* handleAudioFocus= */ true
+                true
             )
             .build()
 
-        exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+        exoPlayer.addListener(object : androidx.media3.common.Player.Listener {.git{,hub,ignore},RE{ADME.md,LEASE.md},app{,ly_{advanced_upgrades.py,logo_and_manual_login.py,s{oundbar_and_updater.py,treaming_upgrades.py,uite.py}}},build.gradle.kts,gradle{,.properties,w{,.bat}},logo.png,process_app_logo.py,settings.gradle.kts,update_icons.py} 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Timber.e(error, "Player error (errorCode=%s)", error.errorCodeName)
             }
-        })
+        )
         player = exoPlayer
 
         val sessionActivityIntent = Intent(this, MainActivity::class.java)
-        val sessionActivityPendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            sessionActivityIntent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
+        val pendingIntent = PendingIntent.getActivity(this, 0, sessionActivityIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         mediaSession = MediaSession.Builder(this, exoPlayer)
-            .setSessionActivity(sessionActivityPendingIntent)
+            .setSessionActivity(pendingIntent)
             .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        val currentPlayer = player
-        if (currentPlayer == null || !currentPlayer.playWhenReady || currentPlayer.mediaItemCount == 0) {
-            stopSelf()
-        }
-        super.onTaskRemoved(rootIntent)
-    }
-
     override fun onDestroy() {
-        mediaSession?.player?.release()
-        mediaSession?.release()
-        mediaSession = null
-        player = null
+        mediaSession?.run {
+            player.release()
+            release()
+            mediaSession = null
+        }
         super.onDestroy()
     }
 }
