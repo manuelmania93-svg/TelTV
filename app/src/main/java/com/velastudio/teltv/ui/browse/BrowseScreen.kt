@@ -58,7 +58,9 @@ fun BrowseScreen(
     activeMarathonName: String? = null,
     onResumeMarathon: () -> Unit = {},
     onDeleteMarathon: () -> Unit = {},
-    onStartMarathonFrom: (MediaItem) -> Unit = {}
+    onStartMarathonFrom: (MediaItem) -> Unit = {},
+    onPlayFromBeginning: (MediaItem) -> Unit = {},
+    onToggleWatched: (MediaItem) -> Unit = {}
 ) {
     val items = pagingFlow.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
@@ -156,7 +158,8 @@ fun BrowseScreen(
                             } else {
                                 onOpenItem(media)
                             }
-                        }
+                        },
+                        onLongClick = { actionItem = media }
                     )
                 } else {
                     PosterCardPlaceholder()
@@ -178,26 +181,113 @@ fun BrowseScreen(
 
     // Item Action Dialog
     actionItem?.let { media ->
+        val isWatched = (resumeFractionFor(media.id) ?: 0f) >= 0.90f
         Dialog(onDismissRequest = { actionItem = null }) {
             androidx.compose.foundation.layout.Column(
                 modifier = Modifier
-                    .width(360.dp)
-                    .background(androidx.compose.ui.graphics.Color(0xFF202735), androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .width(420.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .background(androidx.compose.ui.graphics.Color(0xFF1E2638))
                     .padding(24.dp)
             ) {
-                Text("Video Options", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(8.dp))
-                Text(media.title, maxLines = 2)
+                Text(
+                    "Episode Options",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = androidx.compose.ui.graphics.Color.White,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    media.title,
+                    maxLines = 2,
+                    color = androidx.compose.ui.graphics.Color(0xFFB0BEC5),
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 Spacer(Modifier.height(18.dp))
-                Button(onClick = { onStartMarathonFrom(media); actionItem = null }) { Text("▶️ Start Marathon from Here") }
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = { onAddToPlaylist(media); actionItem = null }) { Text("Add to Playlist") }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { onAddToWatchLater(media); actionItem = null }) { Text("Watch Later") }
-                Spacer(Modifier.height(8.dp))
-                if (pinnedVideo?.id == media.id) {
-                    OutlinedButton(onClick = { onUnpinVideo(media); actionItem = null }) { Text("Unpin from Channel") }
-                } else {
+
+                Button(
+                    onClick = {
+                        actionItem = null
+                        onPlayFromBeginning(media)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF2B354B),
+                        focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF29B6F6)
+                    )
+                ) {
+                    Text("↺  Play from Beginning", color = androidx.compose.ui.graphics.Color.White)
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        actionItem = null
+                        onToggleWatched(media)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF2B354B),
+                        focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF29B6F6)
+                    )
+                ) {
+                    Text(
+                        if (isWatched) "Mark as Unwatched" else "✓  Mark as Watched",
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        actionItem = null
+                        onStartMarathonFrom(media)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF2B354B),
+                        focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF29B6F6)
+                    )
+                ) {
+                    Text("▶️  Start Marathon from Here", color = androidx.compose.ui.graphics.Color.White)
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        actionItem = null
+                        onAddToPlaylist(media)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF2B354B),
+                        focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF29B6F6)
+                    )
+                ) {
+                    Text("+  Add to Playlist", color = androidx.compose.ui.graphics.Color.White)
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Button(
+                    onClick = {
+                        actionItem = null
+                        onAddToWatchLater(media)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.tv.material3.ButtonDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF2B354B),
+                        focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF29B6F6)
+                    )
+                ) {
+                    Text("⏱️  Add to Watch Later", color = androidx.compose.ui.graphics.Color.White)
+                }
+            }
+        }
+    } else {
                     OutlinedButton(onClick = { onPinVideo(media); actionItem = null }) { Text("Pin in Channel") }
                 }
             }

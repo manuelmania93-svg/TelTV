@@ -482,6 +482,41 @@ class MainActivity : ComponentActivity() {
                             onOpenItem = { media ->
                                 navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}?showName=${URLEncoder.encode(title, "UTF-8")}")
                             },
+                            onPlayFromBeginning = { media ->
+                                scope.launch {
+                                    val state = app.database.watchStateDao().get(media.id)
+                                    if (state != null) {
+                                        app.database.watchStateDao().upsert(state.copy(positionMs = 0L, finished = false))
+                                    }
+                                    navController.navigate("player/${URLEncoder.encode(media.id, "UTF-8")}?showName=${URLEncoder.encode(title, "UTF-8")}")
+                                }
+                            },
+                            onToggleWatched = { media ->
+                                scope.launch {
+                                    val existing = app.database.watchStateDao().get(media.id)
+                                    val isCurrentlyWatched = existing?.finished == true || (existing != null && existing.durationMs > 0 && existing.positionMs >= existing.durationMs * 0.90)
+                                    if (isCurrentlyWatched) {
+                                        app.database.watchStateDao().remove(media.id)
+                                        resumeFractions = resumeFractions - media.id
+                                    } else {
+                                        val now = System.currentTimeMillis() / 1000
+                                        val duration = existing?.durationMs?.takeIf { it > 0 } ?: 1800_000L
+                                        app.database.watchStateDao().upsert(
+                                            com.velastudio.teltv.data.local.WatchStateEntity(
+                                                mediaId = media.id,
+                                                positionMs = duration,
+                                                durationMs = duration,
+                                                lastWatchedEpochSec = now,
+                                                title = media.title,
+                                                subtitle = media.subtitle,
+                                                thumbnailFileId = com.velastudio.teltv.ui.common.parseThumbnailFileId(media.thumbnailUrl),
+                                                finished = true
+                                            )
+                                        )
+                                        resumeFractions = resumeFractions + (media.id to 1.0f)
+                                    }
+                                }
+                            },
                             onPinVideo = { media ->
                                 scope.launch {
                                     val messageId = media.id.substringAfterLast(':').toLongOrNull() ?: return@launch

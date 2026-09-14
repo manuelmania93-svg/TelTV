@@ -66,6 +66,7 @@ fun PosterCard(
 
     Card(
         onClick = onClick,
+        onLongClick = onLongClick,
         shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
         border = CardDefaults.border(
             focusedBorder = Border(
