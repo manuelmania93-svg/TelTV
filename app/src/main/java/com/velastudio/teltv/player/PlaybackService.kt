@@ -1,5 +1,8 @@
 package com.velastudio.teltv.player
 import androidx.media3.common.MimeTypes
+import android.os.Build
+import android.media.MediaCodecList
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 
 import android.app.PendingIntent
@@ -67,12 +70,36 @@ class PlaybackService : MediaSessionService() {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             setEnableDecoderFallback(true)
             forceDisableMediaCodecAsynchronousQueueing()
-            setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
-                val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+                        setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+                val defaultDecoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
                 if (mimeType.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true)) {
-                    // Deprioritize known-broken c2.android.mp3.decoder in favor of OMX/vendor decoders
-                    decoders.sortedBy { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) }
+                    val custom = mutableListOf<MediaCodecInfo>()
+                    try {
+                        val mcl = MediaCodecList(MediaCodecList.ALL_CODECS)
+                        for (info in mcl.codecInfos) {
+                            if (info.isEncoder) continue
+                            for (t in info.supportedTypes) {
+                                if (t.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true) && info.name.equals("c2.android.mp3.decoder", ignoreCase = true) == false) {
+                                    val caps = try { info.getCapabilitiesForType(mimeType) } catch (e: Exception) { null }
+                                    val isHw = if (Build.VERSION.SDK_INT >= 29) info.isHardwareAccelerated else false
+                                    val isSw = if (Build.VERSION.SDK_INT >= 29) info.isSoftwareOnly else true
+                                    val isVendor = if (Build.VERSION.SDK_INT >= 29) info.isVendor else false
+                                    custom.add(MediaCodecInfo.newInstance(info.name, mimeType, mimeType, caps, isHw, isSw, isVendor, false, false))
+                                }
+                            }
+                        }
+                    } catch (e: Exception) { Timber.w(e, "MediaCodecList query failed") }
+                    
+                    if (custom.none { it.name.equals("OMX.google.mp3.decoder", ignoreCase = true) }) {
+                        custom.add(0, MediaCodecInfo.newInstance("OMX.google.mp3.decoder", mimeType, mimeType, null, false, true, false, false, false))
+                    }
+                    val c2 = defaultDecoders.filter { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) }
+                    val others = defaultDecoders.filter { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) == false }
+                    (custom + others + c2).distinctBy { it.name }
                 } else {
+                    defaultDecoders
+                }
+            } else {
                     decoders
                 }
             }
