@@ -1,5 +1,7 @@
 package com.velastudio.teltv
 
+import androidx.compose.ui.Alignment
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 
