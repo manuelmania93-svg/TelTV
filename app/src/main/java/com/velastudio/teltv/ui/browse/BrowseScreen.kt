@@ -287,11 +287,6 @@ fun BrowseScreen(
                 }
             }
         }
-    } else {
-                    OutlinedButton(onClick = { onPinVideo(media); actionItem = null }) { Text("Pin in Channel") }
-                }
-            }
-        }
     }
 
     // Marathon Options Dialog (Safely INSIDE BrowseScreen)
