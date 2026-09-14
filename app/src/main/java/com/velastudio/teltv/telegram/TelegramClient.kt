@@ -45,42 +45,110 @@ data class VideoMessagesResult(
 )
 
 class TelegramClient(private val context: Context) {
-    suspend fun getFreshFileId(chatId: Long, messageId: Long): Int? = suspendCancellableCoroutine { cont ->
-        val c = client ?: return@suspendCancellableCoroutine cont.resume(null)
-        c.send(TdApi.GetMessage(chatId, messageId)) { res ->
-            if (res is TdApi.Message) {
-                val fId = when (val content = res.content) {
-                    is TdApi.MessageVideo -> content.video.video.id
-                    is TdApi.MessageDocument -> content.document.document.id
-                    else -> null
+    private val lastDownloadErrors = ConcurrentHashMap<Int, String>()
+
+    fun getLastDownloadError(fileId: Int): String? = lastDownloadErrors[fileId]
+
+    suspend fun getFreshFileId(chatId: Long, messageId: Long): Int? = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext null
+
+        // 1. First attempt GetMessages (contacts Telegram server to register file into current session)
+        val fromServer: Int? = suspendCancellableCoroutine { cont ->
+            c.send(TdApi.GetMessages(chatId, longArrayOf(messageId))) { res ->
+                if (res is TdApi.Messages) {
+                    val msg = res.messages.firstOrNull()
+                    val fId = when (val content = msg?.content) {
+                        is TdApi.MessageVideo -> content.video.video.id
+                        is TdApi.MessageDocument -> content.document.document.id
+                        else -> null
+                    }
+                    if (fId != null) {
+                        val file = when (val cnt = msg?.content) {
+                            is TdApi.MessageVideo -> cnt.video.video
+                            is TdApi.MessageDocument -> cnt.document.document
+                            else -> null
+                        }
+                        if (file != null) fileCache[fId] = file
+                    }
+                    cont.resume(fId)
+                } else {
+                    cont.resume(null)
                 }
-                cont.resume(fId)
-            } else {
-                Timber.w("GetMessage failed for chatId=%d msgId=%d: %s", chatId, messageId, res)
-                cont.resume(null)
+            }
+        }
+        if (fromServer != null) return@withContext fromServer
+
+        // 2. Fallback to GetMessage (searches local TDLib memory)
+        suspendCancellableCoroutine { cont ->
+            c.send(TdApi.GetMessage(chatId, messageId)) { res ->
+                if (res is TdApi.Message) {
+                    val fId = when (val content = res.content) {
+                        is TdApi.MessageVideo -> content.video.video.id
+                        is TdApi.MessageDocument -> content.document.document.id
+                        else -> null
+                    }
+                    if (fId != null) {
+                        val file = when (val cnt = res.content) {
+                            is TdApi.MessageVideo -> cnt.video.video
+                            is TdApi.MessageDocument -> cnt.document.document
+                            else -> null
+                        }
+                        if (file != null) fileCache[fId] = file
+                    }
+                    cont.resume(fId)
+                } else {
+                    Timber.w("GetMessage failed for chatId=%d msgId=%d: %s", chatId, messageId, res)
+                    cont.resume(null)
+                }
             }
         }
     }
-
 
     fun executeAsync(fn: TdApi.Function<*>) {
         client?.send(fn) {}
     }
 
     fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File? {
-        val c = client ?: return null
+        val c = client
+        if (c == null) {
+            lastDownloadErrors[fileId] = "TDLib client is not initialized"
+            return null
+        }
+
+        // Fast-path: if file is already completely downloaded and exists locally
+        val cached = fileCache[fileId]
+        if (cached?.local?.isDownloadingCompleted == true && !cached.local.path.isNullOrBlank()) {
+            return cached
+        }
+
         val safeLimit = limit.coerceIn(1L, 4L * 1024L * 1024L)
         val latch = CountDownLatch(1)
         var result: TdApi.File? = null
 
         c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
-            if (response is TdApi.File) {
-                result = response
-                fileCache[fileId] = response
+            when (response) {
+                is TdApi.File -> {
+                    result = response
+                    fileCache[fileId] = response
+                    lastDownloadErrors.remove(fileId)
+                }
+                is TdApi.Error -> {
+                    val err = "[code=${response.code}] ${response.message}"
+                    lastDownloadErrors[fileId] = err
+                    Timber.e("DownloadFile error for fileId=%d offset=%d: %s", fileId, offset, err)
+                }
+                else -> {
+                    lastDownloadErrors[fileId] = "Unexpected response: ${response?.javaClass?.simpleName}"
+                }
             }
             latch.countDown()
         }
-        latch.await(30, TimeUnit.SECONDS)
+
+        val completed = latch.await(30, TimeUnit.SECONDS)
+        if (!completed) {
+            lastDownloadErrors[fileId] = "Timed out after 30s waiting for TDLib"
+            Timber.w("DownloadFile timed out for fileId=%d offset=%d", fileId, offset)
+        }
         return result ?: fileCache[fileId]
     }
 

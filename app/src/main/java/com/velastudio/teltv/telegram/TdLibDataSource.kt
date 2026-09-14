@@ -97,6 +97,6 @@ class TdLibDataSource(
 class RawTdClient(private val telegram: TelegramClient) {
     fun downloadRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
         return telegram.downloadFileRangeBlocking(fileId, offset, limit)
-            ?: throw IOException("TDLib download failed for file $fileId at offset $offset")
+            ?: throw IOException("TDLib download failed for file $fileId at offset $offset: ${telegram.getLastDownloadError(fileId) ?: "unknown error"}")
     }
 }

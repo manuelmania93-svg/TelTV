@@ -648,7 +648,18 @@ class MainActivity : ComponentActivity() {
 
                             if (cId != null && mId != null) {
                                 val fresh = app.telegramClient.getFreshFileId(cId, mId)
-                                fileId = fresh ?: cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
+                                if (fresh != null) {
+                                    fileId = fresh
+                                    // Auto-heal Room cache with the active session fileId
+                                    if (cachedEntity != null) {
+                                        app.database.videoIndexDao().insertAll(
+                                            listOf(cachedEntity.copy(streamUrl = "tdlib://file/$fresh"))
+                                        )
+                                    }
+                                } else {
+                                    // TDLib could not load the message from server; avoid passing dead old-session file IDs
+                                    Timber.w("Could not resolve fresh fileId for cId=%d, mId=%d", cId, mId)
+                                }
                             } else {
                                 fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
                             }
