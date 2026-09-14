@@ -80,16 +80,15 @@ fun BrowseScreen(
         ) {
             Text(channelTitle, style = MaterialTheme.typography.headlineSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                
                 Button(
-                    onClick = onToggleShowPinned,
+                    onClick = { marathonModeEnabled = !marathonModeEnabled },
                     colors = androidx.tv.material3.ButtonDefaults.colors(
-                        containerColor = if (showPinnedVideos) androidx.compose.ui.graphics.Color(0xFF202735) else androidx.compose.ui.graphics.Color(0xFF374151)
+                        containerColor = if (marathonModeEnabled) androidx.compose.ui.graphics.Color(0xFF29B6F6) else androidx.compose.ui.graphics.Color(0xFF202735)
                     )
                 ) {
-                    Icon(Icons.Filled.PushPin, contentDescription = "Toggle Pinned Videos")
+                    Icon(Icons.Filled.PlaylistPlay, contentDescription = "Marathon Mode")
                     Spacer(Modifier.width(8.dp))
-                    Text(if (showPinnedVideos) "Pins: ON" else "Pins: OFF")
+                    Text(if (marathonModeEnabled) "Marathon: Click to Start" else "Marathon Mode: OFF")
                 }
                 Button(onClick = onToggleSort) {
                     Icon(Icons.Filled.SwapVert, contentDescription = "Sort")
@@ -100,23 +99,7 @@ fun BrowseScreen(
         }
         Spacer(Modifier.height(16.dp))
 
-        if (showPinnedVideos) {
-            pinnedVideo?.let { pinned ->
-                Column(Modifier.fillMaxWidth()) {
-                    Text("Pinned Video", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    PosterCard(
-                        title = pinned.title,
-                        subtitle = "Pinned in this channel",
-                        thumbnailFileId = parseThumbnailFileId(pinned.thumbnailUrl),
-                        thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
-                        enableTmdb = !fastModeEnabled,
-                        onClick = { onOpenItem(pinned) }
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-        }
+
 
         val refreshState = items.loadState.refresh
 
@@ -167,7 +150,13 @@ fun BrowseScreen(
                         thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
                     enableTmdb = !fastModeEnabled,
                         resumeFraction = resumeFractionFor(media.id),
-                        onClick = { onOpenItem(media) }
+                        onClick = {
+                            if (marathonModeEnabled) {
+                                onStartMarathonFrom(media)
+                            } else {
+                                onOpenItem(media)
+                            }
+                        }
                     )
                 } else {
                     PosterCardPlaceholder()

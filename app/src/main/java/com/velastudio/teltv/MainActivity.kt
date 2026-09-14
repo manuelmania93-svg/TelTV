@@ -470,7 +470,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                     activeMarathon = playlist
-                                    navController.navigate("player/${URLEncoder.encode(startMedia.id, "UTF-8")}?playlistId=${playlist.id}")
+                                    navController.navigate("player/${URLEncoder.encode(startMedia.id, "UTF-8")}?playlistId=${playlist.id}&showName=${URLEncoder.encode(title, "UTF-8")}")
                                 }
                             },
                             thumbnailLoader = thumbnailLoader,
@@ -634,8 +634,10 @@ class MainActivity : ComponentActivity() {
                         var fileId by remember { mutableStateOf<Int?>(null) }
                         var title by remember { mutableStateOf(mediaId) }
                         var resumeMs by remember { mutableStateOf(0L) }
+                        var isResolving by remember { mutableStateOf(true) }
 
                         LaunchedEffect(mediaId) {
+                            isResolving = true
                             val existingState = app.database.watchStateDao().get(mediaId)
                             resumeMs = existingState?.positionMs ?: 0L
                             val cachedEntity = app.database.videoIndexDao().getByMediaId(mediaId)
@@ -645,9 +647,11 @@ class MainActivity : ComponentActivity() {
                             val parts = mediaId.removePrefix("tg:").split(":")
                             val cId = parts.getOrNull(0)?.toLongOrNull()
                             val mId = parts.getOrNull(1)?.toLongOrNull()
+                            val resolvedChatId = cId ?: cachedEntity?.chatId
+                            val resolvedMsgId = mId ?: cachedEntity?.messageId
 
-                            if (cId != null && mId != null) {
-                                val fresh = app.telegramClient.getFreshFileId(cId, mId)
+                            if (resolvedChatId != null && resolvedMsgId != null) {
+                                val fresh = app.telegramClient.getFreshFileId(resolvedChatId, resolvedMsgId)
                                 if (fresh != null) {
                                     fileId = fresh
                                     // Auto-heal Room cache with the active session fileId
@@ -657,12 +661,13 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 } else {
-                                    // TDLib could not load the message from server; avoid passing dead old-session file IDs
-                                    Timber.w("Could not resolve fresh fileId for cId=%d, mId=%d", cId, mId)
+                                    // Fallback to cached streamUrl
+                                    fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
                                 }
                             } else {
                                 fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
                             }
+                            isResolving = false
                         }
 
                         var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
@@ -701,7 +706,17 @@ class MainActivity : ComponentActivity() {
                         }
                         val searchTitle = if (finalShowName != null && !title.contains(finalShowName ?: "", ignoreCase = true)) "$finalShowName $title" else title
 
-                        PlayerScreen(
+                        if (isResolving && fileId == null) {
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF0F172A)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    color = androidx.compose.ui.graphics.Color(0xFF29B6F6)
+                                )
+                            }
+                        } else {
+                            PlayerScreen(
                             fileId = fileId,
                             directUri = null,
                             title = searchTitle,
@@ -755,6 +770,7 @@ class MainActivity : ComponentActivity() {
                             onPlaybackEnded = { navController.popBackStack() },
                             onBack = { navController.popBackStack() }
                         )
+                        }
                     }
 
                     composable("settings") {

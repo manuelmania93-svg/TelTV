@@ -52,9 +52,16 @@ class TelegramClient(private val context: Context) {
     suspend fun getFreshFileId(chatId: Long, messageId: Long): Int? = withContext(Dispatchers.IO) {
         val c = client ?: return@withContext null
 
+        val realChatId = if (chatId <= -100_000_000_000_000_000L) {
+            val raw = kotlin.math.abs(chatId)
+            -(raw / 100_000L)
+        } else {
+            chatId
+        }
+
         // 1. First attempt GetMessages (contacts Telegram server to register file into current session)
         val fromServer: Int? = suspendCancellableCoroutine { cont ->
-            c.send(TdApi.GetMessages(chatId, longArrayOf(messageId))) { res ->
+            c.send(TdApi.GetMessages(realChatId, longArrayOf(messageId))) { res ->
                 if (res is TdApi.Messages) {
                     val msg = res.messages.firstOrNull()
                     val fId = when (val content = msg?.content) {
@@ -80,7 +87,7 @@ class TelegramClient(private val context: Context) {
 
         // 2. Fallback to GetMessage (searches local TDLib memory)
         suspendCancellableCoroutine { cont ->
-            c.send(TdApi.GetMessage(chatId, messageId)) { res ->
+            c.send(TdApi.GetMessage(realChatId, messageId)) { res ->
                 if (res is TdApi.Message) {
                     val fId = when (val content = res.content) {
                         is TdApi.MessageVideo -> content.video.video.id
@@ -97,7 +104,7 @@ class TelegramClient(private val context: Context) {
                     }
                     cont.resume(fId)
                 } else {
-                    Timber.w("GetMessage failed for chatId=%d msgId=%d: %s", chatId, messageId, res)
+                    Timber.w("GetMessage failed for realChatId=%d msgId=%d: %s", realChatId, messageId, res)
                     cont.resume(null)
                 }
             }
