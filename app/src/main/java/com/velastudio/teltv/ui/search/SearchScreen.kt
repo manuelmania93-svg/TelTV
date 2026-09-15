@@ -105,7 +105,6 @@ fun SearchScreen(
                 Text("No matches yet.", style = MaterialTheme.typography.bodyMedium)
             } else {
                 LazyVerticalGrid(
-                    modifier = Modifier.focusRestorer(),
                     columns = GridCells.Fixed(deviceProfile.gridColumns),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)

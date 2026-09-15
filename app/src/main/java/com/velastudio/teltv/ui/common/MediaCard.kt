@@ -68,6 +68,8 @@ fun PosterCard(
         if (enableTmdb) {
             val direct = TmdbMetadataProvider.getMetadata(title)
             tmdbMeta = direct ?: fallbackTitle?.let { TmdbMetadataProvider.getMetadata(it) }
+        } else {
+            tmdbMeta = null
         }
     }
 

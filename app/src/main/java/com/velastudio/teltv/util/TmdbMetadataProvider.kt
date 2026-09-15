@@ -83,6 +83,11 @@ object TmdbMetadataProvider {
         delay(120) // Debounce so fast scrolling skips network
         throttle.withPermit {
             try {
+                val cinemeta = fetchCinemeta(query)
+                if (cinemeta != null) {
+                    cache[query] = cinemeta
+                    return@withContext cinemeta
+                }
                 val encoded = URLEncoder.encode(query, "UTF-8")
                 val url = "https://api.themoviedb.org/3/search/multi?api_key=$API_KEY&query=$encoded"
                 val request = Request.Builder().url(url).build()

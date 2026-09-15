@@ -136,7 +136,7 @@ fun BrowseScreen(
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 160.dp),
             state = gridState,
-            modifier = Modifier.fillMaxSize().focusRestorer(),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)

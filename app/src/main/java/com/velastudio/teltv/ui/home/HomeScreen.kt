@@ -92,7 +92,6 @@ fun HomeScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .focusRestorer()
             .padding(horizontal = 40.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -381,7 +380,7 @@ private fun ContinueWatchingRow(
             color = Color.White
         )
         Spacer(Modifier.height(12.dp))
-        LazyRow(modifier = Modifier.focusRestorer(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyRow( horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             items(entries, key = { it.mediaId }) { entry ->
                 PosterCard(
                     title = entry.title,
@@ -407,7 +406,7 @@ private fun HomeRowView(row: HomeRow, thumbnailLoader: ThumbnailLoader, onOpenEn
             color = Color.White
         )
         Spacer(Modifier.height(12.dp))
-        LazyRow(modifier = Modifier.focusRestorer(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyRow( horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             items(row.entries, key = { it.id }) { entry ->
                 PosterCard(
                     title = entry.name,
