@@ -55,7 +55,7 @@ class TdLibDataSource(
         val toRead = minOf(length.toLong(), bytesRemaining).toInt()
         var attempts = 0
 
-        while (readPosition < totalFileSize && attempts < 15) {
+        while (readPosition < totalFileSize && attempts < 60) {
             if (!isFullyDownloaded && readPosition >= downloadedUpTo) {
                 val updated = downloadRangeOrThrow(readPosition, CHUNK_SIZE)
                 updateDownloadedBoundary(updated, readPosition)
@@ -104,8 +104,9 @@ class TdLibDataSource(
                 isFullyDownloaded = true
                 downloadedUpTo = totalFileSize
             } else {
+                // Strictly respect the physical byte range downloaded by TDLib
                 val upTo = local.downloadOffset + local.downloadedPrefixSize
-                downloadedUpTo = maxOf(downloadedUpTo, upTo, requestedOffset + local.downloadedPrefixSize)
+                downloadedUpTo = minOf(totalFileSize, upTo)
             }
         }
     }

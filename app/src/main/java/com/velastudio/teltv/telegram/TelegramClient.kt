@@ -161,7 +161,7 @@ class TelegramClient(private val context: Context) {
 
         c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
             if (response is TdApi.Error) {
-                val err = "[code=] "
+                val err = "[code=${response.code}] ${response.message}"
                 lastDownloadErrors[fileId] = err
                 Timber.e("DownloadFile error for fileId=%d offset=%d: %s", fileId, offset, err)
                 latch.countDown()
