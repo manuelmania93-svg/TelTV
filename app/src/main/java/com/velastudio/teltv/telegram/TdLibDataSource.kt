@@ -111,9 +111,20 @@ class TdLibDataSource(
         throw IOException("TDLib returned an incomplete file response for file $fileId at offset $position", error)
     }
 
-    private fun localPathOrThrow(downloadedFile: TdApi.File): String =
-        downloadedFile.local?.path?.takeIf { it.isNotBlank() }
+    private fun localPathOrThrow(downloadedFile: TdApi.File): String {
+        val path = downloadedFile.local?.path?.takeIf { it.isNotBlank() }
             ?: throw IOException("TDLib did not provide a local path for file $fileId")
+        val diskFile = java.io.File(path)
+        var checks = 0
+        while ((!diskFile.exists() || diskFile.length() <= 0L) && checks < 20) {
+            Thread.sleep(50)
+            checks++
+        }
+        if (!diskFile.exists()) {
+            throw IOException("File on disk not yet created by TDLib: $path")
+        }
+        return path
+    }
 }
 
 class RawTdClient(private val telegram: TelegramClient) {

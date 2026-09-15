@@ -35,6 +35,42 @@ object TmdbMetadataProvider {
         return if (stripped.isNotBlank()) stripped else clean
     }
 
+    private fun fetchCinemeta(query: String): TmdbMetadata? {
+        return try {
+            val encoded = URLEncoder.encode(query, "UTF-8")
+            val urls = listOf(
+                "https://v3-cinemeta.strem.io/catalog/series/top/search=" + encoded + ".json",
+                "https://v3-cinemeta.strem.io/catalog/movie/top/search=" + encoded + ".json"
+            )
+            for (url in urls) {
+                val req = Request.Builder().url(url).build()
+                val res = client.newCall(req).execute()
+                if (!res.isSuccessful) continue
+                val body = res.body?.string() ?: continue
+                val json = JSONObject(body)
+                val metas = json.optJSONArray("metas") ?: continue
+                if (metas.length() > 0) {
+                    val first = metas.getJSONObject(0)
+                    val poster = first.optString("poster").takeIf { it.isNotBlank() && it != "null" }
+                    val year = first.optString("year").takeIf { it.isNotBlank() }
+                    val desc = first.optString("description").takeIf { it.isNotBlank() }
+                    if (poster != null) {
+                        return TmdbMetadata(
+                            posterUrl = poster,
+                            backdropUrl = poster,
+                            rating = null,
+                            year = year,
+                            overview = desc
+                        )
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun getMetadata(rawTitle: String): TmdbMetadata? {
         val query = extractQuery(rawTitle)
         if (query.isBlank()) return null
@@ -65,6 +101,11 @@ object TmdbMetadataProvider {
                     return@withContext null
                 }
                 if (results.length() == 0) {
+                    val cinemeta = fetchCinemeta(query)
+                    if (cinemeta != null) {
+                        cache[query] = cinemeta
+                        return@withContext cinemeta
+                    }
                     cache[query] = EMPTY_META
                     return@withContext null
                 }
@@ -86,8 +127,14 @@ object TmdbMetadataProvider {
                 cache[query] = meta
                 meta
             } catch (e: Exception) {
-                cache[query] = EMPTY_META
-                null
+                val cinemeta = fetchCinemeta(query)
+                if (cinemeta != null) {
+                    cache[query] = cinemeta
+                    cinemeta
+                } else {
+                    cache[query] = EMPTY_META
+                    null
+                }
             }
         }
         }

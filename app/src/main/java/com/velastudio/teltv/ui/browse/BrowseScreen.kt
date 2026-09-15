@@ -152,7 +152,8 @@ fun BrowseScreen(
                         subtitle = media.subtitle,
                         thumbnailFileId = parseThumbnailFileId(media.thumbnailUrl),
                         thumbnailLoader = if (fastModeEnabled) null else thumbnailLoader,
-                    enableTmdb = !fastModeEnabled,
+                        enableTmdb = !fastModeEnabled,
+                        fallbackTitle = channelTitle,
                         resumeFraction = resumeFractionFor(media.id),
                         onClick = {
                             if (marathonModeEnabled) {

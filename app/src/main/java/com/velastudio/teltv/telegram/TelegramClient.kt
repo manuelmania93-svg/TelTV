@@ -134,11 +134,16 @@ class TelegramClient(private val context: Context) {
         fun hasBytes(f: TdApi.File?): Boolean {
             if (f == null) return false
             val local = f.local ?: return false
-            if (local.isDownloadingCompleted && !local.path.isNullOrBlank()) return true
+            val path = local.path ?: return false
+            if (path.isBlank()) return false
+            val diskFile = java.io.File(path)
+            if (!diskFile.exists() || diskFile.length() <= 0L) return false
+
+            if (local.isDownloadingCompleted) return true
 
             val downloadedUpTo = local.downloadOffset + local.downloadedPrefixSize
-            val neededUpTo = offset + safeLimit
-            return local.downloadOffset <= offset && downloadedUpTo >= neededUpTo && !local.path.isNullOrBlank()
+            val minNeeded = minOf(safeLimit, 256L * 1024L)
+            return local.downloadOffset <= offset && downloadedUpTo >= (offset + minNeeded)
         }
 
         val listener: (TdApi.File) -> Unit = { updatedFile ->
@@ -170,7 +175,8 @@ class TelegramClient(private val context: Context) {
             lastDownloadErrors[fileId] = "Timed out after 30s waiting for TDLib to write bytes"
             Timber.w("DownloadFile timed out for fileId=%d offset=%d", fileId, offset)
         }
-        return result ?: fileCache[fileId]
+        val candidate = result ?: fileCache[fileId]
+        return if (hasBytes(candidate)) candidate else null
     }
 
     val fileCache = ConcurrentHashMap<Int, TdApi.File>()
