@@ -65,22 +65,12 @@ class PlaybackService : MediaSessionService() {
                     .build()
             }
         }.apply {
-            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             setEnableDecoderFallback(true)
             forceDisableMediaCodecAsynchronousQueueing()
             // c2.android.mp3.decoder crashes on this TCL SoC (Android 12) under legacy VBR MP3.
             // Exclude it outright instead of relying on runtime fallback timing.
-            setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
-                val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(
-                    mimeType, requiresSecureDecoder, requiresTunnelingDecoder
-                )
-                if (mimeType.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true)) {
-                    decoders.filterNot { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) }.ifEmpty { decoders }
-                } else {
-                    decoders
-                }
             }
-        }
 
         // Track selector: Never downmix 5.1/7.1 audio to stereo on soundbars
         val trackSelector = DefaultTrackSelector(this).apply {

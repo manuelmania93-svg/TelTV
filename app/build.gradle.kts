@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.velastudio.teltv"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.velastudio.teltv"
         minSdk = 21          // covers most Android TV boxes / sticks
         targetSdk = 34
-        versionCode = 42
-        versionName = "0.3.13"
+        versionCode = 43
+        versionName = "0.3.14"
     }
 
     val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
@@ -91,12 +91,13 @@ dependencies {
     // nothing but its (deprecated) lazy layouts was dead weight -- removed.
 
     // Media playback - Media3 / ExoPlayer, HLS + progressive + subtitles
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
-    implementation("androidx.media3:media3-ui-leanback:1.4.1")
-    implementation("androidx.media3:media3-session:1.4.1")
-    implementation("androidx.media3:media3-datasource-okhttp:1.4.1")
+    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.0")
+    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-ui-leanback:1.5.0")
+    implementation("androidx.media3:media3-session:1.5.0")
+    implementation("androidx.media3:media3-datasource-okhttp:1.5.0")
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
 
     // Networking - talks to the titan_vault backend REST/streaming API
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
