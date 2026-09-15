@@ -142,7 +142,8 @@ class TelegramClient(private val context: Context) {
             if (local.isDownloadingCompleted) return true
 
             val downloadedUpTo = local.downloadOffset + local.downloadedPrefixSize
-            val minNeeded = minOf(safeLimit, 256L * 1024L)
+            val remainingInFile = if (f.size > 0L) (f.size - offset).coerceAtLeast(1L) else safeLimit
+            val minNeeded = minOf(safeLimit, 256L * 1024L, remainingInFile)
             return local.downloadOffset <= offset && downloadedUpTo >= (offset + minNeeded)
         }
 

@@ -263,7 +263,11 @@ fun PlayerScreen(
             controller?.let { mediaController ->
                 mediaController.removeListener(listener)
                 onPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0))
-                mediaController.stop()
+                val activeUri = mediaController.currentMediaItem?.localConfiguration?.uri?.toString()
+                val outgoingUri = resolvedUri()?.toString()
+                if (activeUri == null || activeUri == outgoingUri) {
+                    mediaController.stop()
+                }
             }
             MediaController.releaseFuture(controllerFuture)
             controller = null

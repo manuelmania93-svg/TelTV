@@ -16,7 +16,8 @@ class TdLibDataSource(
     private var file: RandomAccessFile? = null
     private var bytesRemaining: Long = 0
     private var readPosition: Long = 0
-    private var downloadedUpTo: Long = 0
+    private var downloadedBlockStart: Long = 0L
+    private var downloadedBlockEnd: Long = 0L
     private var totalFileSize: Long = 0
     private var isFullyDownloaded: Boolean = false
 
@@ -33,7 +34,7 @@ class TdLibDataSource(
             throw IOException("TDLib returned no size for file $fileId")
         }
         totalFileSize = initialFile.size
-        updateDownloadedBoundary(initialFile, position)
+        updateDownloadedBoundary(initialFile)
 
         bytesRemaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) {
             dataSpec.length
@@ -56,18 +57,21 @@ class TdLibDataSource(
         var attempts = 0
 
         while (readPosition < totalFileSize && attempts < 60) {
-            if (!isFullyDownloaded && readPosition >= downloadedUpTo) {
+            val isInsideChunk = readPosition in downloadedBlockStart until downloadedBlockEnd
+            if (!isFullyDownloaded && !isInsideChunk) {
                 val updated = downloadRangeOrThrow(readPosition, CHUNK_SIZE)
-                updateDownloadedBoundary(updated, readPosition)
+                updateDownloadedBoundary(updated)
                 val path = localPathOrThrow(updated)
                 file?.close()
                 file = RandomAccessFile(File(path), "r").also { it.seek(readPosition) }
             }
 
             val available = if (isFullyDownloaded) {
-                bytesRemaining
+                (totalFileSize - readPosition).coerceAtLeast(0L)
+            } else if (readPosition in downloadedBlockStart until downloadedBlockEnd) {
+                downloadedBlockEnd - readPosition
             } else {
-                (downloadedUpTo - readPosition).coerceAtLeast(0)
+                0L
             }
 
             if (available > 0L) {
@@ -95,18 +99,21 @@ class TdLibDataSource(
     override fun close() {
         runCatching { file?.close() }
         file = null
+        if (!isFullyDownloaded) {
+            client.cancelDownload(fileId)
+        }
     }
 
-    private fun updateDownloadedBoundary(tdFile: TdApi.File, requestedOffset: Long) {
+    private fun updateDownloadedBoundary(tdFile: TdApi.File) {
         val local = tdFile.local
         if (local != null) {
             if (local.isDownloadingCompleted) {
                 isFullyDownloaded = true
-                downloadedUpTo = totalFileSize
+                downloadedBlockStart = 0L
+                downloadedBlockEnd = totalFileSize
             } else {
-                // Strictly respect the physical byte range downloaded by TDLib
-                val upTo = local.downloadOffset + local.downloadedPrefixSize
-                downloadedUpTo = minOf(totalFileSize, upTo)
+                downloadedBlockStart = local.downloadOffset
+                downloadedBlockEnd = minOf(totalFileSize, local.downloadOffset + local.downloadedPrefixSize)
             }
         }
     }
@@ -126,5 +133,9 @@ class RawTdClient(private val telegram: TelegramClient) {
     fun downloadRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File {
         return telegram.downloadFileRangeBlocking(fileId, offset, limit)
             ?: throw IOException("TDLib download failed for file $fileId at offset $offset: ${telegram.getLastDownloadError(fileId) ?: "unknown error"}")
+    }
+
+    fun cancelDownload(fileId: Int) {
+        telegram.cancelDownload(fileId)
     }
 }
