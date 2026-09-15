@@ -50,39 +50,44 @@ class TdLibDataSource(
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-        if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
+        if (bytesRemaining == 0L || readPosition >= totalFileSize) return C.RESULT_END_OF_INPUT
 
-        if (!isFullyDownloaded && readPosition >= downloadedUpTo) {
-            val updated = downloadRangeOrThrow(readPosition, CHUNK_SIZE)
-            updateDownloadedBoundary(updated, readPosition)
-            val path = localPathOrThrow(updated)
-            file?.close()
-            file = RandomAccessFile(File(path), "r").also { it.seek(readPosition) }
+        val toRead = minOf(length.toLong(), bytesRemaining).toInt()
+        var attempts = 0
+
+        while (readPosition < totalFileSize && attempts < 15) {
+            if (!isFullyDownloaded && readPosition >= downloadedUpTo) {
+                val updated = downloadRangeOrThrow(readPosition, CHUNK_SIZE)
+                updateDownloadedBoundary(updated, readPosition)
+                val path = localPathOrThrow(updated)
+                file?.close()
+                file = RandomAccessFile(File(path), "r").also { it.seek(readPosition) }
+            }
+
+            val available = if (isFullyDownloaded) {
+                bytesRemaining
+            } else {
+                (downloadedUpTo - readPosition).coerceAtLeast(0)
+            }
+
+            if (available > 0L) {
+                val bytesToRead = minOf(toRead.toLong(), available).toInt()
+                val currentRaf = file ?: throw IOException("File not open for fileId=$fileId")
+                val read = currentRaf.read(buffer, offset, bytesToRead)
+                if (read > 0) {
+                    bytesRemaining -= read
+                    readPosition += read
+                    bytesTransferred(read)
+                    return read
+                }
+            }
+
+            attempts++
+            Thread.sleep(100)
         }
 
-        val maxAvailable = if (isFullyDownloaded) {
-            bytesRemaining
-        } else {
-            (downloadedUpTo - readPosition).coerceAtLeast(0)
-        }
-
-        if (maxAvailable <= 0L && !isFullyDownloaded) {
-            val updated = downloadRangeOrThrow(readPosition, CHUNK_SIZE)
-            updateDownloadedBoundary(updated, readPosition)
-        }
-
-        val toRead = minOf(length.toLong(), bytesRemaining, if (isFullyDownloaded) Long.MAX_VALUE else (downloadedUpTo - readPosition).coerceAtLeast(1L)).toInt()
-
-        val currentRaf = file ?: throw IOException("File not open for fileId=$fileId")
-        val read = currentRaf.read(buffer, offset, toRead)
-        if (read > 0) {
-            bytesRemaining -= read
-            readPosition += read
-            bytesTransferred(read)
-            return read
-        }
-
-        return C.RESULT_END_OF_INPUT
+        if (readPosition >= totalFileSize) return C.RESULT_END_OF_INPUT
+        throw IOException("Buffer underrun: TDLib download timed out at offset $readPosition for file $fileId")
     }
 
     override fun getUri() = TdLibAwareDataSourceFactory.uriForFile(fileId)
@@ -111,20 +116,9 @@ class TdLibDataSource(
         throw IOException("TDLib returned an incomplete file response for file $fileId at offset $position", error)
     }
 
-    private fun localPathOrThrow(downloadedFile: TdApi.File): String {
-        val path = downloadedFile.local?.path?.takeIf { it.isNotBlank() }
+    private fun localPathOrThrow(downloadedFile: TdApi.File): String =
+        downloadedFile.local?.path?.takeIf { it.isNotBlank() }
             ?: throw IOException("TDLib did not provide a local path for file $fileId")
-        val diskFile = java.io.File(path)
-        var checks = 0
-        while ((!diskFile.exists() || diskFile.length() <= 0L) && checks < 20) {
-            Thread.sleep(50)
-            checks++
-        }
-        if (!diskFile.exists()) {
-            throw IOException("File on disk not yet created by TDLib: $path")
-        }
-        return path
-    }
 }
 
 class RawTdClient(private val telegram: TelegramClient) {

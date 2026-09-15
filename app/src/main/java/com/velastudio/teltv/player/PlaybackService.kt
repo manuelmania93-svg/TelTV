@@ -43,7 +43,7 @@ class PlaybackService : MediaSessionService() {
             .setBufferDurationsMs(
                 /* minBufferMs = */ if (constrained) 10_000 else 15_000,
                 /* maxBufferMs = */ if (constrained) 25_000 else 35_000,
-                /* bufferForPlaybackMs = */ 1_500,
+                /* bufferForPlaybackMs = 3_500*/ 1_500,
                 /* bufferForPlaybackAfterRebufferMs = */ if (constrained) 2_000 else 2_500
             )
             .setTargetBufferBytes(if (constrained) 24 * 1024 * 1024 else 35 * 1024 * 1024)
