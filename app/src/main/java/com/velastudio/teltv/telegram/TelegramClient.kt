@@ -122,7 +122,6 @@ class TelegramClient(private val context: Context) {
             return null
         }
 
-        // Fast-path: if file is already completely downloaded and exists locally
         val cached = fileCache[fileId]
         if (cached?.local?.isDownloadingCompleted == true && !cached.local.path.isNullOrBlank()) {
             return cached
@@ -132,28 +131,43 @@ class TelegramClient(private val context: Context) {
         val latch = CountDownLatch(1)
         var result: TdApi.File? = null
 
-        c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
-            when (response) {
-                is TdApi.File -> {
-                    result = response
-                    fileCache[fileId] = response
-                    lastDownloadErrors.remove(fileId)
-                }
-                is TdApi.Error -> {
-                    val err = "[code=${response.code}] ${response.message}"
-                    lastDownloadErrors[fileId] = err
-                    Timber.e("DownloadFile error for fileId=%d offset=%d: %s", fileId, offset, err)
-                }
-                else -> {
-                    lastDownloadErrors[fileId] = "Unexpected response: ${response?.javaClass?.simpleName}"
-                }
+        fun hasBytes(f: TdApi.File?): Boolean {
+            if (f == null) return false
+            val local = f.local ?: return false
+            if (local.isDownloadingCompleted && !local.path.isNullOrBlank()) return true
+
+            val downloadedUpTo = local.downloadOffset + local.downloadedPrefixSize
+            val neededUpTo = offset + safeLimit
+            return local.downloadOffset <= offset && downloadedUpTo >= neededUpTo && !local.path.isNullOrBlank()
+        }
+
+        val listener: (TdApi.File) -> Unit = { updatedFile ->
+            if (hasBytes(updatedFile)) {
+                result = updatedFile
+                latch.countDown()
             }
+        }
+        registerFileListener(fileId, listener)
+
+        if (hasBytes(cached)) {
+            result = cached
             latch.countDown()
         }
 
+        c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
+            if (response is TdApi.Error) {
+                val err = "[code=] "
+                lastDownloadErrors[fileId] = err
+                Timber.e("DownloadFile error for fileId=%d offset=%d: %s", fileId, offset, err)
+                latch.countDown()
+            }
+        }
+
         val completed = latch.await(30, TimeUnit.SECONDS)
-        if (!completed) {
-            lastDownloadErrors[fileId] = "Timed out after 30s waiting for TDLib"
+        unregisterFileListener(fileId, listener)
+
+        if (!completed && result == null) {
+            lastDownloadErrors[fileId] = "Timed out after 30s waiting for TDLib to write bytes"
             Timber.w("DownloadFile timed out for fileId=%d offset=%d", fileId, offset)
         }
         return result ?: fileCache[fileId]
