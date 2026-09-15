@@ -50,13 +50,16 @@ fun PosterCard(
     onLongClick: (() -> Unit)? = null,
     contentDescription: String = title
 ) {
-    var localThumbPath by remember(thumbnailFileId) { mutableStateOf<String?>(null) }
+    var localThumbPath by remember(thumbnailFileId, title) { mutableStateOf<String?>(null) }
     var tmdbMeta by remember(title) { mutableStateOf<TmdbMetadata?>(null) }
 
-    DisposableEffect(thumbnailFileId, thumbnailLoader) {
-        val job = if (thumbnailFileId != null && thumbnailLoader != null) {
+    DisposableEffect(thumbnailFileId, thumbnailLoader, title) {
+        val job = if (thumbnailFileId != null && thumbnailFileId > 0 && thumbnailLoader != null) {
             thumbnailLoader.request(thumbnailFileId) { path -> localThumbPath = path }
-        } else null
+        } else {
+            localThumbPath = null
+            null
+        }
         onDispose { job?.cancel() }
     }
 

@@ -183,6 +183,11 @@ fun BrowseScreen(
 
     // Item Action Dialog
     actionItem?.let { media ->
+        var menuReady by remember(media.id) { mutableStateOf(false) }
+        LaunchedEffect(media.id) {
+            kotlinx.coroutines.delay(350)
+            menuReady = true
+        }
         val isWatched = (resumeFractionFor(media.id) ?: 0f) >= 0.90f
         Dialog(onDismissRequest = { actionItem = null }) {
             androidx.compose.foundation.layout.Column(
@@ -208,7 +213,9 @@ fun BrowseScreen(
                 Spacer(Modifier.height(18.dp))
 
                 Button(
+                    enabled = menuReady,
                     onClick = {
+                        if (!menuReady) return@Button
                         actionItem = null
                         onPlayFromBeginning(media)
                     },
@@ -224,7 +231,9 @@ fun BrowseScreen(
                 Spacer(Modifier.height(10.dp))
 
                 Button(
+                    enabled = menuReady,
                     onClick = {
+                        if (!menuReady) return@Button
                         actionItem = null
                         onToggleWatched(media)
                     },
@@ -243,7 +252,9 @@ fun BrowseScreen(
                 Spacer(Modifier.height(10.dp))
 
                 Button(
+                    enabled = menuReady,
                     onClick = {
+                        if (!menuReady) return@Button
                         actionItem = null
                         onStartMarathonFrom(media)
                     },
@@ -259,7 +270,9 @@ fun BrowseScreen(
                 Spacer(Modifier.height(10.dp))
 
                 Button(
+                    enabled = menuReady,
                     onClick = {
+                        if (!menuReady) return@Button
                         actionItem = null
                         onAddToPlaylist(media)
                     },
@@ -275,7 +288,9 @@ fun BrowseScreen(
                 Spacer(Modifier.height(10.dp))
 
                 Button(
+                    enabled = menuReady,
                     onClick = {
+                        if (!menuReady) return@Button
                         actionItem = null
                         onAddToWatchLater(media)
                     },

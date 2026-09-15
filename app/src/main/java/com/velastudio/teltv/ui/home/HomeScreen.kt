@@ -241,7 +241,7 @@ fun HomeScreen(
 
         // Chat Folders Shelves (hidden if in PINNED_ONLY)
         if (filterMode != HomeFilterMode.PINNED_ONLY) {
-            items(folderRows) { row ->
+            items(folderRows, key = { it.title }) { row ->
                 if (row.entries.isNotEmpty()) {
                     HomeRowView(row, thumbnailLoader, onOpenEntry)
                 }

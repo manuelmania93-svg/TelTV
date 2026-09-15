@@ -46,6 +46,7 @@ class ThumbnailLoader(
     }
 
     fun request(fileId: Int, onResolved: (String) -> Unit): Job {
+        if (fileId <= 0) return Job().apply { complete() }
         cached(fileId)?.let {
             onResolved(it)
             return Job().apply { complete() }

@@ -582,10 +582,33 @@ class TelegramClient(private val context: Context) {
      * before it resolves -- see `ThumbnailLoader` for the cancellation-aware wrapper.
      */
     suspend fun downloadThumbnail(fileId: Int): String = withContext(Dispatchers.IO) {
-        downloadFileRangeBlocking(fileId, 0L, 1024L * 1024L)
-            ?.local?.path
-            ?.takeIf { it.isNotBlank() }
-            .orEmpty()
+        if (fileId <= 0) return@withContext ""
+        val c = client ?: return@withContext ""
+        val cached = fileCache[fileId]
+        if (cached?.local?.isDownloadingCompleted == true && !cached.local.path.isNullOrBlank()) {
+            return@withContext cached.local.path
+        }
+        suspendCancellableCoroutine { cont ->
+            val listener: (TdApi.File) -> Unit = { file ->
+                if (file.local?.isDownloadingCompleted == true && !file.local.path.isNullOrBlank()) {
+                    if (cont.isActive) cont.resume(file.local.path)
+                }
+            }
+            registerFileListener(fileId, listener)
+            cont.invokeOnCancellation {
+                unregisterFileListener(fileId, listener)
+                cancelDownload(fileId)
+            }
+            c.send(TdApi.DownloadFile(fileId, 1, 0, 0, false)) { res ->
+                if (res is TdApi.File && res.local?.isDownloadingCompleted == true && !res.local.path.isNullOrBlank()) {
+                    unregisterFileListener(fileId, listener)
+                    if (cont.isActive) cont.resume(res.local.path)
+                } else if (res is TdApi.Error) {
+                    unregisterFileListener(fileId, listener)
+                    if (cont.isActive) cont.resume("")
+                }
+            }
+        }
     }
 
     /** Cancels an in-flight low-priority thumbnail download, e.g. when its row scrolls off-screen. */
