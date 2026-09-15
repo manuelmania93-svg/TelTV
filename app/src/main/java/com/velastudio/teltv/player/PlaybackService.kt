@@ -75,7 +75,7 @@ class PlaybackService : MediaSessionService() {
                     mimeType, requiresSecureDecoder, requiresTunnelingDecoder
                 )
                 if (mimeType.equals(MimeTypes.AUDIO_MPEG, ignoreCase = true)) {
-                    decoders.filterNot { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) }
+                    decoders.filterNot { it.name.equals("c2.android.mp3.decoder", ignoreCase = true) }.ifEmpty { decoders }
                 } else {
                     decoders
                 }
