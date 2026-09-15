@@ -12,8 +12,8 @@ android {
         applicationId = "com.velastudio.teltv"
         minSdk = 21          // covers most Android TV boxes / sticks
         targetSdk = 34
-        versionCode = 44
-        versionName = "0.3.15"
+        versionCode = 45
+        versionName = "0.3.16"
     }
 
     val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")

@@ -16,29 +16,32 @@ class TdLibDataSource(
     private var file: RandomAccessFile? = null
     private var bytesRemaining: Long = 0
     private var readPosition: Long = 0
-    private var localPath: String? = null
+    private var downloadedUpTo: Long = 0
+    private var totalFileSize: Long = 0
+    private var isFullyDownloaded: Boolean = false
+
+    companion object {
+        private const val CHUNK_SIZE = 4 * 1024 * 1024L
+    }
 
     override fun open(dataSpec: DataSpec): Long {
         val position = dataSpec.position
         readPosition = position
 
-        // 1. Ask TDLib to prioritize downloading from position
-        val initialFile = downloadRangeOrThrow(position, 4 * 1024 * 1024L)
+        val initialFile = downloadRangeOrThrow(position, CHUNK_SIZE)
         if (initialFile.size <= 0L) {
             throw IOException("TDLib returned no size for file $fileId")
         }
-        val totalSize = initialFile.size
+        totalFileSize = initialFile.size
+        updateDownloadedBoundary(initialFile, position)
 
         bytesRemaining = if (dataSpec.length != C.LENGTH_UNSET.toLong()) {
             dataSpec.length
         } else {
-            (totalSize - position).coerceAtLeast(0)
+            (totalFileSize - position).coerceAtLeast(0)
         }
 
         val resolvedPath = localPathOrThrow(initialFile)
-        localPath = resolvedPath
-
-        // 2. Open file if already present
         file = RandomAccessFile(File(resolvedPath), "r").also { it.seek(position) }
 
         transferInitializing(dataSpec)
@@ -49,31 +52,37 @@ class TdLibDataSource(
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
 
-        val toRead = minOf(length.toLong(), bytesRemaining).toInt()
-
-        var attempts = 0
-        while (attempts < 3) {
-            val currentRaf = file
-            if (currentRaf != null) {
-                val read = currentRaf.read(buffer, offset, toRead)
-                if (read > 0) {
-                    bytesRemaining -= read
-                    readPosition += read
-                    bytesTransferred(read)
-                    return read
-                }
-            }
-
-            file?.close()
-            file = null
-            val updated = downloadRangeOrThrow(readPosition, 2 * 1024 * 1024L)
+        if (!isFullyDownloaded && readPosition >= downloadedUpTo) {
+            val updated = downloadRangeOrThrow(readPosition, CHUNK_SIZE)
+            updateDownloadedBoundary(updated, readPosition)
             val path = localPathOrThrow(updated)
-            localPath = path
+            file?.close()
             file = RandomAccessFile(File(path), "r").also { it.seek(readPosition) }
-            attempts++
         }
 
-        throw IOException("TDLib did not provide bytes at offset $readPosition for file $fileId")
+        val maxAvailable = if (isFullyDownloaded) {
+            bytesRemaining
+        } else {
+            (downloadedUpTo - readPosition).coerceAtLeast(0)
+        }
+
+        if (maxAvailable <= 0L && !isFullyDownloaded) {
+            val updated = downloadRangeOrThrow(readPosition, CHUNK_SIZE)
+            updateDownloadedBoundary(updated, readPosition)
+        }
+
+        val toRead = minOf(length.toLong(), bytesRemaining, if (isFullyDownloaded) Long.MAX_VALUE else (downloadedUpTo - readPosition).coerceAtLeast(1L)).toInt()
+
+        val currentRaf = file ?: throw IOException("File not open for fileId=$fileId")
+        val read = currentRaf.read(buffer, offset, toRead)
+        if (read > 0) {
+            bytesRemaining -= read
+            readPosition += read
+            bytesTransferred(read)
+            return read
+        }
+
+        return C.RESULT_END_OF_INPUT
     }
 
     override fun getUri() = TdLibAwareDataSourceFactory.uriForFile(fileId)
@@ -81,6 +90,19 @@ class TdLibDataSource(
     override fun close() {
         runCatching { file?.close() }
         file = null
+    }
+
+    private fun updateDownloadedBoundary(tdFile: TdApi.File, requestedOffset: Long) {
+        val local = tdFile.local
+        if (local != null) {
+            if (local.isDownloadingCompleted) {
+                isFullyDownloaded = true
+                downloadedUpTo = totalFileSize
+            } else {
+                val upTo = local.downloadOffset + local.downloadedPrefixSize
+                downloadedUpTo = maxOf(downloadedUpTo, upTo, requestedOffset + local.downloadedPrefixSize)
+            }
+        }
     }
 
     private fun downloadRangeOrThrow(position: Long, limit: Long): TdApi.File = try {
