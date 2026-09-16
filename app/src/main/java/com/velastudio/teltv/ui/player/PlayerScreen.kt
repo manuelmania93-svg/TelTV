@@ -374,12 +374,12 @@ fun PlayerScreen(
         mediaController.playWhenReady = true
     }
 
-    LaunchedEffect(controller, fileId, directUri) {
+    LaunchedEffect(controller) {
         val mediaController = controller ?: return@LaunchedEffect
-        delay(150) // Wait for outgoing screen to finish window detachment
         playerViewRef?.let { pv ->
-            pv.player = null
-            pv.player = mediaController
+            if (pv.player !== mediaController) {
+                pv.player = mediaController
+            }
         }
     }
 
@@ -482,6 +482,7 @@ fun PlayerScreen(
                     useController = false
                     keepScreenOn = true
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    findViewById<android.view.View>(androidx.media3.ui.R.id.exo_shutter)?.visibility = android.view.View.GONE
                     playerViewRef = this
                     subtitleView?.apply {
                         setFractionalTextSize(0.065f) // Large readable subtitles for TV
@@ -499,7 +500,9 @@ fun PlayerScreen(
                 }
             },
             update = { view ->
-                view.player = controller
+                if (view.player !== controller) {
+                    view.player = controller
+                }
                 view.resizeMode = when (aspectRatioIndex) {
                     1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
