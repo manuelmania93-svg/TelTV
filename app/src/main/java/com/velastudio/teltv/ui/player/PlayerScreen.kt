@@ -96,8 +96,6 @@ fun PlayerScreen(
     }
     val savedAspect4x3 by prefs.aspectRatio4x3.collectAsState(initial = 0)
     var isCurrentVideo4x3 by remember { mutableStateOf(false) }
-    val savedAspect4x3 by prefs.aspectRatio4x3.collectAsState(initial = 0)
-    var isCurrentVideo4x3 by remember { mutableStateOf(false) }
     var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
 
     // Subtitle styling & audio enhancements
@@ -230,19 +228,6 @@ fun PlayerScreen(
             override fun onEvents(player: Player, events: Player.Events) {
                 if (player.duration > 0 && player.duration != androidx.media3.common.C.TIME_UNSET) {
                     durationMs = player.duration
-                }
-            }
-            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                if (videoSize.width > 0 && videoSize.height > 0) {
-                    val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1.0f
-                    val aspect = (videoSize.width.toFloat() / videoSize.height.toFloat()) * pixelRatio
-                    val is4x3 = aspect in 1.1f..1.55f
-                    isCurrentVideo4x3 = is4x3
-                    if (is4x3) {
-                        aspectRatioIndex = savedAspect4x3
-                    } else {
-                        aspectRatioIndex = 0
-                    }
                 }
             }
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
