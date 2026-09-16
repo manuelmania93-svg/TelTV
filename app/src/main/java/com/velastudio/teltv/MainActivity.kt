@@ -659,7 +659,8 @@ class MainActivity : ComponentActivity() {
                             navArgument("showName") { type = NavType.StringType; nullable = true; defaultValue = null }
                         )
                     ) { backStackEntry ->
-                        val mediaId = URLDecoder.decode(backStackEntry.arguments?.getString("mediaId") ?: "", "UTF-8")
+                        val initialMediaId = URLDecoder.decode(backStackEntry.arguments?.getString("mediaId") ?: "", "UTF-8")
+                        var currentMediaId by remember(initialMediaId) { mutableStateOf(initialMediaId) }
                         val playlistId = backStackEntry.arguments
                             ?.takeIf { it.containsKey("playlistId") }
                             ?.getString("playlistId")?.toLongOrNull()
@@ -669,19 +670,19 @@ class MainActivity : ComponentActivity() {
                             ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
                         var resolved by remember { mutableStateOf<WatchStateEntity?>(null) }
                         var fileId by remember { mutableStateOf<Int?>(null) }
-                        var title by remember { mutableStateOf(mediaId) }
+                        var title by remember { mutableStateOf(currentMediaId) }
                         var resumeMs by remember { mutableStateOf(0L) }
                         var isResolving by remember { mutableStateOf(true) }
 
-                        LaunchedEffect(mediaId) {
+                        LaunchedEffect(currentMediaId) {
                             isResolving = true
-                            val existingState = app.database.watchStateDao().get(mediaId)
+                            val existingState = app.database.watchStateDao().get(currentMediaId)
                             resumeMs = existingState?.positionMs ?: 0L
-                            val cachedEntity = app.database.videoIndexDao().getByMediaId(mediaId)
-                            title = cachedEntity?.title ?: existingState?.title?.ifBlank { null } ?: mediaId
+                            val cachedEntity = app.database.videoIndexDao().getByMediaId(currentMediaId)
+                            title = cachedEntity?.title ?: existingState?.title?.ifBlank { null } ?: currentMediaId
 
                             // Parse chatId and msgId to get the LIVE session fileId from Telegram
-                            val parts = mediaId.removePrefix("tg:").split(":")
+                            val parts = currentMediaId.removePrefix("tg:").split(":")
                             val cId = parts.getOrNull(0)?.toLongOrNull()
                             val mId = parts.getOrNull(1)?.toLongOrNull()
                             val resolvedChatId = cId ?: cachedEntity?.chatId
@@ -709,10 +710,10 @@ class MainActivity : ComponentActivity() {
 
                         var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
                         var prevEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
-                        LaunchedEffect(mediaId, playlistId) {
-                            val cur = app.database.videoIndexDao().getByMediaId(mediaId)
+                        LaunchedEffect(currentMediaId, playlistId) {
+                            val cur = app.database.videoIndexDao().getByMediaId(currentMediaId)
                             val playlistItems = if (playlistId != null) app.database.playlistDao().getItems(playlistId) else emptyList()
-                            val curPos = playlistItems.firstOrNull { it.mediaId == mediaId }?.position ?: -1
+                            val curPos = playlistItems.firstOrNull { it.mediaId == currentMediaId }?.position ?: -1
                             nextEntity = if (playlistId != null) {
                                 app.database.playlistDao().nextItem(playlistId, curPos)?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
                             } else if (cur != null) {
@@ -762,39 +763,21 @@ class MainActivity : ComponentActivity() {
                             autoPlayByDefault = false,
                             onPlayPrevious = prevEntity?.let { prev ->
                                 {
-                                    val extraParams = buildString {
-                                        if (playlistId != null) append("?playlistId=$playlistId")
-                                        if (!finalShowName.isNullOrBlank()) {
-                                            append(if (isEmpty()) "?" else "&")
-                                            append("showName=${URLEncoder.encode(finalShowName, "UTF-8")}")
-                                        }
-                                    }
-                                    val prevRoute = "player/${URLEncoder.encode(prev.mediaId, "UTF-8")}$extraParams"
-                                    navController.navigate(prevRoute) {
-                                        popUpTo("player/{mediaId}?playlistId={playlistId}&showName={showName}") { inclusive = true }
-                                    }
+                                    resumeMs = 0L
+                                    currentMediaId = prev.mediaId
                                 }
                             },
                             onPlayNext = nextEntity?.let { next ->
                                 {
-                                    val extraParams = buildString {
-                                        if (playlistId != null) append("?playlistId=$playlistId")
-                                        if (!finalShowName.isNullOrBlank()) {
-                                            append(if (isEmpty()) "?" else "&")
-                                            append("showName=${URLEncoder.encode(finalShowName, "UTF-8")}")
-                                        }
-                                    }
-                                    val nextRoute = "player/${URLEncoder.encode(next.mediaId, "UTF-8")}$extraParams"
-                                    navController.navigate(nextRoute) {
-                                        popUpTo("player/{mediaId}?playlistId={playlistId}&showName={showName}") { inclusive = true }
-                                    }
+                                    resumeMs = 0L
+                                    currentMediaId = next.mediaId
                                 }
                             },
                             onPositionUpdate = { positionMs, durationMs ->
                                 scope.launch {
                                     app.database.watchStateDao().upsert(
                                         WatchStateEntity(
-                                            mediaId = mediaId,
+                                            mediaId = currentMediaId,
                                             positionMs = positionMs,
                                             durationMs = durationMs,
                                             lastWatchedEpochSec = System.currentTimeMillis() / 1000,
