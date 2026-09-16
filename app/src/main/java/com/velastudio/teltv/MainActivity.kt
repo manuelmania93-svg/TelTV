@@ -676,6 +676,7 @@ class MainActivity : ComponentActivity() {
 
                         LaunchedEffect(currentMediaId) {
                             isResolving = true
+                            fileId = null // Clear stale fileId so previous episode is not passed downstream
                             val existingState = app.database.watchStateDao().get(currentMediaId)
                             resumeMs = if (currentMediaId != initialMediaId) 0L else (existingState?.positionMs ?: 0L)
                             val cachedEntity = app.database.videoIndexDao().getByMediaId(currentMediaId)

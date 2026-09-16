@@ -74,22 +74,19 @@ fun PlayerScreen(
     fun resolvedUri(): String? =
         directUri ?: fileId?.let { TdLibAwareDataSourceFactory.uriForFile(it).toString() }
 
-    LaunchedEffect(fileId) {
+    LaunchedEffect(controller, fileId, directUri) {
+        val mc = controller ?: return@LaunchedEffect
+        val uri = resolvedUri() ?: return@LaunchedEffect
         currentPositionMs = resumePositionMs
         durationMs = 0L
         autoPlayTriggered = false
         showAutoPlayOverlay = false
-        controller?.let { mc ->
-            val uri = resolvedUri()
-            if (uri != null) {
-                playerErrorMessage = null
-                mc.setMediaItem(ExoMediaItem.fromUri(uri))
-                mc.seekTo(resumePositionMs)
-                mc.prepare()
-                mc.playWhenReady = true
-                mc.play()
-            }
-        }
+        playerErrorMessage = null
+        mc.setMediaItem(ExoMediaItem.fromUri(uri))
+        mc.seekTo(resumePositionMs)
+        mc.prepare()
+        mc.playWhenReady = true
+        mc.play()
     }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     val savedAutoPlay by prefs.autoPlayEnabled.collectAsState(initial = true)
@@ -220,7 +217,7 @@ fun PlayerScreen(
         }
     }
 
-    DisposableEffect(fileId, directUri) {
+    DisposableEffect(Unit) {
         val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
 
@@ -266,31 +263,15 @@ fun PlayerScreen(
 
         controllerFuture.addListener({
             val mediaController = controllerFuture.get()
-            controller = mediaController
             mediaController.addListener(listener)
-
-            val uri = resolvedUri()
-            if (uri != null) {
-                playerErrorMessage = null
-                mediaController.setMediaItem(ExoMediaItem.fromUri(uri))
-                mediaController.seekTo(resumePositionMs)
-                mediaController.prepare()
-                mediaController.playWhenReady = true
-                mediaController.play()
-            } else {
-                playerErrorMessage = "Couldn't find anything to play."
-            }
+            controller = mediaController
         }, MoreExecutors.directExecutor())
 
         onDispose {
             controller?.let { mediaController ->
                 mediaController.removeListener(listener)
                 onPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0))
-                val activeUri = mediaController.currentMediaItem?.localConfiguration?.uri?.toString()
-                val outgoingUri = resolvedUri()?.toString()
-                if (activeUri == null || activeUri == outgoingUri) {
-                    mediaController.stop()
-                }
+                mediaController.stop()
             }
             MediaController.releaseFuture(controllerFuture)
             controller = null
