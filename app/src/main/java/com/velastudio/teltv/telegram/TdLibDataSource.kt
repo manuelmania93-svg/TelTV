@@ -100,9 +100,6 @@ class TdLibDataSource(
     override fun close() {
         runCatching { file?.close() }
         file = null
-        if (!isFullyDownloaded) {
-            client.cancelDownload(fileId)
-        }
     }
 
     private fun updateDownloadedBoundary(tdFile: TdApi.File) {
