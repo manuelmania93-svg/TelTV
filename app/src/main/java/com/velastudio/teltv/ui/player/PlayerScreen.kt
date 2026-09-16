@@ -484,7 +484,8 @@ fun PlayerScreen(
                     useController = false
                     keepScreenOn = true
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    findViewById<android.view.View>(androidx.media3.ui.R.id.exo_shutter)?.visibility = android.view.View.GONE
+                    val shutter = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_shutter)
+                    (shutter?.parent as? android.view.ViewGroup)?.removeView(shutter)
                     playerViewRef = this
                     subtitleView?.apply {
                         setFractionalTextSize(0.065f) // Large readable subtitles for TV

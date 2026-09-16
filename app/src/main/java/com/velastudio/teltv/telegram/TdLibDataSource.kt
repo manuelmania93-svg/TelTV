@@ -82,6 +82,7 @@ class TdLibDataSource(
                     bytesRemaining -= read
                     readPosition += read
                     bytesTransferred(read)
+                    attempts = 0
                     return read
                 }
             }
