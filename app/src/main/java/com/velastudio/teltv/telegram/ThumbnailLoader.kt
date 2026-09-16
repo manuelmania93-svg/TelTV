@@ -54,16 +54,12 @@ class ThumbnailLoader(
         return scope.launch {
             runCatching { telegram.downloadThumbnail(fileId) }
                 .onSuccess { path ->
-                    cache(fileId, path)
-                    onResolved(path)
+                    if (path.isNotBlank() && java.io.File(path).exists()) {
+                        cache(fileId, path)
+                        onResolved(path)
+                    }
                 }
                 .onFailure { Timber.w(it, "Thumbnail download failed for fileId=%d", fileId) }
-        }.also { job ->
-            job.invokeOnCompletion { cause ->
-                if (cause is kotlinx.coroutines.CancellationException) {
-                    telegram.cancelDownload(fileId)
-                }
-            }
         }
     }
 }

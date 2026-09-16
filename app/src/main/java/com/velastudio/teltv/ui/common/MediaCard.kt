@@ -66,8 +66,8 @@ fun PosterCard(
 
     LaunchedEffect(title, fallbackTitle, enableTmdb) {
         if (enableTmdb) {
-            val direct = TmdbMetadataProvider.getMetadata(title)
-            tmdbMeta = direct ?: fallbackTitle?.let { TmdbMetadataProvider.getMetadata(it) }
+            val showPoster = fallbackTitle?.let { TmdbMetadataProvider.getMetadata(it) }
+            tmdbMeta = showPoster ?: TmdbMetadataProvider.getMetadata(title)
         } else {
             tmdbMeta = null
         }
@@ -94,7 +94,8 @@ fun PosterCard(
             .semantics { this.contentDescription = contentDescription }
     ) {
         Box(Modifier.fillMaxSize()) {
-            val imageSource = localThumbPath ?: tmdbMeta?.posterUrl
+            val imageSource = localThumbPath?.takeIf { it.isNotBlank() && java.io.File(it).exists() }
+                ?: tmdbMeta?.posterUrl
             if (imageSource != null) {
                 AsyncImage(
                     model = imageSource,

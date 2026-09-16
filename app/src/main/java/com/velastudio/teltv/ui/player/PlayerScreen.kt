@@ -68,6 +68,7 @@ fun PlayerScreen(
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
     var autoPlayTriggered by remember { mutableStateOf(false) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     val savedAutoPlay by prefs.autoPlayEnabled.collectAsState(initial = true)
     var autoPlayNext by remember { mutableStateOf(true) }
     LaunchedEffect(savedAutoPlay) {
@@ -373,6 +374,15 @@ fun PlayerScreen(
         mediaController.playWhenReady = true
     }
 
+    LaunchedEffect(controller, fileId, directUri) {
+        val mediaController = controller ?: return@LaunchedEffect
+        delay(150) // Wait for outgoing screen to finish window detachment
+        playerViewRef?.let { pv ->
+            pv.player = null
+            pv.player = mediaController
+        }
+    }
+
     val focusRequester = remember { FocusRequester() }
     val playPauseFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -471,8 +481,8 @@ fun PlayerScreen(
                 PlayerView(ctx).apply {
                     useController = false
                     keepScreenOn = true
-                    keepScreenOn = true
-                    keepScreenOn = true
+                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    playerViewRef = this
                     subtitleView?.apply {
                         setFractionalTextSize(0.065f) // Large readable subtitles for TV
                         setStyle(

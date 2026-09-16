@@ -606,7 +606,7 @@ class TelegramClient(private val context: Context) {
                 unregisterFileListener(fileId, listener)
                 cancelDownload(fileId)
             }
-            c.send(TdApi.DownloadFile(fileId, 1, 0, 0, false)) { res ->
+            c.send(TdApi.DownloadFile(fileId, 16, 0, 0, false)) { res ->
                 if (res is TdApi.File && res.local?.isDownloadingCompleted == true && !res.local.path.isNullOrBlank()) {
                     unregisterFileListener(fileId, listener)
                     if (cont.isActive) cont.resume(res.local.path)
