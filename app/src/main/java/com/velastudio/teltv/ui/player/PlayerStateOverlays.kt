@@ -121,10 +121,11 @@ fun SeekingFeedbackBadge(seekText: String?, isForward: Boolean) {
 @Composable
 fun AutoPlayCountdownOverlay(
     nextTitle: String,
+    initialSeconds: Int = 5,
     onPlayNow: () -> Unit,
     onCancel: () -> Unit
 ) {
-    var secondsRemaining by remember { mutableStateOf(5) }
+    var secondsRemaining by remember(initialSeconds) { mutableStateOf(initialSeconds) }
     val playNowFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {

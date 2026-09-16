@@ -247,7 +247,8 @@ fun PlayerScreen(
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_ENDED) {
                     if (autoPlayNext && onPlayNext != null && nextTitle != null) {
-                        showAutoPlayOverlay = true
+                        showAutoPlayOverlay = false
+                        onPlayNext()
                     } else {
                         onPlaybackEnded()
                     }
@@ -311,16 +312,21 @@ fun PlayerScreen(
 
     LaunchedEffect(controller, isPlaying, autoPlayNext, onPlayNext) {
         val mediaController = controller ?: return@LaunchedEffect
+        var tickCount = 0
         while (true) {
-            delay(POSITION_SAVE_INTERVAL_MS)
+            delay(1000L) // 1-second precision tracking
             val dur = mediaController.duration
             val pos = mediaController.currentPosition
             if (dur > 0) {
-                onPositionUpdate(pos, dur)
-                // Smart Autoplay trigger: If within last 12 seconds of a video (>1 min duration)
+                tickCount++
+                if (tickCount >= 5) {
+                    tickCount = 0
+                    onPositionUpdate(pos, dur)
+                }
+                // Autoplay trigger
                 if (dur > 60_000L && pos > 0L) {
                     val remaining = dur - pos
-                    if (remaining in 1..12_000L && autoPlayNext && onPlayNext != null && !showAutoPlayOverlay && !autoPlayTriggered) {
+                    if (remaining in 1..10_000L && autoPlayNext && onPlayNext != null && !showAutoPlayOverlay && !autoPlayTriggered) {
                         autoPlayTriggered = true
                         showAutoPlayOverlay = true
                     }
@@ -594,8 +600,10 @@ fun PlayerScreen(
         }
 
         if (showAutoPlayOverlay && nextTitle != null && onPlayNext != null) {
+            val remainingSec = maxOf(1, ((durationMs - currentPositionMs) / 1000).toInt())
             AutoPlayCountdownOverlay(
                 nextTitle = nextTitle?.let { MediaTitleCleaner.clean(it) } ?: "Next Episode",
+                initialSeconds = remainingSec,
                 onPlayNow = {
                     showAutoPlayOverlay = false
                     onPlayNext()
