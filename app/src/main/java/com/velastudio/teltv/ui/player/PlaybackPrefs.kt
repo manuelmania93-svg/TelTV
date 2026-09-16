@@ -3,6 +3,7 @@ package com.velastudio.teltv.ui.player
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -15,6 +16,7 @@ private val Context.playbackDataStore by preferencesDataStore(name = "playback_p
 class PlaybackPrefs(private val context: Context) {
     companion object {
         val KEY_SKIP_MS = longPreferencesKey("skip_increment_ms")
+        val KEY_ASPECT_RATIO_4X3 = intPreferencesKey("aspect_ratio_4x3")
         val KEY_AUTOPLAY = booleanPreferencesKey("autoplay_enabled")
         val KEY_DIALOGUE_BOOST = booleanPreferencesKey("dialogue_boost")
         val KEY_FAST_MODE = booleanPreferencesKey("fast_mode_enabled")
@@ -80,6 +82,14 @@ class PlaybackPrefs(private val context: Context) {
 
     suspend fun setShowPinnedVideos(enabled: Boolean) {
         context.playbackDataStore.edit { it[KEY_SHOW_PINNED] = enabled }
+    }
+
+    val aspectRatio4x3: Flow<Int> = context.playbackDataStore.data.map {
+        it[KEY_ASPECT_RATIO_4X3] ?: 0
+    }
+
+    suspend fun setAspectRatio4x3(mode: Int) {
+        context.playbackDataStore.edit { it[KEY_ASPECT_RATIO_4X3] = mode }
     }
 
 }
