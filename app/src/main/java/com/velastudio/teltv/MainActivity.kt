@@ -677,7 +677,7 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(currentMediaId) {
                             isResolving = true
                             val existingState = app.database.watchStateDao().get(currentMediaId)
-                            resumeMs = existingState?.positionMs ?: 0L
+                            resumeMs = if (currentMediaId != initialMediaId) 0L else (existingState?.positionMs ?: 0L)
                             val cachedEntity = app.database.videoIndexDao().getByMediaId(currentMediaId)
                             title = cachedEntity?.title ?: existingState?.title?.ifBlank { null } ?: currentMediaId
 

@@ -70,6 +70,24 @@ fun PlayerScreen(
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
     var autoPlayTriggered by remember { mutableStateOf(false) }
+
+    LaunchedEffect(fileId) {
+        currentPositionMs = resumePositionMs
+        durationMs = 0L
+        autoPlayTriggered = false
+        showAutoPlayOverlay = false
+        controller?.let { mc ->
+            val uri = resolvedUri()
+            if (uri != null) {
+                playerErrorMessage = null
+                mc.setMediaItem(ExoMediaItem.fromUri(uri))
+                mc.seekTo(resumePositionMs)
+                mc.prepare()
+                mc.playWhenReady = true
+                mc.play()
+            }
+        }
+    }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     val savedAutoPlay by prefs.autoPlayEnabled.collectAsState(initial = true)
     var autoPlayNext by remember { mutableStateOf(true) }
