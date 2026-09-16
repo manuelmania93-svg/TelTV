@@ -1,5 +1,7 @@
 package com.velastudio.teltv.ui.player
 
+import com.velastudio.teltv.R
+
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -478,7 +480,7 @@ fun PlayerScreen(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx: Context ->
-                PlayerView(ctx).apply {
+                (android.view.LayoutInflater.from(ctx).inflate(R.layout.teltv_player_view, null, false) as PlayerView).apply {
                     useController = false
                     keepScreenOn = true
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
