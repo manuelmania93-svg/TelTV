@@ -71,6 +71,9 @@ fun PlayerScreen(
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
     var autoPlayTriggered by remember { mutableStateOf(false) }
 
+    fun resolvedUri(): String? =
+        directUri ?: fileId?.let { TdLibAwareDataSourceFactory.uriForFile(it).toString() }
+
     LaunchedEffect(fileId) {
         currentPositionMs = resumePositionMs
         durationMs = 0L
@@ -148,8 +151,7 @@ fun PlayerScreen(
     var seekingIsForward by remember { mutableStateOf(true) }
     var lastSeekTimestamp by remember { mutableStateOf(0L) }
 
-    fun resolvedUri(): String? =
-        directUri ?: fileId?.let { TdLibAwareDataSourceFactory.uriForFile(it).toString() }
+
 
     fun applySubtitleFile(file: java.io.File, lang: String, label: String, offsetMs: Long = 0L) {
         val mediaController = controller ?: return
