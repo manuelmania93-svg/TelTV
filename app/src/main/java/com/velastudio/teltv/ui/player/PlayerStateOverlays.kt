@@ -9,7 +9,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.tv.material3.Border
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -192,14 +198,14 @@ fun AutoPlayCountdownOverlay(
                 OutlinedButton(
                     onClick = onCancel,
                     modifier = Modifier.height(34.dp),
-                    shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
-                    colors = ButtonDefaults.outlinedButtonColors(
+                    shape = OutlinedButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                    colors = OutlinedButtonDefaults.colors(
                         containerColor = Color.Transparent,
                         focusedContainerColor = Color.White.copy(alpha = 0.2f),
                         contentColor = Color.White,
                         focusedContentColor = Color.White
                     ),
-                    border = ButtonDefaults.outlinedButtonBorder(
+                    border = OutlinedButtonDefaults.border(
                         border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), RoundedCornerShape(8.dp)),
                         focusedBorder = Border(BorderStroke(1.dp, Color.White), RoundedCornerShape(8.dp))
                     ),
