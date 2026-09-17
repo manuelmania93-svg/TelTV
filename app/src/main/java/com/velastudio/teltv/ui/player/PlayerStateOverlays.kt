@@ -140,39 +140,72 @@ fun AutoPlayCountdownOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.8f)),
+            .background(Color.Transparent), // No dimming of the background video
         contentAlignment = Alignment.BottomEnd
     ) {
         Column(
             modifier = Modifier
-                .padding(48.dp)
-                .background(Color(0xFF1E1E1E), RoundedCornerShape(16.dp))
-                .padding(28.dp)
-                .widthIn(min = 340.dp, max = 460.dp)
+                .padding(end = 28.dp, bottom = 28.dp)
+                .background(Color(0xE6141820), RoundedCornerShape(12.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .widthIn(min = 260.dp, max = 340.dp)
         ) {
-            Text(
-                text = "Next Episode in ${secondsRemaining}s...",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Next in ${secondsRemaining}s",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFFFFD54F),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = nextTitle,
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.LightGray,
-                maxLines = 2
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = onPlayNow,
-                    modifier = Modifier.focusRequester(playNowFocusRequester)
+                    modifier = Modifier
+                        .focusRequester(playNowFocusRequester)
+                        .height(34.dp),
+                    shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                    colors = ButtonDefaults.colors(
+                        containerColor = Color(0xFFFFC107),
+                        focusedContainerColor = Color(0xFFFFD54F),
+                        contentColor = Color.Black,
+                        focusedContentColor = Color.Black
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Text("Play Now")
+                    Text("▶ Play Now", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
-                OutlinedButton(onClick = onCancel) {
-                    Text("Cancel")
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.height(34.dp),
+                    shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.Transparent,
+                        focusedContainerColor = Color.White.copy(alpha = 0.2f),
+                        contentColor = Color.White,
+                        focusedContentColor = Color.White
+                    ),
+                    border = ButtonDefaults.outlinedButtonBorder(
+                        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), RoundedCornerShape(8.dp)),
+                        focusedBorder = Border(BorderStroke(1.dp, Color.White), RoundedCornerShape(8.dp))
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                ) {
+                    Text("Cancel", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
