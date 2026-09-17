@@ -206,8 +206,8 @@ fun AutoPlayCountdownOverlay(
                         focusedContentColor = Color.White
                     ),
                     border = OutlinedButtonDefaults.border(
-                        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), RoundedCornerShape(8.dp)),
-                        focusedBorder = Border(BorderStroke(1.dp, Color.White), RoundedCornerShape(8.dp))
+                        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.4f))),
+                        focusedBorder = Border(BorderStroke(1.dp, Color.White))
                     ),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                 ) {
