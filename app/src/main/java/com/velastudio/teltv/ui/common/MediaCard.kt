@@ -94,8 +94,12 @@ fun PosterCard(
             .semantics { this.contentDescription = contentDescription }
     ) {
         Box(Modifier.fillMaxSize()) {
-            val imageSource = localThumbPath?.takeIf { it.isNotBlank() && java.io.File(it).exists() }
-                ?: tmdbMeta?.posterUrl
+            val imageSource = if (!enableTmdb) {
+                null // Fast mode: zero bitmap allocations
+            } else {
+                // Prioritize official TMDB/Cinemeta poster art over random embedded Telegram video frames!
+                tmdbMeta?.posterUrl ?: localThumbPath?.takeIf { it.isNotBlank() && java.io.File(it).exists() }
+            }
             if (imageSource != null) {
                 AsyncImage(
                     model = imageSource,

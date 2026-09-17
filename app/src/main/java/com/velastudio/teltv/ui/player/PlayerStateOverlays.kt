@@ -146,59 +146,53 @@ fun AutoPlayCountdownOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Transparent), // No dimming of the background video
-        contentAlignment = Alignment.BottomEnd
+            .background(Color.Transparent),
+        contentAlignment = Alignment.BottomStart // Directly in bottom-left corner
     ) {
         Column(
             modifier = Modifier
-                .padding(end = 28.dp, bottom = 28.dp)
-                .background(Color(0xE6141820), RoundedCornerShape(12.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .widthIn(min = 260.dp, max = 340.dp)
+                .padding(start = 24.dp, bottom = 24.dp)
+                .background(Color(0x800E121A), RoundedCornerShape(10.dp)) // Translucent dark glass
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .widthIn(min = 220.dp, max = 290.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Next in ${secondsRemaining}s",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFFFFD54F),
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Next in ${secondsRemaining}s",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFFFD54F),
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = nextTitle,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = onPlayNow,
                     modifier = Modifier
                         .focusRequester(playNowFocusRequester)
-                        .height(34.dp),
-                    shape = ButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                        .height(28.dp),
+                    shape = ButtonDefaults.shape(RoundedCornerShape(6.dp)),
                     colors = ButtonDefaults.colors(
                         containerColor = Color(0xFFFFC107),
                         focusedContainerColor = Color(0xFFFFD54F),
                         contentColor = Color.Black,
                         focusedContentColor = Color.Black
                     ),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                 ) {
-                    Text("▶ Play Now", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("▶ Play Now", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
                 OutlinedButton(
                     onClick = onCancel,
-                    modifier = Modifier.height(34.dp),
-                    shape = OutlinedButtonDefaults.shape(RoundedCornerShape(8.dp)),
+                    modifier = Modifier.height(28.dp),
+                    shape = OutlinedButtonDefaults.shape(RoundedCornerShape(6.dp)),
                     colors = OutlinedButtonDefaults.colors(
                         containerColor = Color.Transparent,
                         focusedContainerColor = Color.White.copy(alpha = 0.2f),
@@ -206,12 +200,12 @@ fun AutoPlayCountdownOverlay(
                         focusedContentColor = Color.White
                     ),
                     border = OutlinedButtonDefaults.border(
-                        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.4f))),
+                        border = Border(BorderStroke(1.dp, Color.White.copy(alpha = 0.35f))),
                         focusedBorder = Border(BorderStroke(1.dp, Color.White))
                     ),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                 ) {
-                    Text("Cancel", style = MaterialTheme.typography.labelMedium)
+                    Text("Cancel", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

@@ -408,8 +408,12 @@ class MainActivity : ComponentActivity() {
                             activeMarathon = app.database.playlistDao().getByName(marathonName)
                         }
 
+                        val browsePlaybackPrefs = remember { com.velastudio.teltv.ui.player.PlaybackPrefs(app) }
+                        val fastModeActive by browsePlaybackPrefs.fastModeEnabled.collectAsState(initial = false)
+
                         BrowseScreen(
                             channelTitle = title,
+                            fastModeEnabled = fastModeActive,
                             pinnedVideo = pinnedVideo,
                             isAscending = isAscending,
                             onToggleSort = { isAscending = !isAscending },
