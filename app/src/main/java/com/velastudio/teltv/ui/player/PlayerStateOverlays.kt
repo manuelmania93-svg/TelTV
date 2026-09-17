@@ -147,11 +147,11 @@ fun AutoPlayCountdownOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent),
-        contentAlignment = Alignment.BottomStart // Directly in bottom-left corner
+        contentAlignment = Alignment.BottomEnd // Positioned in bottom-right corner
     ) {
         Column(
             modifier = Modifier
-                .padding(start = 24.dp, bottom = 24.dp)
+                .padding(end = 24.dp, bottom = 24.dp)
                 .background(Color(0x800E121A), RoundedCornerShape(10.dp)) // Translucent dark glass
                 .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp)
