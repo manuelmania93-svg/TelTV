@@ -274,11 +274,15 @@ class MainActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val chatId = backStackEntry.arguments?.getLong("chatId") ?: return@composable
                         val title = URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
-                        var topics by remember { mutableStateOf<List<com.velastudio.teltv.telegram.TelegramClient.ForumTopicDetail>>(emptyList()) }
-                        var isLoading by remember { mutableStateOf(true) }
+                        val cachedTopics = remember(chatId) { app.telegramClient.getCachedForumTopics(chatId) }
+                        var topics by remember(chatId) { mutableStateOf<List<com.velastudio.teltv.telegram.TelegramClient.ForumTopicDetail>>(cachedTopics ?: emptyList()) }
+                        var isLoading by remember(chatId) { mutableStateOf(cachedTopics == null) }
 
                         LaunchedEffect(chatId) {
-                            topics = app.telegramClient.getForumTopics(chatId)
+                            val fresh = app.telegramClient.getForumTopics(chatId)
+                            if (fresh.isNotEmpty() || topics.isEmpty()) {
+                                topics = fresh
+                            }
                             isLoading = false
                         }
 

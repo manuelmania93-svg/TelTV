@@ -539,31 +539,19 @@ class TelegramClient(private val context: Context) {
 
     var onNewVideoMessageListener: ((org.drinkless.tdlib.TdApi.Message) -> Unit)? = null
 
+    private val forumTopicsCache = java.util.concurrent.ConcurrentHashMap<Long, List<ForumTopicDetail>>()
+
+    fun getCachedForumTopics(chatId: Long): List<ForumTopicDetail>? = forumTopicsCache[chatId]
+
     suspend fun getForumTopics(chatId: Long): List<ForumTopicDetail> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
             val result = send(org.drinkless.tdlib.TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100)) as org.drinkless.tdlib.TdApi.ForumTopics
-            val semaphore = kotlinx.coroutines.sync.Semaphore(6)
-            kotlinx.coroutines.coroutineScope {
-                result.topics.map { topic ->
-                    async {
-                        semaphore.withPermit {
-                            val count = runCatching {
-                                val search = send(
-                                    org.drinkless.tdlib.TdApi.SearchChatMessages(
-                                        chatId,
-                                        org.drinkless.tdlib.TdApi.MessageTopicForum(topic.info.forumTopicId),
-                                        "", null, 0L, 0, 1,
-                                        org.drinkless.tdlib.TdApi.SearchMessagesFilterVideo()
-                                    )
-                                ) as org.drinkless.tdlib.TdApi.FoundChatMessages
-                                search.totalCount
-                            }.getOrDefault(0)
-                            ForumTopicDetail(topic.info, count)
-                        }
-                    }
-                }.map { it.await() }
+            val topicsList = result.topics.map { topic ->
+                ForumTopicDetail(topic.info, 0)
             }
-        }.getOrDefault(emptyList())
+            forumTopicsCache[chatId] = topicsList
+            topicsList
+        }.getOrDefault(forumTopicsCache[chatId] ?: emptyList())
     }
 
         private val forumChatCache = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
