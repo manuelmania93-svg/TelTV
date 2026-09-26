@@ -1,0 +1,151 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -12,8 +12,8 @@ android {
+         applicationId = "com.velastudio.teltv"
+         minSdk = 26
+         targetSdk = 34
+-        versionCode = 68
+-        versionName = "0.3.39"
++        versionCode = 69
++        versionName = "0.3.40"
+
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+diff --git a/app/src/main/java/com/velastudio/teltv/telegram/TelegramClient.kt b/app/src/main/java/com/velastudio/teltv/telegram/TelegramClient.kt
+--- a/app/src/main/java/com/velastudio/teltv/telegram/TelegramClient.kt
++++ b/app/src/main/java/com/velastudio/teltv/telegram/TelegramClient.kt
+@@ -566,10 +566,20 @@ class TelegramClient(
+         }.getOrDefault(emptyList())
+     }
+
+-    suspend fun isForumChat(chatId: Long): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+-        runCatching {
+-            val chat = send(org.drinkless.tdlib.TdApi.GetChat(chatId)) as org.drinkless.tdlib.TdApi.Chat
+-            chat.viewAsTopics
+-        }.getOrDefault(false)
++    private val forumChatCache = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
++
++    fun recordForumChat(chatId: Long, isForum: Boolean) {
++        forumChatCache[chatId] = isForum
++    }
++
++    suspend fun isForumChat(chatId: Long): Boolean {
++        forumChatCache[chatId]?.let { return it }
++        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
++            runCatching {
++                val chat = send(org.drinkless.tdlib.TdApi.GetChat(chatId)) as org.drinkless.tdlib.TdApi.Chat
++                val isForum = chat.viewAsTopics
++                forumChatCache[chatId] = isForum
++                isForum
++            }.getOrDefault(false)
++        }
+     }
+
+     suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40, topicId: Int = 0): VideoMessagesResult {
+diff --git a/app/src/main/java/com/velastudio/teltv/ui/home/HomeScreen.kt b/app/src/main/java/com/velastudio/teltv/ui/home/HomeScreen.kt
+--- a/app/src/main/java/com/velastudio/teltv/ui/home/HomeScreen.kt
++++ b/app/src/main/java/com/velastudio/teltv/ui/home/HomeScreen.kt
+@@ -266,7 +266,27 @@ fun HomeScreen(
+                          (filterMode == HomeFilterMode.PINNED_ONLY && pinned.entries.isNotEmpty()) ||
+                          (filterMode == HomeFilterMode.FOLDERS_ONLY && folderRows.isNotEmpty())
+
+-        if (!hasContent && !isLoading) {
++        if (isLoading && !hasContent) {
++            item {
++                Box(
++                    modifier = Modifier
++                        .fillMaxWidth()
++                        .height(260.dp),
++                    contentAlignment = Alignment.Center
++                ) {
++                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
++                        androidx.compose.material3.CircularProgressIndicator(
++                            color = Color(0xFFFFC107),
++                            modifier = Modifier.size(44.dp)
++                        )
++                        Spacer(Modifier.height(16.dp))
++                        Text(
++                            text = "Loading channels and folders...",
++                            style = MaterialTheme.typography.bodyMedium,
++                            color = Color(0xFFB0BEC5)
++                        )
++                    }
++                }
++            }
++        } else if (!hasContent) {
+             item {
+                 Box(
+                     modifier = Modifier
+diff --git a/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt b/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt
+--- a/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt
++++ b/app/src/main/java/com/velastudio/teltv/ui/browse/BrowseScreen.kt
+@@ -62,7 +62,8 @@ fun BrowseScreen(
+     onDeleteMarathon: () -> Unit = {},
+     onStartMarathonFrom: (MediaItem) -> Unit = {},
+     onPlayFromBeginning: (MediaItem) -> Unit = {},
+-    onToggleWatched: (MediaItem) -> Unit = {}
++    onToggleWatched: (MediaItem) -> Unit = {},
++    isInitialLoading: Boolean = false
+ ) {
+     val items = pagingFlow.collectAsLazyPagingItems()
+     val gridState = rememberLazyGridState()
+@@ -108,9 +109,9 @@ fun BrowseScreen(
+         val refreshState = items.loadState.refresh
+
+         when {
+-            items.itemCount == 0 && refreshState is androidx.paging.LoadState.Loading -> {
++            items.itemCount == 0 && (isInitialLoading || refreshState is androidx.paging.LoadState.Loading) -> {
+                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+-                    androidx.compose.material3.CircularProgressIndicator()
++                    androidx.compose.material3.CircularProgressIndicator(color = androidx.compose.ui.graphics.Color(0xFFFFC107))
+                 }
+                 return@Column
+             }
+@@ -121,7 +122,7 @@ fun BrowseScreen(
+                 )
+                 return@Column
+             }
+-            items.itemCount == 0 && refreshState is androidx.paging.LoadState.NotLoading -> {
++            items.itemCount == 0 && refreshState is androidx.paging.LoadState.NotLoading && !isInitialLoading -> {
+                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                     Text(
+                         "Nothing here yet.",
+diff --git a/app/src/main/java/com/velastudio/teltv/MainActivity.kt b/app/src/main/java/com/velastudio/teltv/MainActivity.kt
+--- a/app/src/main/java/com/velastudio/teltv/MainActivity.kt
++++ b/app/src/main/java/com/velastudio/teltv/MainActivity.kt
+@@ -211,6 +211,8 @@ class MainActivity : ComponentActivity() {
+                                 )
+                             }
+
++                            pinned.forEach { app.telegramClient.recordForumChat(it.id, it.viewAsTopics) }
++                            folderMap.values.forEach { list -> list.forEach { app.telegramClient.recordForumChat(it.id, it.viewAsTopics) } }
+                             folderRowsState = dynamicFolderRows
+                             pinnedChatIds = (pinned.map { it.id } + folderMap.values.flatten().map { it.id }).distinct()
+                             isLoadingChannels = false
+@@ -370,12 +372,15 @@ class MainActivity : ComponentActivity() {
+
+                         var resumeFractions by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+                         var pinnedVideo by remember { mutableStateOf<MediaItem?>(null) }
++                        var isInitialLoading by remember { mutableStateOf(true) }
+                         LaunchedEffect(chatId) {
++                            isInitialLoading = true
+                             // refreshNewest runs first: corrects stale titles on already-cached rows
+                             // (e.g. after the caption-title fix) and prepends any new videos posted
+                             // since the last visit. ensureNextPage then fills the first page if the
+                             // cache was empty. Both are no-ops if nothing has changed.
+                             runCatching {
+                                 app.channelVideoRepository.refreshNewest(chatId)
+                                 app.channelVideoRepository.ensureNextPage(chatId)
+                             }.onFailure { Timber.w(it, "Failed to load channel videos for chatId=%d", chatId) }
++                            isInitialLoading = false
+
+                             // Silently pre-load up to thousands of remaining videos into Room in the background
+@@ -420,6 +425,7 @@ class MainActivity : ComponentActivity() {
+                             isAscending = isAscending,
+                             onToggleSort = { isAscending = !isAscending },
+                             pagingFlow = remember(chatId, isAscending) { app.channelVideoRepository.videoPager(chatId, isAscending) },
++                            isInitialLoading = isInitialLoading,
+                             activeMarathonName = activeMarathon?.name,
+                             onResumeMarathon = {
+                                 activeMarathon?.let { playlist ->

@@ -266,7 +266,29 @@ fun HomeScreen(
                          (filterMode == HomeFilterMode.PINNED_ONLY && pinned.entries.isNotEmpty()) ||
                          (filterMode == HomeFilterMode.FOLDERS_ONLY && folderRows.isNotEmpty())
 
-        if (!hasContent && !isLoading) {
+        if (isLoading && !hasContent) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(260.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = Color(0xFFFFC107),
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "Loading channels and folders...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFB0BEC5)
+                        )
+                    }
+                }
+            }
+        } else if (!hasContent) {
             item {
                 Box(
                     modifier = Modifier

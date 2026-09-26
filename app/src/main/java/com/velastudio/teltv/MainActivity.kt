@@ -211,6 +211,8 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            pinned.forEach { app.telegramClient.recordForumChat(it.id, it.viewAsTopics) }
+                            folderMap.values.forEach { list -> list.forEach { app.telegramClient.recordForumChat(it.id, it.viewAsTopics) } }
                             folderRowsState = dynamicFolderRows
                             pinnedChatIds = (pinned.map { it.id } + folderMap.values.flatten().map { it.id }).distinct()
                             isLoadingChannels = false
@@ -370,7 +372,9 @@ class MainActivity : ComponentActivity() {
 
                         var resumeFractions by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
                         var pinnedVideo by remember { mutableStateOf<MediaItem?>(null) }
+                        var isInitialLoading by remember { mutableStateOf(true) }
                         LaunchedEffect(chatId) {
+                            isInitialLoading = true
                             // refreshNewest runs first: corrects stale titles on already-cached rows
                             // (e.g. after the caption-title fix) and prepends any new videos posted
                             // since the last visit. ensureNextPage then fills the first page if the
@@ -379,6 +383,7 @@ class MainActivity : ComponentActivity() {
                                 app.channelVideoRepository.refreshNewest(chatId)
                                 app.channelVideoRepository.ensureNextPage(chatId)
                             }.onFailure { Timber.w(it, "Failed to load channel videos for chatId=%d", chatId) }
+                            isInitialLoading = false
 
                             // Silently pre-load up to thousands of remaining videos into Room in the background
                             scope.launch {
@@ -418,6 +423,7 @@ class MainActivity : ComponentActivity() {
                             isAscending = isAscending,
                             onToggleSort = { isAscending = !isAscending },
                             pagingFlow = remember(chatId, isAscending) { app.channelVideoRepository.videoPager(chatId, isAscending) },
+                            isInitialLoading = isInitialLoading,
                             activeMarathonName = activeMarathon?.name,
                             onResumeMarathon = {
                                 activeMarathon?.let { playlist ->

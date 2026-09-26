@@ -62,7 +62,8 @@ fun BrowseScreen(
     onDeleteMarathon: () -> Unit = {},
     onStartMarathonFrom: (MediaItem) -> Unit = {},
     onPlayFromBeginning: (MediaItem) -> Unit = {},
-    onToggleWatched: (MediaItem) -> Unit = {}
+    onToggleWatched: (MediaItem) -> Unit = {},
+    isInitialLoading: Boolean = false
 ) {
     val items = pagingFlow.collectAsLazyPagingItems()
     val gridState = rememberLazyGridState()
@@ -108,7 +109,7 @@ fun BrowseScreen(
         val refreshState = items.loadState.refresh
 
         when {
-            items.itemCount == 0 && refreshState is androidx.paging.LoadState.Loading -> {
+            items.itemCount == 0 && (isInitialLoading || refreshState is androidx.paging.LoadState.Loading) -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     androidx.compose.material3.CircularProgressIndicator()
                 }
@@ -121,7 +122,7 @@ fun BrowseScreen(
                 )
                 return@Column
             }
-            items.itemCount == 0 && refreshState is androidx.paging.LoadState.NotLoading -> {
+            items.itemCount == 0 && refreshState is androidx.paging.LoadState.NotLoading && !isInitialLoading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         "Nothing here yet.",

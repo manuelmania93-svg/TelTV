@@ -566,10 +566,18 @@ class TelegramClient(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    suspend fun isForumChat(chatId: Long): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        private val forumChatCache = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+
+    fun recordForumChat(chatId: Long, isForum: Boolean) {
+        forumChatCache[chatId] = isForum
+    }
+
+    suspend fun isForumChat(chatId: Long): Boolean = forumChatCache[chatId] ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
             val chat = send(org.drinkless.tdlib.TdApi.GetChat(chatId)) as org.drinkless.tdlib.TdApi.Chat
-            chat.viewAsTopics
+            val isForum = chat.viewAsTopics
+            forumChatCache[chatId] = isForum
+            isForum
         }.getOrDefault(false)
     }
 
