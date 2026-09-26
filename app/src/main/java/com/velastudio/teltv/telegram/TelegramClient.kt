@@ -128,8 +128,6 @@ class TelegramClient(private val context: Context) {
         }
 
         val safeLimit = limit.coerceIn(1L, 4L * 1024L * 1024L)
-        val latch = CountDownLatch(1)
-        var result: TdApi.File? = null
 
         fun hasBytes(f: TdApi.File?): Boolean {
             if (f == null) return false
@@ -147,35 +145,64 @@ class TelegramClient(private val context: Context) {
             return local.downloadOffset <= offset && downloadedUpTo >= (offset + minNeeded)
         }
 
-        val listener: (TdApi.File) -> Unit = { updatedFile ->
-            if (hasBytes(updatedFile)) {
-                result = updatedFile
-                latch.countDown()
-            }
-        }
-        registerFileListener(fileId, listener)
-
         if (hasBytes(cached)) {
-            result = cached
-            latch.countDown()
+            return cached
         }
 
-        c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
-            if (response is TdApi.Error) {
-                val err = "[code=${response.code}] ${response.message}"
-                lastDownloadErrors[fileId] = err
-                Timber.e("DownloadFile error for fileId=%d offset=%d: %s", fileId, offset, err)
-                latch.countDown()
+        var result: TdApi.File? = null
+        var attempts = 0
+        val maxAttempts = 4
+
+        while (attempts < maxAttempts && result == null) {
+            attempts++
+            val latch = CountDownLatch(1)
+
+            val listener: (TdApi.File) -> Unit = { updatedFile ->
+                if (hasBytes(updatedFile)) {
+                    result = updatedFile
+                    latch.countDown()
+                }
+            }
+            registerFileListener(fileId, listener)
+
+            val currentCache = fileCache[fileId]
+            if (hasBytes(currentCache)) {
+                result = currentCache
+                unregisterFileListener(fileId, listener)
+                return currentCache
+            }
+
+            c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
+                when (response) {
+                    is TdApi.File -> {
+                        fileCache[fileId] = response
+                        if (hasBytes(response)) {
+                            result = response
+                            lastDownloadErrors.remove(fileId)
+                            latch.countDown()
+                        }
+                    }
+                    is TdApi.Error -> {
+                        val err = "[code=${response.code}] ${response.message}"
+                        lastDownloadErrors[fileId] = err
+                        Timber.w("DownloadFile attempt %d for fileId=%d offset=%d failed: %s", attempts, fileId, offset, err)
+                        latch.countDown()
+                    }
+                }
+            }
+
+            val completed = latch.await(10, TimeUnit.SECONDS)
+            unregisterFileListener(fileId, listener)
+
+            if (result != null && hasBytes(result)) {
+                return result
+            }
+
+            if (attempts < maxAttempts) {
+                try { Thread.sleep(1200) } catch (_: InterruptedException) { break }
             }
         }
 
-        val completed = latch.await(30, TimeUnit.SECONDS)
-        unregisterFileListener(fileId, listener)
-
-        if (!completed && result == null) {
-            lastDownloadErrors[fileId] = "Timed out after 30s waiting for TDLib to write bytes"
-            Timber.w("DownloadFile timed out for fileId=%d offset=%d", fileId, offset)
-        }
         val candidate = result ?: fileCache[fileId]
         return if (hasBytes(candidate)) candidate else null
     }
@@ -193,6 +220,10 @@ class TelegramClient(private val context: Context) {
     }
 
     private val _cachedFolders = java.util.concurrent.CopyOnWriteArrayList<TdApi.ChatFolderInfo>()
+
+    @Volatile
+    var connectionState: TdApi.ConnectionState? = null
+        private set
 
     private var client: Client? = null
     var authState: TdApi.AuthorizationState? = null
@@ -218,6 +249,10 @@ class TelegramClient(private val context: Context) {
                     is TdApi.UpdateAuthorizationState -> {
                         authState = update.authorizationState
                         trySend(update.authorizationState)
+                    }
+                    is TdApi.UpdateConnectionState -> {
+                        connectionState = update.state
+                        Timber.i("TDLib connection state: %s", update.state.javaClass.simpleName)
                     }
                     is TdApi.UpdateChatFolders -> {
                         _cachedFolders.clear()
