@@ -399,6 +399,8 @@ class MainActivity : ComponentActivity() {
                         var resumeFractions by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
                         var pinnedVideo by remember { mutableStateOf<MediaItem?>(null) }
                         var isInitialLoading by remember { mutableStateOf(true) }
+                        var isShufflePreparing by remember { mutableStateOf(false) }
+                        var preloadJob by remember(chatId) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
                         LaunchedEffect(chatId) {
                             isInitialLoading = true
                             // refreshNewest runs first: corrects stale titles on already-cached rows
@@ -412,7 +414,7 @@ class MainActivity : ComponentActivity() {
                             isInitialLoading = false
 
                             // Silently pre-load up to thousands of remaining videos into Room in the background
-                            scope.launch {
+                            preloadJob = scope.launch {
                                 runCatching { app.channelVideoRepository.preloadRemaining(chatId) }
                             }
                             pinnedVideo = if (chatId <= -100_000_000_000_000_000L) null else {
@@ -451,6 +453,51 @@ class MainActivity : ComponentActivity() {
                             pagingFlow = remember(chatId, isAscending) { app.channelVideoRepository.videoPager(chatId, isAscending) },
                             isInitialLoading = isInitialLoading,
                             activeMarathonName = activeMarathon?.name,
+                            isShufflePreparing = isShufflePreparing,
+                            onShuffleEpisodes = {
+                                scope.launch {
+                                    if (isShufflePreparing) return@launch
+                                    isShufflePreparing = true
+                                    try {
+                                        preloadJob?.join()
+                                        val videos = app.database.videoIndexDao().getAllForChat(chatId).shuffled()
+                                        if (videos.isEmpty()) {
+                                            Timber.w("Shuffle requested for empty chatId=%d", chatId)
+                                            return@launch
+                                        }
+
+                                        val playlistDao = app.database.playlistDao()
+                                        val shuffleName = "$title Shuffle"
+                                        playlistDao.getByName(shuffleName)?.let { existing ->
+                                            playlistDao.clearItems(existing.id)
+                                            playlistDao.delete(existing.id)
+                                        }
+                                        val playlist = PlaylistEntity(
+                                            name = shuffleName,
+                                            createdEpochSec = System.currentTimeMillis() / 1000
+                                        ).let { it.copy(id = playlistDao.insert(it)) }
+
+                                        videos.forEachIndexed { index, video ->
+                                            playlistDao.addItem(
+                                                PlaylistItemEntity(
+                                                    playlistId = playlist.id,
+                                                    mediaId = video.mediaId,
+                                                    position = index,
+                                                    title = video.title,
+                                                    addedEpochSec = System.currentTimeMillis() / 1000
+                                                )
+                                            )
+                                        }
+                                        navController.navigate(
+                                            "player/${URLEncoder.encode(videos.first().mediaId, "UTF-8")}?playlistId=${playlist.id}&showName=${URLEncoder.encode(title, "UTF-8")}"
+                                        )
+                                    } catch (error: Exception) {
+                                        Timber.e(error, "Failed to prepare shuffled playback for chatId=%d", chatId)
+                                    } finally {
+                                        isShufflePreparing = false
+                                    }
+                                }
+                            },
                             onResumeMarathon = {
                                 activeMarathon?.let { playlist ->
                                     scope.launch {

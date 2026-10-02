@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.runtime.*
@@ -59,6 +60,8 @@ fun BrowseScreen(
     onCreateMarathon: () -> Unit,
     activeMarathonName: String? = null,
     onResumeMarathon: () -> Unit = {},
+    onShuffleEpisodes: () -> Unit = {},
+    isShufflePreparing: Boolean = false,
     onDeleteMarathon: () -> Unit = {},
     onStartMarathonFrom: (MediaItem) -> Unit = {},
     onPlayFromBeginning: (MediaItem) -> Unit = {},
@@ -94,6 +97,14 @@ fun BrowseScreen(
                     Icon(Icons.Filled.PlaylistPlay, contentDescription = "Marathon Mode")
                     Spacer(Modifier.width(8.dp))
                     Text(if (marathonModeEnabled) "Marathon: Click to Start" else "Marathon Mode: OFF")
+                }
+                Button(
+                    onClick = onShuffleEpisodes,
+                    enabled = !isShufflePreparing && !isInitialLoading
+                ) {
+                    Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle episodes")
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isShufflePreparing) "Preparing..." else "Shuffle Episodes")
                 }
                 Button(onClick = onToggleSort) {
                     Icon(Icons.Filled.SwapVert, contentDescription = "Sort")
