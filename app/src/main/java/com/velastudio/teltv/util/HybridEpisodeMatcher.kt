@@ -56,7 +56,9 @@ object HybridEpisodeMatcher {
         // 3. Anime standalone numbers (e.g. Naruto - 050)
         ANIME_NUM_REGEX.find(clean)?.let { match ->
             val episode = match.groupValues[1].toIntOrNull()
-            if (episode != null) {
+            val explicitlyMarked = match.value.trimStart().let { it.startsWith("-") || it.startsWith("#") }
+            val looksLikeYear = episode in 1900..2099 && !explicitlyMarked
+            if (episode != null && !looksLikeYear) {
                 val stem = clean.substring(0, match.range.first).trim().trim('-', '_', ':')
                 if (stem.isNotBlank()) {
                     return EpisodeSignature(normalizeStem(stem), null, episode)

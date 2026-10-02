@@ -12,6 +12,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Border
 import androidx.tv.material3.ButtonDefaults
@@ -31,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.C
@@ -285,11 +289,22 @@ fun TrackSelectorDialog(
 
     var onlineSubtitles by remember { mutableStateOf<List<OnlineSubtitle>>(emptyList()) }
     var isLoadingOnlineSubs by remember { mutableStateOf(false) }
+    var subtitleQuery by remember(videoTitle) { mutableStateOf(videoTitle) }
 
     LaunchedEffect(videoTitle) {
         if (videoTitle.isNotBlank()) {
             isLoadingOnlineSubs = true
             onlineSubtitles = OnlineSubtitleProvider.searchSubtitles(videoTitle)
+            isLoadingOnlineSubs = false
+        }
+    }
+
+    fun searchOnlineSubtitles() {
+        val query = subtitleQuery.trim()
+        if (query.isBlank() || isLoadingOnlineSubs) return
+        coroutineScope.launch {
+            isLoadingOnlineSubs = true
+            onlineSubtitles = OnlineSubtitleProvider.searchSubtitles(query)
             isLoadingOnlineSubs = false
         }
     }
@@ -417,6 +432,28 @@ fun TrackSelectorDialog(
             }
 
             if (selectedTab == 2) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = subtitleQuery,
+                        onValueChange = { subtitleQuery = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        placeholder = { Text("Series S01E02 or movie title") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { searchOnlineSubtitles() })
+                    )
+                    Button(
+                        onClick = ::searchOnlineSubtitles,
+                        enabled = !isLoadingOnlineSubs && subtitleQuery.isNotBlank()
+                    ) {
+                        Text("Search")
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 if (isLoadingOnlineSubs) {
                     Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {

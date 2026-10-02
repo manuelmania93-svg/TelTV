@@ -2,6 +2,7 @@ package com.velastudio.teltv.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MediaTitleCleanerTest {
@@ -27,5 +28,18 @@ class MediaTitleCleanerTest {
         assertNotNull(sig)
         assertEquals("narutoshippuden", sig!!.stem)
         assertEquals(50, sig.episode)
+    }
+
+    @Test
+    fun parseSignatureDoesNotTreatMovieOrEventYearAsEpisode() {
+        assertNull(HybridEpisodeMatcher.parseSignature("The.Matrix.1999.1080p.mkv"))
+        assertNull(HybridEpisodeMatcher.parseSignature("WWE 2000"))
+    }
+
+    @Test
+    fun parseSignatureKeepsExplicitAnimeEpisodeNumber() {
+        val sig = HybridEpisodeMatcher.parseSignature("One Piece - 1050")
+        assertNotNull(sig)
+        assertEquals(1050, sig!!.episode)
     }
 }
