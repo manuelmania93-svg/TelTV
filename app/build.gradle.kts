@@ -20,10 +20,10 @@ android {
 
             signingConfigs {
         create("release") {
-            storeFile = rootProject.file("teltv-release.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "YourSecurePassword123"
+            storeFile = rootProject.file(releaseKeystorePath ?: "teltv-release.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
             keyAlias = System.getenv("KEY_ALIAS") ?: "teltv"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "YourSecurePassword123"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
             enableV1Signing = true
             enableV2Signing = true
         }
