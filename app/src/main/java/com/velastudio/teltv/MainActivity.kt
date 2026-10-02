@@ -131,6 +131,30 @@ class MainActivity : ComponentActivity() {
                         var folderRowsState by remember { mutableStateOf<List<HomeRow>>(emptyList()) }
                         var isLoadingChannels by remember { mutableStateOf(true) }
                         var cacheClearedSignal by remember { mutableStateOf(0) }
+                        var hasObservedHomeResume by remember { mutableStateOf(false) }
+                        val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+
+                        val refreshWatchShelves: suspend () -> Unit = {
+                            runCatching {
+                                val watchDao = app.database.watchStateDao()
+                                continueWatching = watchDao.continueWatching().map {
+                                    ContinueWatchingEntry(
+                                        mediaId = it.mediaId,
+                                        title = it.title,
+                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
+                                        thumbnailFileId = it.thumbnailFileId
+                                    )
+                                }
+                                recentlyWatched = watchDao.recentlyWatched(limit = 20).map {
+                                    ContinueWatchingEntry(
+                                        mediaId = it.mediaId,
+                                        title = it.title,
+                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
+                                        thumbnailFileId = it.thumbnailFileId
+                                    )
+                                }
+                            }.onFailure { Timber.e(it, "Failed to refresh local watch shelves") }
+                        }
 
                         LaunchedEffect(Unit) {
                             runCatching {
@@ -138,24 +162,8 @@ class MainActivity : ComponentActivity() {
                                     .maybeEmergencyClear(app.filesDir.usableSpace)
                             }.onFailure { Timber.w(it, "Foreground cache trim skipped") }
 
+                            refreshWatchShelves()
                             runCatching {
-                                val watchStates = app.database.watchStateDao().continueWatching()
-                                continueWatching = watchStates.map {
-                                    ContinueWatchingEntry(
-                                        mediaId = it.mediaId,
-                                        title = it.title,
-                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                        thumbnailFileId = it.thumbnailFileId
-                                    )
-                                }
-                                recentlyWatched = app.database.watchStateDao().recentlyWatched(limit = 20).map {
-                                    ContinueWatchingEntry(
-                                        mediaId = it.mediaId,
-                                        title = it.title,
-                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                        thumbnailFileId = it.thumbnailFileId
-                                    )
-                                }
                                 watchLater = app.database.watchlistDao().getAll().mapNotNull { saved ->
                                     app.database.videoIndexDao().getByMediaId(saved.mediaId)?.let { video ->
                                         ContinueWatchingEntry(
@@ -216,6 +224,20 @@ class MainActivity : ComponentActivity() {
                             folderRowsState = dynamicFolderRows
                             pinnedChatIds = (pinned.map { it.id } + folderMap.values.flatten().map { it.id }).distinct()
                             isLoadingChannels = false
+                        }
+
+                        DisposableEffect(lifecycleOwner) {
+                            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                    if (hasObservedHomeResume) {
+                                        scope.launch { refreshWatchShelves() }
+                                    } else {
+                                        hasObservedHomeResume = true
+                                    }
+                                }
+                            }
+                            lifecycleOwner.lifecycle.addObserver(observer)
+                            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                         }
 
                         LaunchedEffect(cacheClearedSignal) {

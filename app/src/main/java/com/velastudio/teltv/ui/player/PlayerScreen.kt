@@ -63,6 +63,7 @@ fun PlayerScreen(
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var isPlaying by remember { mutableStateOf(true) }
     var currentPositionMs by remember { mutableStateOf(resumePositionMs) }
+    var resumeAfterLifecycleStop by remember { mutableStateOf(false) }
     var durationMs by remember { mutableStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(false) }
@@ -296,7 +297,31 @@ fun PlayerScreen(
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) controller?.pause()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    controller?.let { mediaController ->
+                        resumeAfterLifecycleStop = mediaController.mediaItemCount > 0 && mediaController.playWhenReady
+                        if (mediaController.mediaItemCount > 0) {
+                            onPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0L))
+                        }
+                        mediaController.pause()
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    if (resumeAfterLifecycleStop) {
+                        resumeAfterLifecycleStop = false
+                        playerErrorMessage = null
+                        controller?.let { mediaController ->
+                            if (mediaController.mediaItemCount > 0) {
+                                mediaController.prepare()
+                                mediaController.playWhenReady = true
+                                mediaController.play()
+                            }
+                        }
+                    }
+                }
+                else -> Unit
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
