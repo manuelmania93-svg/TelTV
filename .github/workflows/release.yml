@@ -8,6 +8,8 @@ permissions:
 
 jobs:
   release:
+    # Keep manual releases disabled until the rotated key and signing lineage are configured.
+    if: ${{ vars.ANDROID_RELEASE_SIGNING_READY == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
