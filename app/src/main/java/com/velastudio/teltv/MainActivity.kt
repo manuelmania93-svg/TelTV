@@ -337,8 +337,7 @@ class MainActivity : ComponentActivity() {
                                         val topic = topics[idx]
                                         androidx.tv.material3.Card(
                                             onClick = {
-                                                val raw = kotlin.math.abs(chatId)
-                                                val virtualId = -(raw * 100_000L + topic.info.forumTopicId)
+                                                val virtualId = app.telegramClient.virtualChatIdForTopic(chatId, topic.info.forumTopicId)
                                                 val encodedTopicTitle = URLEncoder.encode(topic.info.name, "UTF-8")
                                                 navController.navigate("browse/$virtualId/$encodedTopicTitle")
                                             },

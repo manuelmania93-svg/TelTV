@@ -46,18 +46,62 @@ data class VideoMessagesResult(
 
 class TelegramClient(private val context: Context) {
     private val lastDownloadErrors = ConcurrentHashMap<Int, String>()
+    private val forumTopicAliasPrefs by lazy {
+        context.getSharedPreferences("forum_topic_aliases", Context.MODE_PRIVATE)
+    }
+
+    fun virtualChatIdForTopic(realChatId: Long, topicId: Int): Long {
+        require(topicId > 0)
+        if (topicId < 100_000) {
+            val rawChatId = if (realChatId < 0) -realChatId else realChatId
+            return -(rawChatId * 100_000L + topicId)
+        }
+
+        val pairKey = "$realChatId:$topicId"
+        val pairPreferenceKey = "pair:$pairKey"
+        synchronized(forumTopicAliasPrefs) {
+            forumTopicAliasPrefs.getLong(pairPreferenceKey, 0L).takeIf { it != 0L }?.let { return it }
+
+            var salt = 0
+            while (true) {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest("$pairKey:$salt".toByteArray(Charsets.UTF_8))
+                val hash = java.nio.ByteBuffer.wrap(digest).long and Long.MAX_VALUE
+                val alias = Long.MIN_VALUE + hash
+                val existingPair = forumTopicAliasPrefs.getString("alias:$alias", null)
+                if (existingPair == null || existingPair == pairKey) {
+                    forumTopicAliasPrefs.edit()
+                        .putLong(pairPreferenceKey, alias)
+                        .putString("alias:$alias", pairKey)
+                        .apply()
+                    return alias
+                }
+                salt++
+            }
+        }
+    }
+
+    private fun resolveChatAndTopic(chatId: Long): Pair<Long, Int> {
+        forumTopicAliasPrefs.getString("alias:$chatId", null)?.let { pairKey ->
+            val parts = pairKey.split(':', limit = 2)
+            val realChatId = parts.getOrNull(0)?.toLongOrNull()
+            val topicId = parts.getOrNull(1)?.toIntOrNull()
+            if (realChatId != null && topicId != null) return realChatId to topicId
+        }
+
+        return if (chatId <= -100_000_000_000_000_000L) {
+            val raw = if (chatId == Long.MIN_VALUE) Long.MAX_VALUE else -chatId
+            (-(raw / 100_000L)) to (raw % 100_000L).toInt()
+        } else {
+            chatId to 0
+        }
+    }
 
     fun getLastDownloadError(fileId: Int): String? = lastDownloadErrors[fileId]
 
     suspend fun getFreshFileId(chatId: Long, messageId: Long): Int? = withContext(Dispatchers.IO) {
         val c = client ?: return@withContext null
-
-        val realChatId = if (chatId <= -100_000_000_000_000_000L) {
-            val raw = kotlin.math.abs(chatId)
-            -(raw / 100_000L)
-        } else {
-            chatId
-        }
+        val realChatId = resolveChatAndTopic(chatId).first
 
         // 1. First attempt GetMessages (contacts Telegram server to register file into current session)
         val fromServer: Int? = suspendCancellableCoroutine { cont ->
@@ -432,14 +476,7 @@ class TelegramClient(private val context: Context) {
     }
 
     suspend fun getPinnedVideo(chatId: Long): MediaItem? {
-        val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
-            val raw = kotlin.math.abs(chatId)
-            val tId = (raw % 100_000L).toInt()
-            val cId = -(raw / 100_000L)
-            cId to tId
-        } else {
-            chatId to 0
-        }
+        val (realChatId, topicId) = resolveChatAndTopic(chatId)
 
         val messageRaw: TdApi.Message? = if (topicId != 0) {
             runCatching {
@@ -566,14 +603,8 @@ class TelegramClient(private val context: Context) {
     }
 
     suspend fun getVideoMessages(chatId: Long, fromMessageId: Long = 0L, limit: Int = 40, topicId: Int = 0): VideoMessagesResult {
-        val (realChatId, resolvedTopicId) = if (chatId <= -100_000_000_000_000_000L) {
-            val raw = kotlin.math.abs(chatId)
-            val tId = (raw % 100_000L).toInt()
-            val cId = -(raw / 100_000L)
-            cId to tId
-        } else {
-            chatId to topicId
-        }
+        val (realChatId, decodedTopicId) = resolveChatAndTopic(chatId)
+        val resolvedTopicId = if (decodedTopicId != 0) decodedTopicId else topicId
         val topic = if (resolvedTopicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(resolvedTopicId) else null
         val result = runCatching {
             send(
@@ -714,14 +745,7 @@ class TelegramClient(private val context: Context) {
      * that were never fully paged into the local cache yet.
      */
     suspend fun searchChannelVideos(chatId: Long, query: String, limit: Int = 40): List<MediaItem> {
-        val (realChatId, topicId) = if (chatId <= -100_000_000_000_000_000L) {
-            val raw = kotlin.math.abs(chatId)
-            val tId = (raw % 100_000L).toInt()
-            val cId = -(raw / 100_000L)
-            cId to tId
-        } else {
-            chatId to 0
-        }
+        val (realChatId, topicId) = resolveChatAndTopic(chatId)
         val topic = if (topicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(topicId) else null
         val result = runCatching {
             send(
