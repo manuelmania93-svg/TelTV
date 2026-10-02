@@ -123,10 +123,6 @@ class TelegramClient(private val context: Context) {
         }
 
         val cached = fileCache[fileId]
-        if (cached?.local?.isDownloadingCompleted == true && !cached.local.path.isNullOrBlank()) {
-            return cached
-        }
-
         val safeLimit = limit.coerceIn(1L, 4L * 1024L * 1024L)
 
         fun hasBytes(f: TdApi.File?): Boolean {
