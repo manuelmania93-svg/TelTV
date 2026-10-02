@@ -125,7 +125,7 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         var continueWatching by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
                         var recentlyWatched by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
-                        var watchLater by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
+                        var favorites by remember { mutableStateOf<List<ContinueWatchingEntry>>(emptyList()) }
                         var pinnedRow by remember { mutableStateOf(HomeRow("Pinned Channels", emptyList())) }
                         var allChannelsRow by remember { mutableStateOf(HomeRow("Channels", emptyList())) }
                         var folderRowsState by remember { mutableStateOf<List<HomeRow>>(emptyList()) }
@@ -153,6 +153,16 @@ class MainActivity : ComponentActivity() {
                                         thumbnailFileId = it.thumbnailFileId
                                     )
                                 }
+                                favorites = app.database.watchlistDao().getAll().mapNotNull { saved ->
+                                    app.database.videoIndexDao().getByMediaId(saved.mediaId)?.let { video ->
+                                        ContinueWatchingEntry(
+                                            mediaId = video.mediaId,
+                                            title = video.title,
+                                            progressFraction = 0f,
+                                            thumbnailFileId = video.thumbnailFileId
+                                        )
+                                    }
+                                }
                             }.onFailure { Timber.e(it, "Failed to refresh local watch shelves") }
                         }
 
@@ -163,18 +173,6 @@ class MainActivity : ComponentActivity() {
                             }.onFailure { Timber.w(it, "Foreground cache trim skipped") }
 
                             refreshWatchShelves()
-                            runCatching {
-                                watchLater = app.database.watchlistDao().getAll().mapNotNull { saved ->
-                                    app.database.videoIndexDao().getByMediaId(saved.mediaId)?.let { video ->
-                                        ContinueWatchingEntry(
-                                            mediaId = video.mediaId,
-                                            title = video.title,
-                                            progressFraction = 0f,
-                                            thumbnailFileId = video.thumbnailFileId
-                                        )
-                                    }
-                                }
-                            }.onFailure { Timber.e(it, "Failed to load local home shelves") }
 
                             // Pins and folders are independent TDLib requests; load them together
                             // so Home is not blocked by two sequential chat-list walks.
@@ -253,7 +251,7 @@ class MainActivity : ComponentActivity() {
                             thumbnailLoader = thumbnailLoader,
                             continueWatching = continueWatching,
                             recentlyWatched = recentlyWatched,
-                            watchLater = watchLater,
+                            favorites = favorites,
                             pinned = pinnedRow,
                             allChannels = allChannelsRow,
                             folderRows = folderRowsState,
@@ -273,6 +271,18 @@ class MainActivity : ComponentActivity() {
                             },
                             onResumeWatching = { mediaId ->
                                 navController.navigate("player/${URLEncoder.encode(mediaId, "UTF-8")}")
+                            },
+                            onRemoveFromHistory = { mediaId ->
+                                scope.launch {
+                                    app.database.watchStateDao().remove(mediaId)
+                                    refreshWatchShelves()
+                                }
+                            },
+                            onRemoveFavorite = { mediaId ->
+                                scope.launch {
+                                    app.database.watchlistDao().remove(mediaId)
+                                    favorites = favorites.filterNot { it.mediaId == mediaId }
+                                }
                             },
                             onOpenSearch = { navController.navigate("search") },
                             onOpenSettings = { navController.navigate("settings") },
@@ -632,7 +642,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             },
-                            onAddToWatchLater = { media ->
+                            onAddToFavorites = { media ->
                                 scope.launch {
                                     app.database.watchlistDao().add(
                                         com.velastudio.teltv.data.local.WatchlistEntity(

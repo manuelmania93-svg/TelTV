@@ -1,47 +1,37 @@
-# TelTV — Android Smart TV app for streaming your Telegram library
+# TelTV — Android TV media player for Telegram libraries
 
-An Android TV app for your Telegram library, inspired by testing multiple Telegram apps with
-streaming features. TelTV connects directly to **your own Telegram account** (not a bot and not a
-specific channel), with pinned-chat and folder discovery, ExoPlayer streaming that seeks
-instantly instead of downloading whole files, and automatic cache management.
+TelTV is an Android TV app for browsing and streaming videos from your own Telegram account.
+It is branded **Manuel Mania** and is designed for remote-first navigation on Android TV boxes.
 
-## What's actually in this scaffold vs. what you still need to do
+## Features
 
-I've written this as a real, compilable-shaped Android Studio project with correct architecture
-and working logic in the pieces that don't depend on native binaries. Two things I could **not**
-do inside this sandbox, on purpose:
+- Browse pinned chats, Telegram folders, groups, and forum topics.
+- Stream and seek Telegram videos with ExoPlayer; browse large libraries using paged Room caching.
+- Shuffle all indexed episodes in a channel or topic and continue playback from the shuffled queue.
+- Use **Continue Watching** for unfinished videos, **Watch History** for recently played videos, and
+  **Favorites** as a separate saved list on Home. Long-press a history or favorite card to remove it.
+- Search embedded subtitle tracks or look up online subtitles by title. The online lookup uses
+  Cinemeta and OpenSubtitles metadata; manually adjust the search title/episode when filenames
+  are inconsistent. Subtitle timing, size, and color can be adjusted in the player.
+- Browse SMB and WebDAV sources alongside Telegram media.
+- Manage playback preferences, playlists, cache usage, and automatic cache cleanup.
+- Navigate screens and actions with an Android TV D-pad and OK/Center button.
 
-1. **Compile TDLib's native library.** TDLib (Telegram's own client library, needed to log into a
-   *real user account* rather than a bot) is C++ and must be built with the Android NDK against
-   Telegram's official source. My sandbox has no NDK and no access to Google's Maven/NDK
-   repositories. I also deliberately did **not** wire in any of the unofficial "prebuilt TDLib
-   AAR" packages floating around GitHub/JitPack — several I found were single-purpose accounts
-   making suspiciously turnkey claims, which is a classic shape for a malicious dependency, and
-   this is a library that gets full access to your real Telegram session. Build it yourself from
-   the source Telegram publishes; see step 2 below.
-2. **Produce a compiled `.apk`.** Same root cause — no Android SDK/NDK toolchain here. You'll open
-   this in Android Studio and build it there (or I can keep helping you fix build errors as you go).
-
-Everything else — the data models, SMB/WebDAV clients, Room database, TDLib coroutine wrapper,
-the custom ExoPlayer streaming data source, cache manager, and Compose UI — is real code, not
-pseudocode. It'll need the usual amount of glue/debugging once it's in Android Studio, but the
-architecture and the tricky parts (streaming playback from TDLib, folder/pinned discovery, cache
-sizing) are actually solved here, not hand-waved.
+**Attribution:** The app's visible brand is Manuel Mania. Copyright attribution to Manuel Durnig
+is retained in the app's About screen.
 
 ## Setup
 
-### APK mit einem Klick herunterladen
+### Download the latest APK
 
-Die aktuellste signierte APK liegt nach einem erfolgreichen Build hier:
+The latest signed APK is published here after a successful release workflow:
 
 [**TelTV APK herunterladen**](https://github.com/manuelmania93-svg/TelTV/releases/download/rolling-release/app-release.apk)
 
-Auf der Android-TV-Box den Link im Browser öffnen, den Download bestätigen und die APK
-anschließend aus dem Download-Ordner installieren. Dafür muss die Installation aus dieser
-Quelle in den Android-TV-Sicherheitseinstellungen erlaubt sein.
+Open the link in a browser on the Android TV device, download the APK, then install it from the
+Downloads folder. Android may require allowing installs from that browser.
 
-Der Link wird durch den Workflow `Build TelTV APK` aktualisiert, sobald nach `main` gepusht
-wird. Den Build kann man auch in GitHub unter **Actions** manuell über **Run workflow** starten.
+The link is updated by the GitHub Actions release workflow after a push to `main`.
 
 ### 0. Use a supported JDK
 
@@ -73,14 +63,11 @@ app/src/main/java/org/drinkless/tdlib/TdApi.java
 Android TV emulator: Android Studio → Device Manager → Create Device → TV category.
 Real device: enable Developer Options + ADB debugging on your TV box, `adb connect <ip>`.
 
-## How TelTV's streaming and browsing pieces work
+## How TelTV works
 
 - **Pinned channels + folders** (`TelegramClient.getPinnedChannels()` /
-  `getChannelsInFolders()`): reads directly from your account's real chat list and chat-folder
-  data via TDLib, instead of you re-adding/re-organizing sources inside the app. The exact TDLib
-  call names for folder enumeration differ slightly between TDLib versions (`GetChatFolders` /
-  chat-list-by-folder-id) — the file has a clear note on which call to wire up once you see what
-  your built `TdApi.java` exposes; the calling pattern in the rest of the app won't need to change.
+  `getChannelsInFolders()`): reads pinned chats and Telegram folder data through TDLib, so you
+  can browse the organization already present in your account.
 - **Instant-seek streaming** (`TdLibDataSource.kt`): ExoPlayer asks for a byte range, we tell
   TDLib to prioritize downloading exactly that range (`DownloadFile` with offset/limit), then read
   straight off TDLib's local file once it's ready. This is the same technique Telegram's own apps
@@ -93,11 +80,9 @@ Real device: enable Developer Options + ADB debugging on your TV box, `adb conne
   folder for SMB and server URL/user/pass for WebDAV, kept as secondary source types alongside
   your Telegram account.
 
-## What's new: performance + the features a real Telegram-TV player needs
+## Features and architecture
 
-This pass focused on the two things you asked about directly, plus everything else that a
-"browse a Telegram channel on a TV and actually enjoy it" app needs. All of it is real code (same
-caveat as above: can't compile it in this sandbox), wired into the nav graph in `MainActivity.kt`.
+These features are available in the app and wired into the navigation graph in `MainActivity.kt`.
 
 ### 1. Faster pinned-chat/folder discovery
 `TelegramClient.getPinnedChannels()` used to call `GetChat` on every chat in your list one at a
@@ -130,21 +115,32 @@ This is the one that actually needed new architecture, not just a tweak:
   LRU of resolved paths. This is the other half of "scrolls fine for a second then stalls" --
   it was every off-screen row quietly continuing to download.
 
-### 3. Continue Watching / last-played
-`WatchStateEntity` now carries title/subtitle/thumbnail alongside the resume position, so the new
-"Continue Watching" row on Home (`ui/home/HomeScreen.kt`) renders instantly from Room -- no
-Telegram round-trip just to redraw a row of cards. `PlayerScreen` now saves the resume position
-every 5 seconds while playing, not only on a clean exit, since cheap TV boxes get killed by the
-system far more eagerly than a phone and a kill mid-episode used to silently lose progress.
+### 3. Playback, history, and favorites
+`Continue Watching` is the unfinished portion of viewing history and stores resume positions.
+`Watch History` is the separate list of recently played videos. Long-press a card on Home and choose
+**Remove from history** to remove an accidental play; this does not remove a favorite.
+Favorites use the separate local watchlist, can be added from a video's long-press menu in Browse,
+and appear in their own **Favorites** row on Home. `PlayerScreen` saves playback position every
+five seconds and resumes from the saved position.
 
-### 4. Search
+### 4. Shuffle and autoplay
+Browse a Telegram channel or forum topic and choose **Shuffle Episodes**. TelTV waits for the
+background index preload, creates a shuffled playlist from that channel/topic, and plays through
+it. Autoplay can continue to the next playlist item.
+
+### 5. Search
 `ui/search/SearchScreen.kt`: typing shows instant on-device title matches
 (`VideoIndexDao.searchLocal`, no network) immediately, and after a device-tuned debounce, also
 fires `TelegramClient.searchAcrossChannels()` -- a bounded-concurrency search across every pinned
 channel at once, for videos that were never paged into the local cache. Recent searches are saved
 and shown as one-tap chips, since typing on a remote is the slowest input method there is.
 
-### 5. Smooth remote/D-pad navigation
+### 6. Online and embedded subtitles
+The player can select embedded text tracks or search online by title through Cinemeta and
+OpenSubtitles metadata. The online query can be edited when source filenames use inconsistent
+episode titles. Subtitle sync, size, and color controls are available in the player.
+
+### 7. Smooth remote/D-pad navigation
 `util/RemoteInput.kt`:
 - `rememberKeyRepeatThrottle` coalesces a held D-pad key's auto-repeat into a steady, throttled
   rate instead of firing an action every single repeat event.
@@ -155,22 +151,17 @@ and shown as one-tap chips, since typing on a remote is the slowest input method
 - Every `LazyRow`/`LazyColumn`/`LazyVerticalGrid` added in this pass uses stable `key = { it.id }`
   so scrolling and focus don't get scrambled by unrelated recompositions.
 
-### 6. Background cache upkeep
+### 8. Background cache upkeep
 `worker/CacheTrimWorker.kt`: a `WorkManager` periodic job (every 6h, battery-aware) that calls the
 existing `CacheManager.maybeAutoClear()` even when Settings was never opened -- previously that
 only ran when someone happened to open the cache screen.
 
-### Ideas brainstormed, not yet built (clear extension points, deliberately left as such)
-- **Autoplay next episode**: `PlayerScreen.onPlaybackEnded` already fires on `STATE_ENDED`; wire
-  it to look up the next video by `position` in `VideoIndexDao` and navigate straight into it.
-- **Skeleton "recently added" row per folder**, refreshed on a schedule, not just on open.
-- **Subtitle track discovery** for channels that post `.srt`/`.vtt` alongside the video message.
-- **Picture-in-picture** while browsing back to Home (Media3 supports this on API 26+).
-- **Voice search** via the Assistant button many TV remotes have (`RecognizerIntent`).
-- **A dedicated low-priority background sync** that walks folders overnight so cold-start Home
-  is always fresh without the person waiting on it.
-- **Real Room `Migration`s** before this leaves the "pre-1.0, no real users" stage --
-  `fallbackToDestructiveMigration()` is fine for now, not for a release build.
+### Current limitations
+- Online subtitle matches depend on metadata and subtitle availability. Unusual episode names may
+  need a manually edited series/season/episode query.
+- Automatic association of separate `.srt`/`.vtt` files posted alongside Telegram videos is not
+  currently implemented.
+- The app needs a Telegram login and a working network connection for Telegram-hosted media.
 
 ## Project layout
 ```
@@ -182,5 +173,5 @@ app/src/main/java/com/velastudio/teltv/
   ui/home/         Pinned/folder rows
   ui/player/       ExoPlayer screen
   ui/settings/     Cache controls
-  MainActivity.kt  Navigation host (screens are stubbed with TODOs pointing at the pieces above)
+  MainActivity.kt  Navigation host for Home, topics, browse, player, and settings
 ```

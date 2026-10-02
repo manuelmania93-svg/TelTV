@@ -110,7 +110,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Copyright 2026 Manuel Durnig",
+                    text = "by Manuel Mania",
                     style = MaterialTheme.typography.bodySmall,
                     color = TelTvMuted
                 )
@@ -175,7 +175,7 @@ fun LoginScreen(telegramClient: TelegramClient, onReady: () -> Unit) {
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "Copyright 2026 Manuel Durnig",
+                    text = "by Manuel Mania",
                     style = MaterialTheme.typography.bodySmall,
                     color = TelTvMuted
                 )

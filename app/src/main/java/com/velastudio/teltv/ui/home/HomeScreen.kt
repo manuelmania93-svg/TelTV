@@ -57,7 +57,7 @@ fun HomeScreen(
     thumbnailLoader: ThumbnailLoader,
     continueWatching: List<ContinueWatchingEntry>,
     recentlyWatched: List<ContinueWatchingEntry>,
-    watchLater: List<ContinueWatchingEntry>,
+    favorites: List<ContinueWatchingEntry>,
     pinned: HomeRow,
     allChannels: HomeRow,
     folderRows: List<HomeRow>,
@@ -65,6 +65,8 @@ fun HomeScreen(
     isLoading: Boolean = false,
     onOpenEntry: (HomeEntry) -> Unit,
     onResumeWatching: (mediaId: String) -> Unit,
+    onRemoveFromHistory: (mediaId: String) -> Unit,
+    onRemoveFavorite: (mediaId: String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onQuickClearCache: (() -> Unit)? = null
@@ -118,7 +120,7 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = "Copyright 2026 Manuel Durnig",
+                        text = "Manuel Mania",
                         style = MaterialTheme.typography.labelSmall,
                         color = TelTvMuted
                     )
@@ -219,16 +221,40 @@ fun HomeScreen(
         // Continue Watching Row (hidden if in FOLDERS_ONLY)
         if (filterMode != HomeFilterMode.FOLDERS_ONLY && continueWatching.isNotEmpty()) {
             item {
-                ContinueWatchingRow(continueWatching, thumbnailLoader, onResumeWatching)
+                ContinueWatchingRow(
+                    entries = continueWatching,
+                    thumbnailLoader = thumbnailLoader,
+                    onResumeWatching = onResumeWatching,
+                    onRemove = onRemoveFromHistory,
+                    removeActionLabel = "Remove from Continue Watching"
+                )
             }
         }
 
         if (filterMode != HomeFilterMode.FOLDERS_ONLY && recentlyWatched.isNotEmpty()) {
-            item { ContinueWatchingRow(recentlyWatched, thumbnailLoader, onResumeWatching, title = "Recently Watched") }
+            item {
+                ContinueWatchingRow(
+                    entries = recentlyWatched,
+                    thumbnailLoader = thumbnailLoader,
+                    onResumeWatching = onResumeWatching,
+                    title = "Watch History",
+                    onRemove = onRemoveFromHistory,
+                    removeActionLabel = "Remove from history"
+                )
+            }
         }
 
-        if (filterMode != HomeFilterMode.FOLDERS_ONLY && watchLater.isNotEmpty()) {
-            item { ContinueWatchingRow(watchLater, thumbnailLoader, onResumeWatching, title = "Watch Later") }
+        if (filterMode != HomeFilterMode.FOLDERS_ONLY && favorites.isNotEmpty()) {
+            item {
+                ContinueWatchingRow(
+                    entries = favorites,
+                    thumbnailLoader = thumbnailLoader,
+                    onResumeWatching = onResumeWatching,
+                    title = "Favorites",
+                    onRemove = onRemoveFavorite,
+                    removeActionLabel = "Remove favorite"
+                )
+            }
         }
 
         // Pinned Channels Row (hidden if in FOLDERS_ONLY)
@@ -386,14 +412,18 @@ private fun FilterTabButton(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
 @Composable
 private fun ContinueWatchingRow(
     entries: List<ContinueWatchingEntry>,
     thumbnailLoader: ThumbnailLoader,
     onResumeWatching: (mediaId: String) -> Unit,
-    title: String = "Continue Watching"
+    title: String = "Continue Watching",
+    onRemove: ((mediaId: String) -> Unit)? = null,
+    removeActionLabel: String = "Remove"
 ) {
+    var selectedEntry by remember { mutableStateOf<ContinueWatchingEntry?>(null) }
+
     Column {
         Text(
             title,
@@ -410,8 +440,33 @@ private fun ContinueWatchingRow(
                     thumbnailLoader = thumbnailLoader,
                     resumeFraction = entry.progressFraction,
                     enableTmdb = true,
-                    onClick = { onResumeWatching(entry.mediaId) }
+                    onClick = { onResumeWatching(entry.mediaId) },
+                    onLongClick = if (onRemove != null) ({ selectedEntry = entry }) else null
                 )
+            }
+        }
+    }
+
+    selectedEntry?.let { entry ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { selectedEntry = null }) {
+            Card(onClick = {}) {
+                Column(Modifier.width(440.dp).padding(24.dp)) {
+                    Text("Remove video?", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    Text(entry.title, maxLines = 2, color = TelTvMuted)
+                    Spacer(Modifier.height(20.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = {
+                            onRemove?.invoke(entry.mediaId)
+                            selectedEntry = null
+                        }) {
+                            Text(removeActionLabel)
+                        }
+                        OutlinedButton(onClick = { selectedEntry = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                }
             }
         }
     }

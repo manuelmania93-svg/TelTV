@@ -292,12 +292,12 @@ fun AppInfoSection() {
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "App creator: manuelmania93 alias Manuel Durnig",
+            text = "App creator: Manuel Mania",
             color = TelTvMuted,
             style = MaterialTheme.typography.bodySmall
         )
         Text(
-            text = "Copyright 2026 Manuel Durnig",
+            text = "Copyright © 2026 Manuel Durnig",
             color = TelTvMuted,
             style = MaterialTheme.typography.bodySmall
         )

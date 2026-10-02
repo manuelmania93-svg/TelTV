@@ -56,7 +56,7 @@ fun BrowseScreen(
     onPinVideo: (MediaItem) -> Unit,
     onUnpinVideo: (MediaItem) -> Unit,
     onAddToPlaylist: (MediaItem) -> Unit,
-    onAddToWatchLater: (MediaItem) -> Unit,
+    onAddToFavorites: (MediaItem) -> Unit,
     onCreateMarathon: () -> Unit,
     activeMarathonName: String? = null,
     onResumeMarathon: () -> Unit = {},
@@ -305,7 +305,7 @@ fun BrowseScreen(
                     onClick = {
                         if (!menuReady) return@Button
                         actionItem = null
-                        onAddToWatchLater(media)
+                        onAddToFavorites(media)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = androidx.tv.material3.ButtonDefaults.colors(
@@ -313,7 +313,7 @@ fun BrowseScreen(
                         focusedContainerColor = androidx.compose.ui.graphics.Color(0xFF29B6F6)
                     )
                 ) {
-                    Text("⏱️  Add to Watch Later", color = androidx.compose.ui.graphics.Color.White)
+                    Text("Add to Favorites", color = androidx.compose.ui.graphics.Color.White)
                 }
             }
         }
