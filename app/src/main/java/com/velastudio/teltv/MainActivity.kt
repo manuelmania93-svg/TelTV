@@ -43,6 +43,7 @@ import com.velastudio.teltv.ui.player.PlaybackPrefs
 import com.velastudio.teltv.ui.theme.TelTvTheme
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -168,8 +169,12 @@ class MainActivity : ComponentActivity() {
 
                         LaunchedEffect(Unit) {
                             runCatching {
-                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute)
-                                    .maybeEmergencyClear(app.filesDir.usableSpace)
+                                val autoClearEnabled =
+                                    com.velastudio.teltv.worker.CachePrefs(app).autoClearEnabled.first()
+                                if (autoClearEnabled) {
+                                    com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app)
+                                        .maybeEmergencyClear(app.filesDir.usableSpace)
+                                }
                             }.onFailure { Timber.w(it, "Foreground cache trim skipped") }
 
                             refreshWatchShelves()
@@ -896,6 +901,7 @@ class MainActivity : ComponentActivity() {
 
                     composable("settings") {
                         var cacheSize by remember { mutableStateOf(0L) }
+                        var cacheSizeAvailable by remember { mutableStateOf(false) }
                         var freeStorage by remember { mutableStateOf(app.filesDir.usableSpace) }
                         var totalStorage by remember { mutableStateOf(app.filesDir.totalSpace) }
                         var playlists by remember { mutableStateOf<List<PlaylistEntity>>(emptyList()) }
@@ -910,10 +916,12 @@ class MainActivity : ComponentActivity() {
                         val fastModeEnabled by playbackPrefs.fastModeEnabled.collectAsState(initial = false)
 
                         LaunchedEffect(Unit) {
-                            cacheSize = runCatching {
+                            runCatching {
                                 com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).getCurrentSizeBytes()
+                            }.onSuccess {
+                                cacheSize = it
+                                cacheSizeAvailable = true
                             }.onFailure { Timber.e(it, "Failed to read cache size") }
-                                .getOrDefault(0L)
                             freeStorage = app.filesDir.usableSpace
                             totalStorage = app.filesDir.totalSpace
                             playlists = app.database.playlistDao().getAll()
@@ -930,6 +938,7 @@ class MainActivity : ComponentActivity() {
                             item {
                             CacheSettingsSection(
                                 currentSizeBytes = cacheSize,
+                                cacheSizeAvailable = cacheSizeAvailable,
                                 freeStorageBytes = freeStorage,
                                 totalStorageBytes = totalStorage,
                                 cacheLimitBytes = cacheLimitBytes,
@@ -938,12 +947,18 @@ class MainActivity : ComponentActivity() {
                                 onSelectLimit = { scope.launch { cachePrefs.setLimitBytes(it) } },
                                 onClearNow = {
                                     scope.launch {
-                                        com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).clearAllNow()
-                                        cacheSize = runCatching {
-                                            com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).getCurrentSizeBytes()
-                                        }.getOrDefault(0L)
-                                        freeStorage = app.filesDir.usableSpace
-                                        totalStorage = app.filesDir.totalSpace
+                                        runCatching {
+                                            com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).clearAllNow()
+                                            cacheSize = com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app)
+                                                .getCurrentSizeBytes()
+                                            cacheSizeAvailable = true
+                                            freeStorage = app.filesDir.usableSpace
+                                            totalStorage = app.filesDir.totalSpace
+                                        }.onFailure {
+                                            cacheSizeAvailable = false
+                                            Timber.e(it, "Manual cache clear failed")
+                                            android.widget.Toast.makeText(app, "Could not clear cache", android.widget.Toast.LENGTH_LONG).show()
+                                        }
                                     }
                                 }
                             )

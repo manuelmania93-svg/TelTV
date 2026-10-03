@@ -72,6 +72,7 @@ fun ClearCacheConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
 @Composable
 fun CacheSettingsSection(
     currentSizeBytes: Long,
+    cacheSizeAvailable: Boolean,
     freeStorageBytes: Long,
     totalStorageBytes: Long,
     cacheLimitBytes: Long,
@@ -100,7 +101,7 @@ fun CacheSettingsSection(
             Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                 StorageMetric(
                     label = "Cache used",
-                    value = formatGigabytes(currentSizeBytes),
+                    value = if (cacheSizeAvailable) formatGigabytes(currentSizeBytes) else "Unavailable",
                     valueColor = TelTvYellow
                 )
                 StorageMetric(
@@ -141,10 +142,16 @@ fun CacheSettingsSection(
 
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Emergency auto-clear when TV storage is almost full", color = Color.White)
+                Text("Automatically manage cache and clear when TV storage is almost full", color = Color.White)
                 Spacer(Modifier.width(16.dp))
                 Switch(checked = autoClearEnabled, onCheckedChange = onToggleAutoClear)
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Downloaded subtitles are kept during cache clearing so playback is not interrupted.",
+                color = TelTvMuted,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 
