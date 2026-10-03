@@ -19,7 +19,8 @@ data class OnlineSubtitle(
     val langDisplay: String,
     val url: String,
     val fileName: String,
-    val isForced: Boolean = false
+    val isForced: Boolean = false,
+    val releaseName: String = ""
 )
 
 data class SubtitleMediaIdentity(
@@ -221,6 +222,7 @@ object OnlineSubtitleProvider {
                     item.optString("type").equals("forced", ignoreCase = true) ||
                     Regex("""(?i)\bforced\b|\bforeign[ ._-]*parts?[ ._-]*only\b""")
                         .containsMatchIn("$fileName $id")
+                val releaseName = item.optString("movieReleaseName", "").ifBlank { fileName }
                 if (url.isNotBlank()) {
                     results.add(
                         OnlineSubtitle(
@@ -229,16 +231,45 @@ object OnlineSubtitleProvider {
                             langDisplay = getLanguageDisplay(lang),
                             url = url,
                             fileName = fileName,
-                            isForced = isForced
+                            isForced = isForced,
+                            releaseName = releaseName
                         )
                     )
                 }
             }
 
-            results
+            val targetKeywords = listOf("web-dl", "webrip", "web", "bluray", "bdrip", "hdtv", "1080p", "720p", "hevc", "x265", "x264", "nf", "netflix")
+            val lowerTitle = rawTitle.lowercase()
+            val matchedKeywords = targetKeywords.filter { lowerTitle.contains(it) }
+
+            results.sortedWith(
+                compareByDescending<OnlineSubtitle> { sub ->
+                    when (sub.lang.lowercase()) {
+                        "ger", "deu", "de" -> 100
+                        "eng", "en" -> 50
+                        else -> 0
+                    }
+                }.thenByDescending { sub ->
+                    val subText = "${sub.releaseName} ${sub.fileName}".lowercase()
+                    matchedKeywords.count { subText.contains(it) }
+                }
+            )
         } catch (e: Exception) {
             Timber.w(e, "Failed to fetch online subtitles for %s", rawTitle)
             emptyList()
+        }
+    }
+
+    fun formatReleaseBadge(release: String): String {
+        val upper = release.uppercase()
+        return when {
+            upper.contains("WEB-DL") || upper.contains("WEBDL") -> "WEB-DL"
+            upper.contains("WEBRIP") -> "WEBRip"
+            upper.contains("BLURAY") || upper.contains("BD-RIP") || upper.contains("BDRIP") -> "BluRay"
+            upper.contains("HDTV") -> "HDTV"
+            upper.contains("NF") || upper.contains("NETFLIX") -> "Netflix"
+            upper.contains("CR") || upper.contains("CRUNCHYROLL") -> "Crunchyroll"
+            else -> ""
         }
     }
 
