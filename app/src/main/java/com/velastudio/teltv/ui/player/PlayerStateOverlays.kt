@@ -456,11 +456,15 @@ fun TrackSelectorDialog(
                         color = Color.LightGray,
                         fontSize = 12.sp
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Button(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(syncOffsetMs - 5_000L) }
                         ) { Text("-5s") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSyncOffset(syncOffsetMs - 1_000L) }
+                        ) { Text("-1s") }
                         Button(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(syncOffsetMs - 250L) }
@@ -473,6 +477,10 @@ fun TrackSelectorDialog(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(syncOffsetMs + 250L) }
                         ) { Text("+250ms") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSyncOffset(syncOffsetMs + 1_000L) }
+                        ) { Text("+1s") }
                         Button(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(syncOffsetMs + 5_000L) }
