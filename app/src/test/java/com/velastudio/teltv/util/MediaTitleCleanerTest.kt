@@ -68,4 +68,18 @@ class MediaTitleCleanerTest {
         assertEquals(false, identity.isSeries)
         assertEquals(1999, identity.year)
     }
+
+    @Test
+    fun subtitleResultsPrioritizeAndroidPreferredLanguage() {
+        val english = OnlineSubtitle("1", "eng", "English", "https://example.test/en.srt", "en.srt")
+        val spanish = OnlineSubtitle("2", "spa", "Spanish", "https://example.test/es.srt", "es.srt")
+
+        val ordered = OnlineSubtitleProvider.prioritizePreferredLanguages(
+            listOf(english, spanish),
+            listOf("es-MX", "en-US")
+        )
+
+        assertEquals(listOf(spanish, english), ordered)
+        assertEquals(spanish, OnlineSubtitleProvider.firstPreferredLanguageMatch(ordered, listOf("es-MX")))
+    }
 }

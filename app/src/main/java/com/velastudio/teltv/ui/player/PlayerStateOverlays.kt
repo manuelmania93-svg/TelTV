@@ -20,6 +20,8 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,8 +33,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusGroup
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -47,6 +51,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import java.util.Locale
 import com.velastudio.teltv.util.OnlineSubtitle
 import com.velastudio.teltv.util.OnlineSubtitleProvider
@@ -230,7 +235,7 @@ data class TrackItem(
 fun TrackSelectorDialog(
     controller: MediaController?,
     videoTitle: String = "",
-    onSelectOnlineSubtitle: (OnlineSubtitle) -> Unit = {},
+    onSelectOnlineSubtitle: suspend (OnlineSubtitle) -> Boolean = { false },
     syncOffsetMs: Long = 0L,
     onAdjustSyncOffset: (Long) -> Unit = {},
     prefs: PlaybackPrefs? = null,
@@ -238,6 +243,18 @@ fun TrackSelectorDialog(
 ) {
     if (controller == null) return
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val initialTabFocusRequester = remember { FocusRequester() }
+    val onlineTabFocusRequester = remember { FocusRequester() }
+    val preferredLanguageTags = remember(context) {
+        val configuration = context.resources.configuration
+        if (android.os.Build.VERSION.SDK_INT >= 24) {
+            List(configuration.locales.size()) { configuration.locales[it].toLanguageTag() }
+        } else {
+            @Suppress("DEPRECATION")
+            listOfNotNull(configuration.locale?.toLanguageTag())
+        }
+    }
 
     var currentTracks by remember { mutableStateOf(controller.currentTracks) }
     androidx.compose.runtime.DisposableEffect(controller) {
@@ -290,32 +307,60 @@ fun TrackSelectorDialog(
     var onlineSubtitles by remember { mutableStateOf<List<OnlineSubtitle>>(emptyList()) }
     var isLoadingOnlineSubs by remember { mutableStateOf(false) }
     var subtitleQuery by remember(videoTitle) { mutableStateOf(videoTitle) }
+    var downloadingSubtitleId by remember { mutableStateOf<String?>(null) }
+    var subtitleActionMessage by remember { mutableStateOf<String?>(null) }
     val subtitleIdentity = remember(subtitleQuery) {
         OnlineSubtitleProvider.identifyMedia(subtitleQuery)
     }
-
-    LaunchedEffect(videoTitle) {
-        if (videoTitle.isNotBlank()) {
-            isLoadingOnlineSubs = true
-            onlineSubtitles = OnlineSubtitleProvider.searchSubtitles(videoTitle)
-            isLoadingOnlineSubs = false
-        }
-    }
-
-    fun searchOnlineSubtitles() {
-        val query = subtitleQuery.trim()
-        if (query.isBlank() || isLoadingOnlineSubs) return
-        coroutineScope.launch {
-            isLoadingOnlineSubs = true
-            onlineSubtitles = OnlineSubtitleProvider.searchSubtitles(query)
-            isLoadingOnlineSubs = false
-        }
-    }
-
     // Default to Online Subs if video has 0 embedded subtitle tracks
     var selectedTab by remember { mutableStateOf(if (subtitleTracks.size <= 1) 2 else 0) } // 0 = Audio, 1 = Embedded, 2 = Online Subs
 
-    Box(
+    suspend fun searchOnlineSubtitles(query: String, autoSelectPreferred: Boolean) {
+        if (query.isBlank() || isLoadingOnlineSubs) return
+        isLoadingOnlineSubs = true
+        subtitleActionMessage = null
+        try {
+            val results = OnlineSubtitleProvider.prioritizePreferredLanguages(
+                OnlineSubtitleProvider.searchSubtitles(query),
+                preferredLanguageTags
+            )
+            onlineSubtitles = results
+            if (autoSelectPreferred) {
+                val preferred = OnlineSubtitleProvider.firstPreferredLanguageMatch(results, preferredLanguageTags)
+                if (preferred != null) {
+                    downloadingSubtitleId = preferred.id
+                    subtitleActionMessage = "Automatically selecting ${preferred.langDisplay}..."
+                    if (onSelectOnlineSubtitle(preferred)) {
+                        onDismiss()
+                    } else {
+                        subtitleActionMessage = "Could not apply ${preferred.langDisplay}. Select a subtitle to retry."
+                    }
+                    downloadingSubtitleId = null
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            timber.log.Timber.e(e, "Subtitle search or selection failed")
+            subtitleActionMessage = "Subtitle search failed. Check your connection and try again."
+        } finally {
+            downloadingSubtitleId = null
+            isLoadingOnlineSubs = false
+        }
+    }
+
+    LaunchedEffect(videoTitle, preferredLanguageTags, selectedTab) {
+        if (videoTitle.isNotBlank() && selectedTab == 2) {
+            searchOnlineSubtitles(videoTitle, autoSelectPreferred = true)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
+        if (selectedTab == 2) onlineTabFocusRequester.requestFocus() else initialTabFocusRequester.requestFocus()
+    }
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.8f))
@@ -324,21 +369,28 @@ fun TrackSelectorDialog(
     ) {
         Column(
             modifier = Modifier
-                .width(500.dp)
+                .widthIn(max = 500.dp)
+                .fillMaxWidth(0.92f)
+                .heightIn(max = maxHeight * 0.9f)
+                .verticalScroll(rememberScrollState())
+                .focusGroup()
                 .background(Color(0xFF222222), RoundedCornerShape(16.dp))
                 .padding(24.dp)
         ) {
             Text("Audio & Subtitles", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(Modifier.height(14.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = { selectedTab = 0 }) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { selectedTab = 0 }, modifier = Modifier.weight(1f).focusRequester(initialTabFocusRequester)) {
                     Text(if (selectedTab == 0) "● Audio (${audioTracks.size})" else "Audio (${audioTracks.size})")
                 }
-                Button(onClick = { selectedTab = 1 }) {
+                Button(onClick = { selectedTab = 1 }, modifier = Modifier.weight(1f)) {
                     Text(if (selectedTab == 1) "● Embedded (${subtitleTracks.size - 1})" else "Embedded (${subtitleTracks.size - 1})")
                 }
-                Button(onClick = { selectedTab = 2 }) {
+                Button(
+                    onClick = { selectedTab = 2 },
+                    modifier = Modifier.weight(1f).focusRequester(onlineTabFocusRequester)
+                ) {
                     Text(if (selectedTab == 2) "● Online (${if (isLoadingOnlineSubs) "..." else onlineSubtitles.size})" else "Online (${if (isLoadingOnlineSubs) "..." else onlineSubtitles.size})")
                 }
             }
@@ -453,10 +505,18 @@ fun TrackSelectorDialog(
                         singleLine = true,
                         placeholder = { Text("Series S01E02 or movie title") },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { searchOnlineSubtitles() })
+                        keyboardActions = KeyboardActions(onSearch = {
+                            coroutineScope.launch {
+                                searchOnlineSubtitles(subtitleQuery.trim(), autoSelectPreferred = true)
+                            }
+                        })
                     )
                     Button(
-                        onClick = ::searchOnlineSubtitles,
+                        onClick = {
+                            coroutineScope.launch {
+                                searchOnlineSubtitles(subtitleQuery.trim(), autoSelectPreferred = true)
+                            }
+                        },
                         enabled = !isLoadingOnlineSubs && subtitleQuery.isNotBlank()
                     ) {
                         Text("Search")
@@ -468,14 +528,25 @@ fun TrackSelectorDialog(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             androidx.compose.material3.CircularProgressIndicator(color = Color(0xFF29B6F6))
                             Spacer(Modifier.height(12.dp))
-                            Text("Searching OpenSubtitles database...", color = Color.LightGray, fontSize = 14.sp)
+                            Text(
+                                subtitleActionMessage ?: "Searching OpenSubtitles database...",
+                                color = Color.LightGray,
+                                fontSize = 14.sp
+                            )
                         }
                     }
                 } else if (onlineSubtitles.isEmpty()) {
                     Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                        Text("No online subtitles found for this title.", color = Color.Gray, fontSize = 14.sp)
+                        Text(
+                            subtitleActionMessage ?: "No online subtitles found for this title.",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
                     }
                 } else {
+                    subtitleActionMessage?.let { message ->
+                        Text(message, color = Color(0xFFFFCC80), fontSize = 13.sp)
+                    }
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 240.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -483,8 +554,24 @@ fun TrackSelectorDialog(
                         items(onlineSubtitles) { sub ->
                             androidx.tv.material3.Card(
                                 onClick = {
-                                    onSelectOnlineSubtitle(sub)
-                                    onDismiss()
+                                    if (downloadingSubtitleId == null) {
+                                        coroutineScope.launch {
+                                            downloadingSubtitleId = sub.id
+                                            subtitleActionMessage = "Downloading ${sub.langDisplay}..."
+                                            try {
+                                                if (onSelectOnlineSubtitle(sub)) {
+                                                    onDismiss()
+                                                } else {
+                                                    subtitleActionMessage = "Download failed. Check your connection and try again."
+                                                }
+                                            } catch (e: Exception) {
+                                                timber.log.Timber.e(e, "Failed to apply selected subtitle")
+                                                subtitleActionMessage = "Could not apply this subtitle. Try another result."
+                                            } finally {
+                                                downloadingSubtitleId = null
+                                            }
+                                        }
+                                    }
                                 },
                                 colors = androidx.tv.material3.CardDefaults.colors(
                                     containerColor = Color.White.copy(alpha = 0.08f),
@@ -505,7 +592,15 @@ fun TrackSelectorDialog(
                                         Text(sub.langDisplay, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                         Text(sub.fileName, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
                                     }
-                                    Icon(Icons.Filled.Check, contentDescription = "Download & Select", tint = Color.White.copy(alpha = 0.7f))
+                                    if (downloadingSubtitleId == sub.id) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(Icons.Filled.Check, contentDescription = "Download & Select", tint = Color.White.copy(alpha = 0.7f))
+                                    }
                                 }
                             }
                         }

@@ -160,6 +160,10 @@ fun PlayerScreen(
         } else file
 
         if (targetFile.exists()) {
+            mediaController.trackSelectionParameters = mediaController.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                .build()
             val subUri = Uri.fromFile(targetFile)
             val subConfig = ExoMediaItem.SubtitleConfiguration.Builder(subUri)
                 .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
@@ -183,21 +187,22 @@ fun PlayerScreen(
         }
     }
 
-    fun attachOnlineSubtitle(sub: OnlineSubtitle) {
-        val mediaController = controller ?: return
-        coroutineScope.launch {
-            seekingText = "Downloading ${sub.langDisplay}..."
-            val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
-            if (file != null && file.exists()) {
-                activeSubtitleFile = file
-                activeSubtitleLang = sub.lang
-                activeSubtitleLabel = sub.langDisplay
-                subtitleSyncOffsetMs = 0L
-                applySubtitleFile(file, sub.lang, sub.langDisplay, 0L)
-            } else {
-                seekingText = "Failed to download subtitle"
-            }
+    suspend fun attachOnlineSubtitle(sub: OnlineSubtitle): Boolean {
+        val mediaController = controller ?: return false
+        if (mediaController.currentMediaItem == null) return false
+        seekingText = "Downloading ${sub.langDisplay}..."
+        val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
+        if (file == null || !file.exists()) {
+            seekingText = "Failed to download subtitle"
+            return false
         }
+        activeSubtitleFile = file
+        activeSubtitleLang = sub.lang
+        activeSubtitleLabel = sub.langDisplay
+        subtitleSyncOffsetMs = 0L
+        applySubtitleFile(file, sub.lang, sub.langDisplay, 0L)
+        seekingText = "Subtitles: ${sub.langDisplay}"
+        return true
     }
 
     fun adjustSubtitleSync(newOffset: Long) {

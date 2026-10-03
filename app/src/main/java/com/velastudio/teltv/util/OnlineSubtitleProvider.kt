@@ -93,6 +93,50 @@ object OnlineSubtitleProvider {
         "ukr" to "Ukrainian", "ces" to "Czech", "cze" to "Czech", "hun" to "Hungarian",
         "ron" to "Romanian", "rum" to "Romanian", "bul" to "Bulgarian", "hrv" to "Croatian"
     )
+    private val ISO3_TO_ISO2 by lazy {
+        Locale.getISOLanguages().mapNotNull { language ->
+            runCatching { Locale(language).isO3Language.lowercase() to language.lowercase() }.getOrNull()
+        }.toMap()
+    }
+
+    private fun normalizedLanguageCode(code: String): String {
+        val language = code.trim().lowercase().substringBefore('-')
+        return when (language) {
+            "pob" -> "pt"
+            "fre" -> "fr"
+            "ger" -> "de"
+            "dut" -> "nl"
+            "gre" -> "el"
+            "cze" -> "cs"
+            "rum" -> "ro"
+            else -> if (language.length == 3) ISO3_TO_ISO2[language] ?: language else language
+        }
+    }
+
+    fun prioritizePreferredLanguages(
+        subtitles: List<OnlineSubtitle>,
+        preferredLanguageTags: List<String>
+    ): List<OnlineSubtitle> {
+        val preferredCodes = preferredLanguageTags.map(::normalizedLanguageCode)
+        return subtitles.withIndex()
+            .sortedWith(
+                compareBy<IndexedValue<OnlineSubtitle>> {
+                    preferredCodes.indexOf(normalizedLanguageCode(it.value.lang))
+                        .takeIf { index -> index >= 0 } ?: Int.MAX_VALUE
+                }.thenBy { it.index }
+            )
+            .map { it.value }
+    }
+
+    fun firstPreferredLanguageMatch(
+        subtitles: List<OnlineSubtitle>,
+        preferredLanguageTags: List<String>
+    ): OnlineSubtitle? {
+        val preferredCodes = preferredLanguageTags.map(::normalizedLanguageCode)
+        return subtitles.firstOrNull {
+            normalizedLanguageCode(it.lang) in preferredCodes
+        }
+    }
 
     private fun getLanguageDisplay(code: String): String {
         val lower = code.lowercase().trim()
@@ -179,26 +223,34 @@ object OnlineSubtitleProvider {
     suspend fun downloadSubtitle(context: Context, subtitle: OnlineSubtitle): File? = withContext(Dispatchers.IO) {
         try {
             val subDir = File(context.cacheDir, "subtitles").apply { mkdirs() }
-            val targetFile = File(subDir, "${subtitle.lang}_${subtitle.id}.srt")
+            val safeId = subtitle.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            val safeLanguage = subtitle.lang.replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val targetFile = File(subDir, "${safeLanguage}_$safeId.srt")
             if (targetFile.exists() && targetFile.length() > 0) {
                 return@withContext targetFile
             }
+            val temporaryFile = File(subDir, "${targetFile.name}.part")
+            temporaryFile.delete()
 
-            val req = Request.Builder()
-                .url(subtitle.url)
-                .header("User-Agent", "TelTV-AndroidTV")
-                .build()
+            try {
+                val req = Request.Builder()
+                    .url(subtitle.url)
+                    .header("User-Agent", "TelTV-AndroidTV")
+                    .build()
 
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext null
-                val body = resp.body ?: return@withContext null
-                body.byteStream().use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        input.copyTo(output)
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext null
+                    val body = resp.body ?: return@withContext null
+                    body.byteStream().use { input ->
+                        FileOutputStream(temporaryFile).use { output ->
+                            input.copyTo(output)
+                        }
                     }
                 }
+                if (temporaryFile.length() > 0 && temporaryFile.renameTo(targetFile)) targetFile else null
+            } finally {
+                temporaryFile.delete()
             }
-            if (targetFile.exists() && targetFile.length() > 0) targetFile else null
         } catch (e: Exception) {
             Timber.e(e, "Failed to download subtitle file: %s", subtitle.url)
             null
