@@ -606,15 +606,13 @@ class TelegramClient(private val context: Context) {
         val (realChatId, decodedTopicId) = resolveChatAndTopic(chatId)
         val resolvedTopicId = if (decodedTopicId != 0) decodedTopicId else topicId
         val topic = if (resolvedTopicId != 0) org.drinkless.tdlib.TdApi.MessageTopicForum(resolvedTopicId) else null
-        val result = runCatching {
-            send(
-                TdApi.SearchChatMessages(
-                    realChatId, topic, "", null, fromMessageId, 0, limit,
-                    TdApi.SearchMessagesFilterVideo()
-                )
-            ) as? TdApi.FoundChatMessages
-        }.onFailure { Timber.w(it, "SearchChatMessages failed for chatId=%d topicId=%d", realChatId, resolvedTopicId) }
-            .getOrNull() ?: return VideoMessagesResult(emptyList(), 0L)
+        val result = send(
+            TdApi.SearchChatMessages(
+                realChatId, topic, "", null, fromMessageId, 0, limit,
+                TdApi.SearchMessagesFilterVideo()
+            )
+        ) as? TdApi.FoundChatMessages
+            ?: throw IllegalStateException("TDLib returned an unexpected response for video search")
 
         val items = result.messages.filter { it.id != fromMessageId }.mapNotNull { msg ->
             val msgVideo = msg.content as? TdApi.MessageVideo ?: return@mapNotNull null

@@ -71,15 +71,34 @@ class ChannelVideoRepository(
             val state = syncStateDao.get(chatId) ?: ChannelSyncStateEntity(chatId = chatId)
             if (state.fullyLoaded && !forceContinue) return@withLock
 
-            val page = telegram.getVideoMessages(
-                chatId = chatId,
-                fromMessageId = state.oldestLoadedMessageId,
-                limit = deviceProfile.pageSize
-            )
+            val page = try {
+                telegram.getVideoMessages(
+                    chatId = chatId,
+                    fromMessageId = state.oldestLoadedMessageId,
+                    limit = deviceProfile.pageSize
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.w(error, "Failed to synchronize videos for chatId=%d", chatId)
+                return@withLock
+            }
             val fetched = page.items
             if (fetched.isEmpty()) {
                 if (page.nextFromMessageId == 0L) {
-                    syncStateDao.upsert(state.copy(fullyLoaded = true))
+                    syncStateDao.upsert(
+                        state.copy(
+                            fullyLoaded = true,
+                            lastSyncedEpochSec = System.currentTimeMillis() / 1000
+                        )
+                    )
+                } else if (page.nextFromMessageId != state.oldestLoadedMessageId) {
+                    syncStateDao.upsert(
+                        state.copy(
+                            oldestLoadedMessageId = page.nextFromMessageId,
+                            lastSyncedEpochSec = System.currentTimeMillis() / 1000
+                        )
+                    )
                 }
                 return@withLock
             }
