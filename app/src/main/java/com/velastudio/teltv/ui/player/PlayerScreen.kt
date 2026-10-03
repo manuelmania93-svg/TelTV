@@ -28,6 +28,7 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.MoreExecutors
 import com.velastudio.teltv.player.PlaybackService
+import com.velastudio.teltv.player.SubtitleSyncOffset
 import com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory
 import com.velastudio.teltv.util.MediaTitleCleaner
 import kotlinx.coroutines.delay
@@ -117,9 +118,13 @@ fun PlayerScreen(
     var loudnessEnhancer by remember { mutableStateOf<android.media.audiofx.LoudnessEnhancer?>(null) }
 
     var activeSubtitleFile by remember { mutableStateOf<java.io.File?>(null) }
-    var activeSubtitleLang by remember { mutableStateOf("en") }
-    var activeSubtitleLabel by remember { mutableStateOf("Online") }
     var subtitleSyncOffsetMs by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(fileId, directUri) {
+        activeSubtitleFile = null
+        subtitleSyncOffsetMs = 0L
+        SubtitleSyncOffset.setOffsetMs(0L)
+    }
 
     val subFontSize = when (subSize) {
         "NORMAL" -> 0.050f
@@ -164,18 +169,16 @@ fun PlayerScreen(
 
 
 
-    fun applySubtitleFile(file: java.io.File, lang: String, label: String, offsetMs: Long = 0L) {
+    fun applySubtitleFile(file: java.io.File, lang: String, label: String) {
         val mediaController = controller ?: return
-        val targetFile = if (offsetMs != 0L) {
-            OnlineSubtitleProvider.shiftSubtitle(file, offsetMs)
-        } else file
-
-        if (targetFile.exists()) {
+        if (file.exists()) {
             mediaController.trackSelectionParameters = mediaController.trackSelectionParameters
                 .buildUpon()
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                .clearOverridesOfType(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                .setPreferredTextLanguages(lang)
                 .build()
-            val subUri = Uri.fromFile(targetFile)
+            val subUri = Uri.fromFile(file)
             val subConfig = ExoMediaItem.SubtitleConfiguration.Builder(subUri)
                 .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_SUBRIP)
                 .setLanguage(lang)
@@ -193,7 +196,7 @@ fun PlayerScreen(
                 mediaController.setMediaItem(updatedMediaItem, currentPos)
                 mediaController.prepare()
                 mediaController.playWhenReady = isPlayingNow
-                seekingText = if (offsetMs != 0L) "Sync: ${if (offsetMs > 0) "+${offsetMs}ms" else "${offsetMs}ms"}" else "Subtitles: $label"
+                seekingText = "Subtitles: $label"
             }
         }
     }
@@ -208,18 +211,21 @@ fun PlayerScreen(
             return false
         }
         activeSubtitleFile = file
-        activeSubtitleLang = sub.lang
-        activeSubtitleLabel = sub.langDisplay
         subtitleSyncOffsetMs = 0L
-        applySubtitleFile(file, sub.lang, sub.langDisplay, 0L)
+        SubtitleSyncOffset.setOffsetMs(0L)
+        applySubtitleFile(file, sub.lang, sub.langDisplay)
         seekingText = "Subtitles: ${sub.langDisplay}"
         return true
     }
 
     fun adjustSubtitleSync(newOffset: Long) {
         subtitleSyncOffsetMs = newOffset
-        activeSubtitleFile?.let { file ->
-            applySubtitleFile(file, activeSubtitleLang, activeSubtitleLabel, newOffset)
+        SubtitleSyncOffset.setOffsetMs(newOffset)
+        controller?.let { mediaController ->
+            if (mediaController.currentMediaItem != null) {
+                mediaController.seekTo(mediaController.currentPosition)
+                seekingText = "Subtitle delay: ${if (newOffset >= 0) "+" else ""}${newOffset}ms"
+            }
         }
     }
 
@@ -671,8 +677,10 @@ fun PlayerScreen(
                 controller = controller,
                 videoTitle = title,
                 onSelectOnlineSubtitle = ::attachOnlineSubtitle,
+                onSelectEmbeddedSubtitle = { activeSubtitleFile = null },
                 syncOffsetMs = subtitleSyncOffsetMs,
                 onAdjustSyncOffset = ::adjustSubtitleSync,
+                onlineSubtitleSelected = activeSubtitleFile != null,
                 prefs = prefs,
                 onDismiss = { showTrackSelector = false }
             )

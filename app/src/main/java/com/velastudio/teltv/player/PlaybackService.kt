@@ -12,17 +12,22 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.audio.AudioCapabilities
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.text.TextOutput
+import androidx.media3.exoplayer.text.TextRenderer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.velastudio.teltv.MainActivity
 import com.velastudio.teltv.TelTvApp
 import com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory
+import android.os.Looper
 import timber.log.Timber
+import java.util.ArrayList
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
@@ -53,6 +58,16 @@ class PlaybackService : MediaSessionService() {
         // Audio Passthrough (Bitstream) for Soundbars & AV Receivers
         val audioCapabilities = AudioCapabilities.getCapabilities(this)
         val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildTextRenderers(
+                context: Context,
+                output: TextOutput,
+                outputLooper: Looper,
+                extensionRendererMode: Int,
+                out: ArrayList<Renderer>
+            ) {
+                out.add(TextRenderer(output, outputLooper, SubtitleOffsetDecoderFactory))
+            }
+
             override fun buildAudioSink(
                 context: Context,
                 enableFloatOutput: Boolean,

@@ -236,8 +236,10 @@ fun TrackSelectorDialog(
     controller: MediaController?,
     videoTitle: String = "",
     onSelectOnlineSubtitle: suspend (OnlineSubtitle) -> Boolean = { false },
+    onSelectEmbeddedSubtitle: () -> Unit = {},
     syncOffsetMs: Long = 0L,
     onAdjustSyncOffset: (Long) -> Unit = {},
+    onlineSubtitleSelected: Boolean = false,
     prefs: PlaybackPrefs? = null,
     onDismiss: () -> Unit
 ) {
@@ -310,6 +312,8 @@ fun TrackSelectorDialog(
         }
         list
     }
+    val embeddedSubtitleSelected = subtitleTracks.any { it.group != null && it.isSelected } &&
+        !onlineSubtitleSelected
 
     var onlineSubtitles by remember { mutableStateOf<List<OnlineSubtitle>>(emptyList()) }
     var isLoadingOnlineSubs by remember { mutableStateOf(false) }
@@ -424,22 +428,66 @@ fun TrackSelectorDialog(
                         .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(8.dp))
                         .padding(10.dp)
                 ) {
+                    val canAdjustSync = if (selectedTab == 1) {
+                        embeddedSubtitleSelected
+                    } else {
+                        onlineSubtitleSelected
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Sync: ${if (syncOffsetMs >= 0) "+${syncOffsetMs}ms" else "${syncOffsetMs}ms"}",
+                            text = "Subtitle delay",
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Button(onClick = { onAdjustSyncOffset(syncOffsetMs - 250L) }) { Text("-250ms") }
-                            Button(onClick = { onAdjustSyncOffset(0L) }) { Text("0s") }
-                            Button(onClick = { onAdjustSyncOffset(syncOffsetMs + 250L) }) { Text("+250ms") }
-                        }
+                        Text(
+                            text = "${if (syncOffsetMs >= 0) "+" else ""}${"%.2f".format(syncOffsetMs / 1000.0)}s",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        "Positive delays subtitles; negative moves them earlier.",
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSyncOffset(syncOffsetMs - 5_000L) }
+                        ) { Text("-5s") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSyncOffset(syncOffsetMs - 250L) }
+                        ) { Text("-250ms") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSyncOffset(0L) }
+                        ) { Text("Reset") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSyncOffset(syncOffsetMs + 250L) }
+                        ) { Text("+250ms") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSyncOffset(syncOffsetMs + 5_000L) }
+                        ) { Text("+5s") }
+                    }
+                    if (!canAdjustSync) {
+                        Text(
+                            if (selectedTab == 1) {
+                                "Select an embedded subtitle track to adjust its sync."
+                            } else {
+                                "Select a downloaded online subtitle to adjust its sync."
+                            },
+                            color = Color.LightGray,
+                            fontSize = 12.sp
+                        )
                     }
 
                     if (prefs != null) {
@@ -653,11 +701,13 @@ fun TrackSelectorDialog(
                                         .build()
                                 } else if (selectedTab == 1) {
                                     if (track.group == null) {
+                                        onSelectEmbeddedSubtitle()
                                         controller.trackSelectionParameters = controller.trackSelectionParameters
                                             .buildUpon()
                                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                                             .build()
                                     } else {
+                                        onSelectEmbeddedSubtitle()
                                         val override = TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex)
                                         controller.trackSelectionParameters = controller.trackSelectionParameters
                                             .buildUpon()

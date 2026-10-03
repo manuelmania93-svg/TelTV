@@ -4,7 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.io.File
+import androidx.media3.common.text.Cue
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.extractor.text.Subtitle
+import com.velastudio.teltv.player.OffsetSubtitle
 
+@OptIn(UnstableApi::class)
 class MediaTitleCleanerTest {
 
     @Test
@@ -103,5 +109,49 @@ class MediaTitleCleanerTest {
         assertEquals(listOf(forcedGerman, fullGerman), ordered)
         assertEquals(forcedGerman, OnlineSubtitleProvider.firstPreferredLanguageMatch(ordered, listOf("de-DE")))
         assertEquals(true, OnlineSubtitleProvider.isPreferredLanguage("deu", listOf("de-DE")))
+    }
+
+    @Test
+    fun shiftSubtitleMovesCueTimesWithoutChangingOriginal() {
+        val source = File.createTempFile("subtitle", ".srt")
+        val shifted = File(source.parentFile, "${source.nameWithoutExtension}_shift_1250.srt")
+        try {
+            source.writeText(
+                "1\n00:00:01,000 --> 00:00:02,500\nHello\n"
+            )
+
+            val result = OnlineSubtitleProvider.shiftSubtitle(source, 1_250L)
+
+            assertEquals(shifted, result)
+            assertEquals("1\n00:00:02,250 --> 00:00:03,750\nHello\n", result.readText())
+            assertEquals("1\n00:00:01,000 --> 00:00:02,500\nHello\n", source.readText())
+        } finally {
+            shifted.delete()
+            source.delete()
+        }
+    }
+
+    @Test
+    fun embeddedSubtitleOffsetMovesCueEventsInBothDirections() {
+        val original = object : Subtitle {
+            private val eventTimes = longArrayOf(1_000L, 2_000L)
+
+            override fun getNextEventTimeIndex(timeUs: Long): Int =
+                eventTimes.indexOfFirst { it > timeUs }.takeIf { it >= 0 } ?: -1
+
+            override fun getEventTimeCount(): Int = eventTimes.size
+
+            override fun getEventTime(index: Int): Long = eventTimes[index]
+
+            override fun getCues(timeUs: Long): List<Cue> = emptyList()
+        }
+
+        val delayed = OffsetSubtitle(original, 500L)
+        assertEquals(1_500L, delayed.getEventTime(0))
+        assertEquals(0, delayed.getNextEventTimeIndex(1_499L))
+
+        val advanced = OffsetSubtitle(original, -500L)
+        assertEquals(500L, advanced.getEventTime(0))
+        assertEquals(0, advanced.getNextEventTimeIndex(499L))
     }
 }
