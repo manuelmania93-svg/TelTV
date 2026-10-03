@@ -42,4 +42,30 @@ class MediaTitleCleanerTest {
         assertNotNull(sig)
         assertEquals(1050, sig!!.episode)
     }
+
+    @Test
+    fun subtitleIdentityDetectsSeasonEpisodeFromSceneFilename() {
+        val identity = OnlineSubtitleProvider.identifyMedia("The.Office.US.S02E03.1080p.WEB-DL.mkv")
+        assertEquals("The Office US", identity.title)
+        assertEquals(true, identity.isSeries)
+        assertEquals(2, identity.season)
+        assertEquals(3, identity.episode)
+    }
+
+    @Test
+    fun subtitleIdentityDetectsAnimeEpisodeNumber() {
+        val identity = OnlineSubtitleProvider.identifyMedia("One Piece - 1050 [1080p].mkv")
+        assertEquals("One Piece", identity.title)
+        assertEquals(true, identity.isSeries)
+        assertNull(identity.season)
+        assertEquals(1050, identity.episode)
+    }
+
+    @Test
+    fun subtitleIdentityRecognizesMovieYear() {
+        val identity = OnlineSubtitleProvider.identifyMedia("The.Matrix.1999.1080p.mkv")
+        assertEquals("The Matrix", identity.title)
+        assertEquals(false, identity.isSeries)
+        assertEquals(1999, identity.year)
+    }
 }

@@ -290,6 +290,9 @@ fun TrackSelectorDialog(
     var onlineSubtitles by remember { mutableStateOf<List<OnlineSubtitle>>(emptyList()) }
     var isLoadingOnlineSubs by remember { mutableStateOf(false) }
     var subtitleQuery by remember(videoTitle) { mutableStateOf(videoTitle) }
+    val subtitleIdentity = remember(subtitleQuery) {
+        OnlineSubtitleProvider.identifyMedia(subtitleQuery)
+    }
 
     LaunchedEffect(videoTitle) {
         if (videoTitle.isNotBlank()) {
@@ -432,6 +435,12 @@ fun TrackSelectorDialog(
             }
 
             if (selectedTab == 2) {
+                Text(
+                    text = subtitleIdentity.displayLabel(),
+                    color = Color(0xFFB3E5FC),
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
