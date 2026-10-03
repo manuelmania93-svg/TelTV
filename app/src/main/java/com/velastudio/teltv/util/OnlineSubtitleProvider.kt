@@ -18,7 +18,8 @@ data class OnlineSubtitle(
     val lang: String,
     val langDisplay: String,
     val url: String,
-    val fileName: String
+    val fileName: String,
+    val isForced: Boolean = false
 )
 
 data class SubtitleMediaIdentity(
@@ -113,6 +114,12 @@ object OnlineSubtitleProvider {
         }
     }
 
+    fun isPreferredLanguage(languageCode: String?, preferredLanguageTags: List<String>): Boolean {
+        if (languageCode.isNullOrBlank()) return false
+        val language = normalizedLanguageCode(languageCode)
+        return preferredLanguageTags.any { normalizedLanguageCode(it) == language }
+    }
+
     fun prioritizePreferredLanguages(
         subtitles: List<OnlineSubtitle>,
         preferredLanguageTags: List<String>
@@ -123,7 +130,8 @@ object OnlineSubtitleProvider {
                 compareBy<IndexedValue<OnlineSubtitle>> {
                     preferredCodes.indexOf(normalizedLanguageCode(it.value.lang))
                         .takeIf { index -> index >= 0 } ?: Int.MAX_VALUE
-                }.thenBy { it.index }
+                }.thenBy { if (it.value.isForced) 0 else 1 }
+                    .thenBy { it.index }
             )
             .map { it.value }
     }
@@ -199,7 +207,20 @@ object OnlineSubtitleProvider {
                 val id = item.optString("id", "")
                 val url = item.optString("url", "")
                 val lang = item.optString("lang", "").lowercase()
-                val fileName = item.optString("subtitleFileName", "$lang.srt")
+                val fileName = item.optString(
+                    "subtitleFileName",
+                    item.optString(
+                        "fileName",
+                        item.optString("filename", item.optString("name", item.optString("title", "$lang.srt")))
+                    )
+                )
+                val isForced = item.optBoolean("forced") ||
+                    item.optBoolean("isForced") ||
+                    item.optBoolean("foreign_parts_only") ||
+                    item.optBoolean("foreignPartsOnly") ||
+                    item.optString("type").equals("forced", ignoreCase = true) ||
+                    Regex("""(?i)\bforced\b|\bforeign[ ._-]*parts?[ ._-]*only\b""")
+                        .containsMatchIn("$fileName $id")
                 if (url.isNotBlank()) {
                     results.add(
                         OnlineSubtitle(
@@ -207,7 +228,8 @@ object OnlineSubtitleProvider {
                             lang = lang,
                             langDisplay = getLanguageDisplay(lang),
                             url = url,
-                            fileName = fileName
+                            fileName = fileName,
+                            isForced = isForced
                         )
                     )
                 }

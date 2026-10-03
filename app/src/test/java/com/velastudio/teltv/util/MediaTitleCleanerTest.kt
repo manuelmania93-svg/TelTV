@@ -82,4 +82,26 @@ class MediaTitleCleanerTest {
         assertEquals(listOf(spanish, english), ordered)
         assertEquals(spanish, OnlineSubtitleProvider.firstPreferredLanguageMatch(ordered, listOf("es-MX")))
     }
+
+    @Test
+    fun forcedSubtitleInPreferredLanguageRanksBeforeFullSubtitle() {
+        val fullGerman = OnlineSubtitle("1", "de", "German", "https://example.test/de.srt", "German.srt")
+        val forcedGerman = OnlineSubtitle(
+            "2",
+            "de",
+            "German",
+            "https://example.test/de-forced.srt",
+            "German.Forced.srt",
+            isForced = true
+        )
+
+        val ordered = OnlineSubtitleProvider.prioritizePreferredLanguages(
+            listOf(fullGerman, forcedGerman),
+            listOf("de-DE")
+        )
+
+        assertEquals(listOf(forcedGerman, fullGerman), ordered)
+        assertEquals(forcedGerman, OnlineSubtitleProvider.firstPreferredLanguageMatch(ordered, listOf("de-DE")))
+        assertEquals(true, OnlineSubtitleProvider.isPreferredLanguage("deu", listOf("de-DE")))
+    }
 }

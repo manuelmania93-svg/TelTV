@@ -73,9 +73,18 @@ class PlaybackService : MediaSessionService() {
             }
 
         // Track selector: Never downmix 5.1/7.1 audio to stereo on soundbars
+        val configuration = resources.configuration
+        val preferredTextLanguages = if (android.os.Build.VERSION.SDK_INT >= 24) {
+            List(configuration.locales.size()) { configuration.locales[it].toLanguageTag() }
+        } else {
+            @Suppress("DEPRECATION")
+            listOfNotNull(configuration.locale?.toLanguageTag())
+        }
         val trackSelector = DefaultTrackSelector(this).apply {
             parameters = buildUponParameters()
                 .setConstrainAudioChannelCountToDeviceCapabilities(false)
+                .setPreferredTextLanguages(*preferredTextLanguages.toTypedArray())
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .build()
         }
 

@@ -33,7 +33,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusGroup
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -225,7 +224,8 @@ data class TrackItem(
     val title: String,
     val isSelected: Boolean,
     val group: Tracks.Group?,
-    val trackIndex: Int
+    val trackIndex: Int,
+    val isForced: Boolean = false
 )
 
 /**
@@ -276,7 +276,8 @@ fun TrackSelectorDialog(
                 for (i in 0 until group.length) {
                     if (!group.isTrackSupported(i)) continue
                     val format = group.getTrackFormat(i)
-                    val lang = format.language?.let { Locale(it).displayLanguage } ?: format.label ?: "Audio #${list.size + 1}"
+                    val lang = format.language?.takeIf { it.isNotBlank() && it != "und" }
+                        ?.let { Locale(it).displayLanguage } ?: format.label ?: "Audio #${list.size + 1}"
                     val label = if (format.label != null && format.language != null) "$lang (${format.label})" else lang
                     list.add(TrackItem(label, group.isTrackSelected(i), group, i))
                 }
@@ -295,9 +296,15 @@ fun TrackSelectorDialog(
                 for (i in 0 until group.length) {
                     if (!group.isTrackSupported(i)) continue
                     val format = group.getTrackFormat(i)
-                    val lang = format.language?.let { Locale(it).displayLanguage } ?: format.label ?: "Subtitle #${list.size}"
-                    val label = if (format.label != null && format.language != null) "$lang (${format.label})" else lang
-                    list.add(TrackItem(label, group.isTrackSelected(i), group, i))
+                    val lang = format.language?.takeIf { it.isNotBlank() && it != "und" }
+                        ?.let { Locale(it).displayLanguage } ?: format.label ?: "Subtitle #${list.size}"
+                    val isForced = format.selectionFlags and C.SELECTION_FLAG_FORCED != 0
+                    val label = buildString {
+                        append(lang)
+                        if (isForced) append(" · Forced")
+                        if (format.label != null && format.language != null) append(" (${format.label})")
+                    }
+                    list.add(TrackItem(label, group.isTrackSelected(i), group, i, isForced))
                 }
             }
         }
@@ -312,6 +319,12 @@ fun TrackSelectorDialog(
     val subtitleIdentity = remember(subtitleQuery) {
         OnlineSubtitleProvider.identifyMedia(subtitleQuery)
     }
+    val subtitleLanguagePreferences = remember(preferredLanguageTags) { preferredLanguageTags }
+    val subtitleLanguageHint = preferredLanguageTags.firstOrNull()?.let {
+        Locale.forLanguageTag(it).displayLanguage
+            .takeIf(String::isNotBlank)
+            ?.let { language -> "Subtitles for your TV language: $language (forced dialogue first)" }
+    } ?: "Subtitle language could not be detected"
     // Default to Online Subs if video has 0 embedded subtitle tracks
     var selectedTab by remember { mutableStateOf(if (subtitleTracks.size <= 1) 2 else 0) } // 0 = Audio, 1 = Embedded, 2 = Online Subs
 
@@ -322,20 +335,27 @@ fun TrackSelectorDialog(
         try {
             val results = OnlineSubtitleProvider.prioritizePreferredLanguages(
                 OnlineSubtitleProvider.searchSubtitles(query),
-                preferredLanguageTags
+                subtitleLanguagePreferences
             )
             onlineSubtitles = results
             if (autoSelectPreferred) {
-                val preferred = OnlineSubtitleProvider.firstPreferredLanguageMatch(results, preferredLanguageTags)
+                val preferred = OnlineSubtitleProvider.firstPreferredLanguageMatch(results, subtitleLanguagePreferences)
                 if (preferred != null) {
                     downloadingSubtitleId = preferred.id
-                    subtitleActionMessage = "Automatically selecting ${preferred.langDisplay}..."
+                    subtitleActionMessage = if (preferred.isForced) {
+                        "Automatically selecting forced ${preferred.langDisplay} subtitles..."
+                    } else {
+                        "Automatically selecting ${preferred.langDisplay} subtitles..."
+                    }
                     if (onSelectOnlineSubtitle(preferred)) {
                         onDismiss()
                     } else {
                         subtitleActionMessage = "Could not apply ${preferred.langDisplay}. Select a subtitle to retry."
                     }
                     downloadingSubtitleId = null
+                } else if (subtitleLanguagePreferences.isNotEmpty()) {
+                    val language = Locale.forLanguageTag(subtitleLanguagePreferences.first()).displayLanguage
+                    subtitleActionMessage = "No $language subtitles found. Choose an available language below."
                 }
             }
         } catch (e: CancellationException) {
@@ -349,7 +369,7 @@ fun TrackSelectorDialog(
         }
     }
 
-    LaunchedEffect(videoTitle, preferredLanguageTags, selectedTab) {
+    LaunchedEffect(videoTitle, subtitleLanguagePreferences, selectedTab) {
         if (videoTitle.isNotBlank() && selectedTab == 2) {
             searchOnlineSubtitles(videoTitle, autoSelectPreferred = true)
         }
@@ -373,7 +393,6 @@ fun TrackSelectorDialog(
                 .fillMaxWidth(0.92f)
                 .heightIn(max = maxHeight * 0.9f)
                 .verticalScroll(rememberScrollState())
-                .focusGroup()
                 .background(Color(0xFF222222), RoundedCornerShape(16.dp))
                 .padding(24.dp)
         ) {
@@ -491,6 +510,12 @@ fun TrackSelectorDialog(
                     text = subtitleIdentity.displayLabel(),
                     color = Color(0xFFB3E5FC),
                     fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = subtitleLanguageHint,
+                    color = Color.LightGray,
+                    fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
                 Row(
@@ -589,7 +614,12 @@ fun TrackSelectorDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(sub.langDisplay, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            if (sub.isForced) "${sub.langDisplay} · Forced (foreign dialogue)" else sub.langDisplay,
+                                            color = Color.White,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                         Text(sub.fileName, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
                                     }
                                     if (downloadingSubtitleId == sub.id) {

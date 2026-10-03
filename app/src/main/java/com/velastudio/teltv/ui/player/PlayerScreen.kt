@@ -71,6 +71,16 @@ fun PlayerScreen(
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
     var autoPlayTriggered by remember { mutableStateOf(false) }
+    var autoSubtitleAppliedUri by remember { mutableStateOf<String?>(null) }
+    val preferredSubtitleLanguages = remember(context) {
+        val configuration = context.resources.configuration
+        if (android.os.Build.VERSION.SDK_INT >= 24) {
+            List(configuration.locales.size()) { configuration.locales[it].toLanguageTag() }
+        } else {
+            @Suppress("DEPRECATION")
+            listOfNotNull(configuration.locale?.toLanguageTag())
+        }
+    }
 
     fun resolvedUri(): String? =
         directUri ?: fileId?.let { TdLibAwareDataSourceFactory.uriForFile(it).toString() }
@@ -83,6 +93,7 @@ fun PlayerScreen(
         autoPlayTriggered = false
         showAutoPlayOverlay = false
         playerErrorMessage = null
+        autoSubtitleAppliedUri = null
         mc.setMediaItem(ExoMediaItem.fromUri(uri))
         mc.seekTo(resumePositionMs)
         mc.prepare()
@@ -231,6 +242,44 @@ fun PlayerScreen(
 
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                val mediaController = controller ?: return
+                val mediaUri = mediaController.currentMediaItem?.localConfiguration?.uri?.toString() ?: return
+                if (autoSubtitleAppliedUri == mediaUri) return
+                val textTracks = tracks.groups
+                    .filter { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+                    .flatMap { group ->
+                        (0 until group.length)
+                            .filter { group.isTrackSupported(it) }
+                            .map { trackIndex -> Triple(group, trackIndex, group.getTrackFormat(trackIndex)) }
+                    }
+                if (textTracks.isEmpty()) return
+                autoSubtitleAppliedUri = mediaUri
+
+                val forcedMatch = preferredSubtitleLanguages.firstNotNullOfOrNull { preferredLanguage ->
+                    textTracks.firstOrNull { (_, _, format) ->
+                        format.selectionFlags and androidx.media3.common.C.SELECTION_FLAG_FORCED != 0 &&
+                            OnlineSubtitleProvider.isPreferredLanguage(format.language, listOf(preferredLanguage))
+                    }
+                }
+                val fallbackMatch = preferredSubtitleLanguages.firstNotNullOfOrNull { preferredLanguage ->
+                    textTracks.firstOrNull { (_, _, format) ->
+                        OnlineSubtitleProvider.isPreferredLanguage(format.language, listOf(preferredLanguage))
+                    }
+                }
+                val subtitleMatch = forcedMatch ?: fallbackMatch ?: return
+                val (group, trackIndex) = subtitleMatch
+                val override = androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, trackIndex)
+                mediaController.trackSelectionParameters = mediaController.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(override)
+                    .build()
+                Timber.i(
+                    "Auto-selected %s embedded subtitle for TV language preference",
+                    if (forcedMatch != null) "forced" else "full"
+                )
+            }
             override fun onEvents(player: Player, events: Player.Events) {
                 if (player.duration > 0 && player.duration != androidx.media3.common.C.TIME_UNSET) {
                     durationMs = player.duration
