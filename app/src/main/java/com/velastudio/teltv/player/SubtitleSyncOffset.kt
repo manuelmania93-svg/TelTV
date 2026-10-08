@@ -36,7 +36,7 @@ internal class OffsetSubtitleDecoder(
     override fun getName(): String = "Offset${decoder.name}"
 
     override fun setOutputStartTimeUs(outputStartTimeUs: Long) {
-        decoder.setOutputStartTimeUs(outputStartTimeUs - SubtitleSyncOffset.offsetUs)
+        decoder.setOutputStartTimeUs(outputStartTimeUs)
     }
 
     override fun dequeueInputBuffer(): SubtitleInputBuffer? = decoder.dequeueInputBuffer()
