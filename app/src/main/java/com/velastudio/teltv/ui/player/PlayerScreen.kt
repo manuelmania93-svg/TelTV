@@ -64,6 +64,7 @@ fun PlayerScreen(
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var isPlaying by remember { mutableStateOf(true) }
     var currentPositionMs by remember { mutableStateOf(resumePositionMs) }
+    val latestOnPositionUpdate by rememberUpdatedState(onPositionUpdate)
     var resumeAfterLifecycleStop by remember { mutableStateOf(false) }
     var durationMs by remember { mutableStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -347,7 +348,7 @@ fun PlayerScreen(
         onDispose {
             controller?.let { mediaController ->
                 mediaController.removeListener(listener)
-                onPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0))
+                latestOnPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0))
                 mediaController.stop()
             }
             MediaController.releaseFuture(controllerFuture)
@@ -362,7 +363,7 @@ fun PlayerScreen(
                     controller?.let { mediaController ->
                         resumeAfterLifecycleStop = mediaController.mediaItemCount > 0 && mediaController.playWhenReady
                         if (mediaController.mediaItemCount > 0) {
-                            onPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0L))
+                            latestOnPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0L))
                         }
                         mediaController.pause()
                     }
@@ -406,7 +407,7 @@ fun PlayerScreen(
                 tickCount++
                 if (tickCount >= 5) {
                     tickCount = 0
-                    onPositionUpdate(pos, dur)
+                    latestOnPositionUpdate(pos, dur)
                 }
                 // Autoplay trigger
                 if (dur > 60_000L && pos > 0L) {

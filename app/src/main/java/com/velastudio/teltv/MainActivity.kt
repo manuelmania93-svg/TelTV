@@ -62,6 +62,12 @@ import java.net.URLEncoder
  *   settings -> cache management (see CacheSettingsSection) + playback + account
  */
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        val app = application as? TelTvApp ?: return
+        if (app.startupError == null) app.telegramClient.refreshNetworkState()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as TelTvApp

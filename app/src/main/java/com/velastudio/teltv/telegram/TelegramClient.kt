@@ -3,6 +3,9 @@ package com.velastudio.teltv.telegram
 import java.util.concurrent.ConcurrentHashMap
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 import com.velastudio.teltv.data.model.MediaItem
 import com.velastudio.teltv.data.model.SourceType
 import kotlinx.coroutines.async
@@ -268,6 +271,48 @@ class TelegramClient(private val context: Context) {
     private var client: Client? = null
     var authState: TdApi.AuthorizationState? = null
         private set
+
+    fun refreshNetworkState() {
+        val activeClient = client ?: return
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return
+        val networkType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork
+            val capabilities = network?.let(connectivityManager::getNetworkCapabilities)
+            when {
+                capabilities == null -> TdApi.NetworkTypeNone()
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> TdApi.NetworkTypeWiFi()
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> TdApi.NetworkTypeMobile()
+                else -> TdApi.NetworkTypeOther()
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val info = connectivityManager.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            when {
+                info?.isConnected != true -> TdApi.NetworkTypeNone()
+                info.type == ConnectivityManager.TYPE_WIFI -> TdApi.NetworkTypeWiFi()
+                info.type == ConnectivityManager.TYPE_MOBILE -> TdApi.NetworkTypeMobile()
+                else -> TdApi.NetworkTypeOther()
+            }
+        }
+
+        if (networkType is TdApi.NetworkTypeNone) {
+            activeClient.send(TdApi.SetNetworkType(networkType)) {}
+        } else {
+            // Force TDLib through an offline/online transition after Android TV sleep.
+            activeClient.send(TdApi.SetNetworkType(TdApi.NetworkTypeNone())) { result ->
+                if (result is TdApi.Error) {
+                    Timber.w("TDLib network reset failed: [%d] %s", result.code, result.message)
+                }
+                activeClient.send(TdApi.SetNetworkType(networkType)) { reconnectResult ->
+                    if (reconnectResult is TdApi.Error) {
+                        Timber.w("TDLib network refresh failed: [%d] %s", reconnectResult.code, reconnectResult.message)
+                    }
+                }
+            }
+        }
+    }
 
     companion object {
         // Replace with your own values from https://my.telegram.org -- never commit real ones.
