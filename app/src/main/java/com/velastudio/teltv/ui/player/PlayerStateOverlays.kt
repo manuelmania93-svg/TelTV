@@ -54,6 +54,8 @@ import kotlinx.coroutines.CancellationException
 import java.util.Locale
 import com.velastudio.teltv.util.OnlineSubtitle
 import com.velastudio.teltv.util.OnlineSubtitleProvider
+import com.velastudio.teltv.util.SubtitleLanguages
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun BufferingIndicator() {
@@ -249,15 +251,6 @@ fun TrackSelectorDialog(
     val context = LocalContext.current
     val initialTabFocusRequester = remember { FocusRequester() }
     val onlineTabFocusRequester = remember { FocusRequester() }
-    val preferredLanguageTags = remember(context) {
-        val configuration = context.resources.configuration
-        if (android.os.Build.VERSION.SDK_INT >= 24) {
-            List(configuration.locales.size()) { configuration.locales[it].toLanguageTag() }
-        } else {
-            @Suppress("DEPRECATION")
-            listOfNotNull(configuration.locale?.toLanguageTag())
-        }
-    }
 
     var currentTracks by remember { mutableStateOf(controller.currentTracks) }
     androidx.compose.runtime.DisposableEffect(controller) {
@@ -316,7 +309,19 @@ fun TrackSelectorDialog(
     val embeddedSubtitleSelected = subtitleTracks.any { it.group != null && it.isSelected } &&
         !onlineSubtitleSelected
 
-    var onlineSubtitles by remember { mutableStateOf<List<OnlineSubtitle>>(emptyList()) }
+    var rawOnlineSubtitles by remember { mutableStateOf<List<OnlineSubtitle>>(emptyList()) }
+    // Chosen subtitle language (ISO 639-1). null until the saved choice is read; German by default.
+    var selectedSubtitleLanguage by remember { mutableStateOf<String?>(null) }
+    var showLanguagePicker by remember { mutableStateOf(false) }
+    var languageQuery by remember { mutableStateOf("") }
+    LaunchedEffect(prefs) {
+        selectedSubtitleLanguage = prefs?.subtitleLanguage?.first() ?: SubtitleLanguages.DEFAULT_CODE
+    }
+    val activeSubtitleLanguage = selectedSubtitleLanguage ?: SubtitleLanguages.DEFAULT_CODE
+    val onlineSubtitles = remember(rawOnlineSubtitles, activeSubtitleLanguage) {
+        SubtitleLanguages.orderForSelection(rawOnlineSubtitles, activeSubtitleLanguage)
+    }
+    val languageCounts = remember(rawOnlineSubtitles) { SubtitleLanguages.countByLanguage(rawOnlineSubtitles) }
     var isLoadingOnlineSubs by remember { mutableStateOf(false) }
     var subtitleQuery by remember(videoTitle) { mutableStateOf(videoTitle) }
     var downloadingSubtitleId by remember { mutableStateOf<String?>(null) }
@@ -324,12 +329,9 @@ fun TrackSelectorDialog(
     val subtitleIdentity = remember(subtitleQuery) {
         OnlineSubtitleProvider.identifyMedia(subtitleQuery)
     }
-    val subtitleLanguagePreferences = remember(preferredLanguageTags) { preferredLanguageTags }
-    val subtitleLanguageHint = preferredLanguageTags.firstOrNull()?.let {
-        Locale.forLanguageTag(it).displayLanguage
-            .takeIf(String::isNotBlank)
-            ?.let { language -> "Subtitles for your TV language: $language (forced dialogue first)" }
-    } ?: "Subtitle language could not be detected"
+    val subtitleLanguagePreferences = listOf(activeSubtitleLanguage)
+    val subtitleLanguageHint =
+        "Subtitle language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)} (forced dialogue first)"
     // Default to Online Subs if video has 0 embedded subtitle tracks
     var selectedTab by remember { mutableStateOf(if (subtitleTracks.size <= 1) 2 else 0) } // 0 = Audio, 1 = Embedded, 2 = Online Subs
 
@@ -339,10 +341,10 @@ fun TrackSelectorDialog(
         subtitleActionMessage = null
         try {
             val results = OnlineSubtitleProvider.prioritizePreferredLanguages(
-                OnlineSubtitleProvider.searchSubtitles(query),
+                OnlineSubtitleProvider.searchSubtitles(query, activeSubtitleLanguage),
                 subtitleLanguagePreferences
             )
-            onlineSubtitles = results
+            rawOnlineSubtitles = results
             if (autoSelectPreferred) {
                 val preferred = OnlineSubtitleProvider.firstPreferredLanguageMatch(results, subtitleLanguagePreferences)
                 if (preferred != null) {
@@ -359,7 +361,7 @@ fun TrackSelectorDialog(
                     }
                     downloadingSubtitleId = null
                 } else if (subtitleLanguagePreferences.isNotEmpty()) {
-                    val language = Locale.forLanguageTag(subtitleLanguagePreferences.first()).displayLanguage
+                    val language = SubtitleLanguages.displayName(subtitleLanguagePreferences.first())
                     subtitleActionMessage = "No $language subtitles found. Choose an available language below."
                 }
             }
@@ -374,8 +376,9 @@ fun TrackSelectorDialog(
         }
     }
 
-    LaunchedEffect(videoTitle, subtitleLanguagePreferences, selectedTab) {
-        if (videoTitle.isNotBlank() && selectedTab == 2) {
+    // Waits for the saved language, then searches once; picking another language later only re-orders results.
+    LaunchedEffect(videoTitle, selectedSubtitleLanguage != null, selectedTab) {
+        if (videoTitle.isNotBlank() && selectedTab == 2 && selectedSubtitleLanguage != null) {
             searchOnlineSubtitles(videoTitle, autoSelectPreferred = true)
         }
     }
@@ -596,6 +599,56 @@ fun TrackSelectorDialog(
                     fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
+                Button(
+                    onClick = { showLanguagePicker = !showLanguagePicker; languageQuery = "" },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)}" +
+                            if (showLanguagePicker) "  (close)" else "  (change)"
+                    )
+                }
+                if (showLanguagePicker) {
+                    OutlinedTextField(
+                        value = languageQuery,
+                        onValueChange = { languageQuery = it },
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        singleLine = true,
+                        placeholder = { Text("Search language, e.g. French, Francais, fra") }
+                    )
+                    val matchingLanguages = remember(languageQuery, activeSubtitleLanguage) {
+                        SubtitleLanguages.search(languageQuery, activeSubtitleLanguage)
+                    }
+                    if (matchingLanguages.isEmpty()) {
+                        Text("No language matches \"$languageQuery\"", color = Color.Gray, fontSize = 13.sp)
+                    }
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 200.dp).padding(vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(matchingLanguages) { language ->
+                            val count = languageCounts[language.code] ?: 0
+                            Button(
+                                onClick = {
+                                    selectedSubtitleLanguage = language.code
+                                    showLanguagePicker = false
+                                    languageQuery = ""
+                                    subtitleActionMessage = if (rawOnlineSubtitles.isNotEmpty() && count == 0) {
+                                        "No ${language.english} subtitles for this title. Showing other languages."
+                                    } else null
+                                    coroutineScope.launch { prefs?.setSubtitleLanguage(language.code) }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    language.label() + if (count > 0) "  -  $count available" else "",
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

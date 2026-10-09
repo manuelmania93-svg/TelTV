@@ -156,7 +156,10 @@ object OnlineSubtitleProvider {
         }
     }
 
-    suspend fun searchSubtitles(rawTitle: String): List<OnlineSubtitle> = withContext(Dispatchers.IO) {
+    suspend fun searchSubtitles(
+        rawTitle: String,
+        preferredLanguage: String = SubtitleLanguages.DEFAULT_CODE
+    ): List<OnlineSubtitle> = withContext(Dispatchers.IO) {
         try {
             val identity = identifyMedia(rawTitle)
             val searchTitle = identity.title
@@ -242,18 +245,7 @@ object OnlineSubtitleProvider {
             val lowerTitle = rawTitle.lowercase()
             val matchedKeywords = targetKeywords.filter { lowerTitle.contains(it) }
 
-            results.sortedWith(
-                compareByDescending<OnlineSubtitle> { sub ->
-                    when (sub.lang.lowercase()) {
-                        "ger", "deu", "de" -> 100
-                        "eng", "en" -> 50
-                        else -> 0
-                    }
-                }.thenByDescending { sub ->
-                    val subText = "${sub.releaseName} ${sub.fileName}".lowercase()
-                    matchedKeywords.count { subText.contains(it) }
-                }
-            )
+            SubtitleLanguages.rankResults(results, preferredLanguage, matchedKeywords)
         } catch (e: Exception) {
             Timber.w(e, "Failed to fetch online subtitles for %s", rawTitle)
             emptyList()
