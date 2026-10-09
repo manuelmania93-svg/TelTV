@@ -65,7 +65,11 @@ class PlaybackService : MediaSessionService() {
                 extensionRendererMode: Int,
                 out: ArrayList<Renderer>
             ) {
-                out.add(TextRenderer(output, outputLooper, SubtitleOffsetDecoderFactory))
+                val textRenderer = TextRenderer(output, outputLooper, SubtitleOffsetDecoderFactory)
+                // Media3 1.5.0 parses subtitles during extraction by default, which bypasses
+                // our offset decoder. Force legacy decoding so SubtitleSyncOffset applies.
+                textRenderer.experimentalSetLegacyDecodingEnabled(true)
+                out.add(textRenderer)
             }
 
             override fun buildAudioSink(
@@ -104,7 +108,11 @@ class PlaybackService : MediaSessionService() {
         }
 
         val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(this)
+                    .setDataSourceFactory(dataSourceFactory)
+                    .experimentalParseSubtitlesDuringExtraction(false)
+            )
             .setLoadControl(loadControl)
             .setTrackSelector(trackSelector)
             .setAudioAttributes(
