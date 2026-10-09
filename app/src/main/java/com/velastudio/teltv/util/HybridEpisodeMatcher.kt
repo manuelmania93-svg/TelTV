@@ -2,6 +2,7 @@ package com.velastudio.teltv.util
 
 import com.velastudio.teltv.data.local.VideoIndexDao
 import com.velastudio.teltv.data.local.VideoIndexEntity
+import com.velastudio.teltv.util.matcher.UniversalMatcher
 import java.util.Locale
 
 object HybridEpisodeMatcher {
@@ -106,6 +107,9 @@ object HybridEpisodeMatcher {
             }
         }
 
+        // Step 2b: universal matcher (date-named shows, anime absolute numbering, bare numbers)
+        universalNext(current, dao)?.let { return it }
+
         // Step 3: Timeline Fallback (The Bridge)
         return dao.getNextInChannel(current.chatId, current.messageId)
     }
@@ -146,7 +150,28 @@ object HybridEpisodeMatcher {
             }
         }
 
+        universalPrevious(current, dao)?.let { return it }
+
         // Step 3: Timeline Fallback (previous uploaded video in channel)
         return dao.getPreviousInChannel(current.chatId, current.messageId)
+    }
+
+    private suspend fun universalNext(current: VideoIndexEntity, dao: VideoIndexDao): VideoIndexEntity? =
+        universal(current, dao) { cur, lib -> UniversalMatcher.findNext(cur, lib) }
+
+    private suspend fun universalPrevious(current: VideoIndexEntity, dao: VideoIndexDao): VideoIndexEntity? =
+        universal(current, dao) { cur, lib -> UniversalMatcher.findPrevious(cur, lib) }
+
+    private suspend fun universal(
+        current: VideoIndexEntity,
+        dao: VideoIndexDao,
+        step: (UniversalMatcher.Entry, List<UniversalMatcher.Entry>) -> UniversalMatcher.Entry?
+    ): VideoIndexEntity? {
+        val all = dao.getAllForChat(current.chatId)
+        val hit = step(
+            UniversalMatcher.Entry(current.mediaId, current.title),
+            all.map { UniversalMatcher.Entry(it.mediaId, it.title) }
+        ) ?: return null
+        return all.firstOrNull { it.mediaId == hit.id }
     }
 }
