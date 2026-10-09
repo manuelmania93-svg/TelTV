@@ -14,6 +14,14 @@ android {
         targetSdk = 34
         versionCode = 88
         versionName = "0.3.59"
+
+        // TMDB v3 API key comes from local.properties (TMDB_API_KEY=...) or the
+        // TMDB_API_KEY environment variable. It is never committed.
+        val localProps = java.util.Properties()
+        val localPropsFile = rootProject.file("local.properties")
+        if (localPropsFile.exists()) localPropsFile.inputStream().use { localProps.load(it) }
+        val tmdbKey = localProps.getProperty("TMDB_API_KEY") ?: System.getenv("TMDB_API_KEY") ?: ""
+        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbKey\"")
     }
 
     val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
