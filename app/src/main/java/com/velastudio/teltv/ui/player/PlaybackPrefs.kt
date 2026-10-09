@@ -23,6 +23,7 @@ class PlaybackPrefs(private val context: Context) {
         val KEY_SHOW_PINNED = booleanPreferencesKey("show_pinned_videos")
         val KEY_SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
         val KEY_SUBTITLE_COLOR = stringPreferencesKey("subtitle_color")
+        val KEY_SUBTITLE_LANGUAGE = stringPreferencesKey("subtitle_language")
         const val DEFAULT_SKIP_MS = 10_000L
         const val DEFAULT_AUTOPLAY = true
     }
@@ -33,6 +34,15 @@ class PlaybackPrefs(private val context: Context) {
 
     suspend fun setDialogueBoostEnabled(enabled: Boolean) {
         context.playbackDataStore.edit { it[KEY_DIALOGUE_BOOST] = enabled }
+    }
+
+    /** Language chosen in the online-subtitle picker (ISO 639-1). German until the user picks another. */
+    val subtitleLanguage: Flow<String> = context.playbackDataStore.data.map {
+        it[KEY_SUBTITLE_LANGUAGE] ?: com.velastudio.teltv.util.SubtitleLanguages.DEFAULT_CODE
+    }
+
+    suspend fun setSubtitleLanguage(code: String) {
+        context.playbackDataStore.edit { it[KEY_SUBTITLE_LANGUAGE] = code }
     }
 
     val subtitleSize: Flow<String> = context.playbackDataStore.data.map {
