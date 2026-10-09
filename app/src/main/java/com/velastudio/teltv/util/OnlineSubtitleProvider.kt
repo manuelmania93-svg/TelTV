@@ -1,6 +1,7 @@
 package com.velastudio.teltv.util
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -10,6 +11,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.net.URLEncoder
+import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -20,7 +22,9 @@ data class OnlineSubtitle(
     val url: String,
     val fileName: String,
     val isForced: Boolean = false,
-    val releaseName: String = ""
+    val releaseName: String = "",
+    val season: Int? = null,
+    val episode: Int? = null
 )
 
 data class SubtitleMediaIdentity(
@@ -55,7 +59,7 @@ object OnlineSubtitleProvider {
         val cleanTitle = MediaTitleCleaner.clean(rawTitle)
         val signature = HybridEpisodeMatcher.parseSignature(rawTitle)
         val seasonMatch = SEASON_EPISODE_REGEX.find(cleanTitle)
-        val year = YEAR_REGEX.find(cleanTitle)?.groupValues?.get(1)?.toIntOrNull()
+        val year = YEAR_REGEX.find(rawTitle)?.groupValues?.get(1)?.toIntOrNull()
         val isSeries = signature != null || seasonMatch != null
 
         val season = signature?.season ?: seasonMatch?.let {
@@ -147,6 +151,55 @@ object OnlineSubtitleProvider {
         }
     }
 
+    /** A conservative title match; punctuation/accents are ignored, words are not. */
+    internal fun titleScore(expected: String, candidate: String): Int {
+        fun words(value: String): Set<String> = Normalizer.normalize(value, Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT)
+            .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim().split(Regex("\\s+"))
+            .filter { it.isNotBlank() }.toSet()
+        val left = words(expected)
+        val right = words(candidate)
+        if (left.isEmpty() || right.isEmpty()) return 0
+        if (left == right) return 100
+        return (100 * left.intersect(right).size / left.union(right).size)
+    }
+
+    internal fun releaseScore(rawTitle: String, subtitle: OnlineSubtitle): Int? {
+        val wanted = identifyMedia(rawTitle)
+        val release = subtitle.releaseName.ifBlank { subtitle.fileName }
+        val releaseIdentity = identifyMedia(release.replace(Regex("(?i)\\.(srt|vtt|ass|ssa)$"), ""))
+        val fileIdentity = identifyMedia(subtitle.fileName.replace(Regex("(?i)\\.(srt|vtt|ass|ssa)$"), ""))
+        val found = if (fileIdentity.episode != null) fileIdentity else releaseIdentity
+        val foundSeason = subtitle.season ?: found.season
+        val foundEpisode = subtitle.episode ?: found.episode
+        // Explicit conflicts are unsafe even when the provider scoped its response by IMDb ID.
+        if (wanted.season != null && foundSeason != null && wanted.season != foundSeason) return null
+        if (wanted.episode != null && foundEpisode != null && wanted.episode != foundEpisode) return null
+        if (wanted.year != null && found.year != null && wanted.year != found.year) return null
+        // Language-only filenames have no title evidence. Keep them as a low-ranked fallback.
+        val generic = Regex("(?i)^(?:[a-z]{2,3}|subtitle|subtitles|\\d+)(?:\\.srt|\\.vtt|\\.ass)?$")
+            .matches(release.trim())
+        val titleMatch = if (generic) 0 else maxOf(titleScore(wanted.title, found.title), titleScore(wanted.title, fileIdentity.title))
+        if (!generic && titleMatch < 50) return null
+        val tags = listOf("web-dl", "webrip", "bluray", "bdrip", "hdtv", "1080p", "720p", "2160p", "hevc", "x265", "x264")
+        val raw = rawTitle.lowercase(Locale.ROOT)
+        val text = "$release ${subtitle.fileName}".lowercase(Locale.ROOT)
+        val group = Regex("-([a-z0-9]+)(?:\\.[a-z0-9]+)?$", RegexOption.IGNORE_CASE)
+            .find(rawTitle)?.groupValues?.get(1)
+        return titleMatch + (if (wanted.episode != null && wanted.episode == foundEpisode) 40 else 0) +
+            (if (wanted.season != null && wanted.season == foundSeason) 20 else 0) +
+            (if (wanted.year != null && wanted.year == found.year) 20 else 0) +
+            tags.count { raw.contains(it) && text.contains(it) } * 2 +
+            (if (group != null && Regex("(?i)(?:-|\\b)${Regex.escape(group)}(?:\\.|$)").containsMatchIn(release)) 10 else 0)
+    }
+
+    internal fun rankSubtitles(rawTitle: String, subtitles: List<OnlineSubtitle>): List<OnlineSubtitle> =
+        subtitles.mapNotNull { sub -> releaseScore(rawTitle, sub)?.let { sub to it } }
+            .sortedWith(compareByDescending<Pair<OnlineSubtitle, Int>> {
+                when (normalizedLanguageCode(it.first.lang)) { "de" -> 100; "en" -> 50; else -> 0 }
+            }.thenByDescending { it.second }.thenBy { it.first.id })
+            .map { it.first }
+
     private fun getLanguageDisplay(code: String): String {
         val lower = code.lowercase().trim()
         return LANG_MAP[lower] ?: try {
@@ -160,8 +213,12 @@ object OnlineSubtitleProvider {
         try {
             val identity = identifyMedia(rawTitle)
             val searchTitle = identity.title
-            val seasonNum = identity.season ?: 1
-            val episodeNum = identity.episode ?: 1
+            // Never silently search episode 1 or map absolute anime numbering to season 1.
+            if (identity.isSeries && (identity.season == null || identity.episode == null)) {
+                return@withContext emptyList()
+            }
+            val seasonNum = identity.season
+            val episodeNum = identity.episode
 
             // Step 1: Query Cinemeta for IMDb ID
             val type = if (identity.isSeries) "series" else "movie"
@@ -173,16 +230,31 @@ object OnlineSubtitleProvider {
                 .header("User-Agent", "TelTV-AndroidTV")
                 .build()
 
-            val cinemetaResp = client.newCall(cinemetaReq).execute()
-            if (!cinemetaResp.isSuccessful) return@withContext emptyList()
-
-            val cinemetaBody = cinemetaResp.body?.string() ?: return@withContext emptyList()
+            val cinemetaBody = client.newCall(cinemetaReq).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                response.body?.string()
+            } ?: return@withContext emptyList()
             val metas = JSONObject(cinemetaBody).optJSONArray("metas") ?: return@withContext emptyList()
             if (metas.length() == 0) return@withContext emptyList()
 
-            val imdbId = metas.getJSONObject(0).optString("imdb_id").takeIf { it.isNotBlank() }
-                ?: metas.getJSONObject(0).optString("id").takeIf { it.isNotBlank() }
-                ?: return@withContext emptyList()
+            val candidates = (0 until metas.length()).map { metas.getJSONObject(it) }
+            val ranked = candidates.mapNotNull { candidate ->
+                val name = candidate.optString("name")
+                val candidateYear = YEAR_REGEX.find(candidate.optString("year"))
+                    ?.value?.toIntOrNull()
+                val score = titleScore(identity.title, name)
+                if (score < 70 || (identity.year != null && candidateYear != null &&
+                            identity.year != candidateYear)) null
+                else candidate to (score + if (identity.year != null && identity.year == candidateYear) 30 else 0)
+            }.sortedByDescending { it.second }
+            val best = ranked.firstOrNull() ?: return@withContext emptyList()
+            // Refuse equally plausible remakes instead of choosing by provider order.
+            if (ranked.drop(1).any { it.second == best.second &&
+                    it.first.optString("id") != best.first.optString("id") }) {
+                return@withContext emptyList()
+            }
+            val imdbId = best.first.optString("imdb_id").ifBlank { best.first.optString("id") }
+                .takeIf { Regex("tt\\d+").matches(it) } ?: return@withContext emptyList()
 
             // Step 2: Query OpenSubtitles v3 for subtitles list
             val subUrl = if (identity.isSeries) {
@@ -196,10 +268,10 @@ object OnlineSubtitleProvider {
                 .header("User-Agent", "TelTV-AndroidTV")
                 .build()
 
-            val subResp = client.newCall(subReq).execute()
-            if (!subResp.isSuccessful) return@withContext emptyList()
-
-            val subBody = subResp.body?.string() ?: return@withContext emptyList()
+            val subBody = client.newCall(subReq).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                response.body?.string()
+            } ?: return@withContext emptyList()
             val subArray = JSONObject(subBody).optJSONArray("subtitles") ?: return@withContext emptyList()
 
             val results = mutableListOf<OnlineSubtitle>()
@@ -232,28 +304,17 @@ object OnlineSubtitleProvider {
                             url = url,
                             fileName = fileName,
                             isForced = isForced,
-                            releaseName = releaseName
+                            releaseName = releaseName,
+                            season = item.optInt("season", -1).takeIf { it >= 0 },
+                            episode = item.optInt("episode", -1).takeIf { it >= 0 }
                         )
                     )
                 }
             }
 
-            val targetKeywords = listOf("web-dl", "webrip", "web", "bluray", "bdrip", "hdtv", "1080p", "720p", "hevc", "x265", "x264", "nf", "netflix")
-            val lowerTitle = rawTitle.lowercase()
-            val matchedKeywords = targetKeywords.filter { lowerTitle.contains(it) }
-
-            results.sortedWith(
-                compareByDescending<OnlineSubtitle> { sub ->
-                    when (sub.lang.lowercase()) {
-                        "ger", "deu", "de" -> 100
-                        "eng", "en" -> 50
-                        else -> 0
-                    }
-                }.thenByDescending { sub ->
-                    val subText = "${sub.releaseName} ${sub.fileName}".lowercase()
-                    matchedKeywords.count { subText.contains(it) }
-                }
-            )
+            rankSubtitles(rawTitle, results)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Timber.w(e, "Failed to fetch online subtitles for %s", rawTitle)
             emptyList()
