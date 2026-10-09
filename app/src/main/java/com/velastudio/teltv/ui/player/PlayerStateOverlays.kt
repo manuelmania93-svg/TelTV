@@ -240,6 +240,7 @@ fun TrackSelectorDialog(
     syncOffsetMs: Long = 0L,
     onAdjustSyncOffset: (Long) -> Unit = {},
     onlineSubtitleSelected: Boolean = false,
+    onAutoSync: suspend () -> String = { "" },
     prefs: PlaybackPrefs? = null,
     onDismiss: () -> Unit
 ) {
@@ -485,6 +486,27 @@ fun TrackSelectorDialog(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(syncOffsetMs + 5_000L) }
                         ) { Text("+5s") }
+                    }
+                    if (selectedTab != 1) {
+                        var autoSyncBusy by remember { mutableStateOf(false) }
+                        var autoSyncStatus by remember { mutableStateOf("") }
+                        Button(
+                            enabled = canAdjustSync && !autoSyncBusy,
+                            onClick = {
+                                autoSyncBusy = true
+                                autoSyncStatus = "Listening to the audio..."
+                                coroutineScope.launch {
+                                    autoSyncStatus = try {
+                                        onAutoSync()
+                                    } finally {
+                                        autoSyncBusy = false
+                                    }
+                                }
+                            }
+                        ) { Text(if (autoSyncBusy) "Syncing..." else "Auto-sync to audio") }
+                        if (autoSyncStatus.isNotEmpty()) {
+                            Text(autoSyncStatus, color = Color.LightGray, fontSize = 12.sp)
+                        }
                     }
                     if (!canAdjustSync) {
                         Text(
