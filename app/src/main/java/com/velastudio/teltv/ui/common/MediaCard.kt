@@ -52,7 +52,7 @@ fun PosterCard(
     contentDescription: String = title
 ) {
     var localThumbPath by remember(thumbnailFileId, title) { mutableStateOf<String?>(null) }
-    var tmdbMeta by remember(title) { mutableStateOf<TmdbMetadata?>(null) }
+    var tmdbMeta by remember(title, fallbackTitle, enableTmdb) { mutableStateOf<TmdbMetadata?>(null) }
 
     DisposableEffect(thumbnailFileId, thumbnailLoader, title) {
         val job = if (thumbnailFileId != null && thumbnailFileId > 0 && thumbnailLoader != null) {
@@ -66,8 +66,15 @@ fun PosterCard(
 
     LaunchedEffect(title, fallbackTitle, enableTmdb) {
         if (enableTmdb) {
-            val showPoster = fallbackTitle?.let { TmdbMetadataProvider.getMetadata(it) }
-            tmdbMeta = showPoster ?: TmdbMetadataProvider.getMetadata(title)
+            // The filename identifies the episode. A channel name is only an artwork fallback,
+            // never the primary identity for every movie in a mixed channel.
+            tmdbMeta = TmdbMetadataProvider.getMetadata(title)
+                ?: fallbackTitle?.let { fallback ->
+                    TmdbMetadataProvider.getMetadata(fallback)?.copy(
+                        title = null, year = null, rating = null, overview = null,
+                        episodeName = null, seasonName = null, seasonNumber = null, episodeNumber = null
+                    )
+                }
         } else {
             tmdbMeta = null
         }
@@ -97,7 +104,7 @@ fun PosterCard(
             val imageSource = if (!enableTmdb) {
                 null // Fast mode: zero bitmap allocations
             } else {
-                // Prioritize official TMDB/Cinemeta poster art over random embedded Telegram video frames!
+                // Prioritize configured TMDB poster art over random embedded Telegram video frames!
                 tmdbMeta?.posterUrl ?: localThumbPath?.takeIf { it.isNotBlank() && java.io.File(it).exists() }
             }
             if (imageSource != null) {
@@ -192,14 +199,16 @@ fun PosterCard(
             ) {
                 val clean = remember(title) { MediaTitleCleaner.clean(title) }
                 Text(
-                    text = clean,
+                    text = tmdbMeta?.episodeName ?: tmdbMeta?.title ?: clean,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
-                val subText = subtitle ?: tmdbMeta?.year
+                val subText = tmdbMeta?.episodeLabel()?.let { label ->
+                    listOfNotNull(tmdbMeta?.title, label).joinToString(" - ")
+                } ?: subtitle ?: tmdbMeta?.year
                 if (subText != null) {
                     Spacer(Modifier.height(2.dp))
                     Text(

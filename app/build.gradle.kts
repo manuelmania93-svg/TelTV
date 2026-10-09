@@ -1,8 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
 }
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val tmdbApiKey = localProperties.getProperty("TMDB_API_KEY", "").trim()
+    .replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.velastudio.teltv"
@@ -14,6 +23,7 @@ android {
         targetSdk = 34
         versionCode = 88
         versionName = "0.3.59"
+        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
     }
 
     val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
@@ -65,6 +75,7 @@ android {
 }
 
 dependencies {
+    testImplementation("org.json:json:20240303")
     // Core / Compose
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.3")
