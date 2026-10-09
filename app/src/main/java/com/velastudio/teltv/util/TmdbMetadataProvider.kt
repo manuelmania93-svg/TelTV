@@ -1,5 +1,6 @@
 package com.velastudio.teltv.util
 
+import com.velastudio.teltv.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
@@ -24,7 +25,8 @@ object TmdbMetadataProvider {
     private val EMPTY_META = TmdbMetadata(null, null, null, null, null)
     private val cache = ConcurrentHashMap<String, TmdbMetadata>()
     private val throttle = Semaphore(2)
-    private const val API_KEY = "e6931fc8ba77a2818c3a9f931e088b3f"
+    // Read from local.properties (TMDB_API_KEY) at build time; see README.
+    private val API_KEY: String get() = BuildConfig.TMDB_API_KEY
     private const val IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
     private val EPISODE_REGEX = Regex("(?i)\\s*-\\s*s\\d{1,2}e\\d{1,2}.*|\\s+s\\d{1,2}e\\d{1,2}.*|\\s+season\\s+\\d+.*|\\s+episode\\s+\\d+.*")
@@ -88,6 +90,7 @@ object TmdbMetadataProvider {
                     cache[query] = cinemeta
                     return@withContext cinemeta
                 }
+                if (API_KEY.isBlank()) return@withContext null // no TMDB key configured
                 val encoded = URLEncoder.encode(query, "UTF-8")
                 val url = "https://api.themoviedb.org/3/search/multi?api_key=$API_KEY&query=$encoded"
                 val request = Request.Builder().url(url).build()
