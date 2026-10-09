@@ -230,6 +230,26 @@ fun PlayerScreen(
         }
     }
 
+    suspend fun autoSyncSubtitle(): String {
+        val file = activeSubtitleFile ?: return "Select an online subtitle first"
+        val uri = resolvedUri() ?: return "No media to analyse"
+        val app = context.applicationContext as com.velastudio.teltv.TelTvApp
+        val factory = com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory(app.telegramClient, context)
+        val length = durationMs.takeIf { it > 0 } ?: controller?.duration?.takeIf { it > 0 } ?: 0L
+        return when (val outcome = com.velastudio.teltv.sync.SubtitleAutoSync.run(factory, Uri.parse(uri), file, length)) {
+            is com.velastudio.teltv.sync.AutoSyncOutcome.Synced -> {
+                adjustSubtitleSync(outcome.offsetMs)
+                "Synced: ${"%+.2f".format(outcome.offsetMs / 1000.0)}s (${outcome.result.agreeingWindows} of ${outcome.result.totalWindows} checks agree)"
+            }
+            is com.velastudio.teltv.sync.AutoSyncOutcome.AlreadyInSync -> "Already in sync with the audio"
+            is com.velastudio.teltv.sync.AutoSyncOutcome.Drifting ->
+                "Timing drifts through the film (different frame rate or cut). Try another subtitle."
+            is com.velastudio.teltv.sync.AutoSyncOutcome.NotConfident ->
+                "Could not match this subtitle to the audio confidently. Nothing changed."
+            is com.velastudio.teltv.sync.AutoSyncOutcome.Failed -> "Auto-sync unavailable: ${outcome.reason}"
+        }
+    }
+
     fun openInExternalPlayer() {
         val streamUri = resolvedUri() ?: return
         try {
@@ -682,6 +702,7 @@ fun PlayerScreen(
                 syncOffsetMs = subtitleSyncOffsetMs,
                 onAdjustSyncOffset = ::adjustSubtitleSync,
                 onlineSubtitleSelected = activeSubtitleFile != null,
+                onAutoSync = ::autoSyncSubtitle,
                 prefs = prefs,
                 onDismiss = { showTrackSelector = false }
             )
