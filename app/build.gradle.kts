@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -17,7 +19,7 @@ android {
 
         // TMDB v3 API key comes from local.properties (TMDB_API_KEY=...) or the
         // TMDB_API_KEY environment variable. It is never committed.
-        val localProps = java.util.Properties()
+        val localProps = Properties()
         val localPropsFile = rootProject.file("local.properties")
         if (localPropsFile.exists()) localPropsFile.inputStream().use { localProps.load(it) }
         val tmdbKey = localProps.getProperty("TMDB_API_KEY") ?: System.getenv("TMDB_API_KEY") ?: ""
