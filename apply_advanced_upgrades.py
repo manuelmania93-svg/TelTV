@@ -24,7 +24,7 @@ data class TmdbMetadata(
 object TmdbMetadataProvider {
     private val client = OkHttpClient.Builder().build()
     private val cache = ConcurrentHashMap<String, TmdbMetadata?>()
-    private const val API_KEY = "e6931fc8ba77a2818c3a9f931e088b3f"
+    private val API_KEY: String get() = com.velastudio.teltv.BuildConfig.TMDB_API_KEY
     private const val IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
     private val EPISODE_REGEX = Regex("(?i)\\\\s*-\\\\s*s\\\\d{1,2}e\\\\d{1,2}.*|\\\\s+s\\\\d{1,2}e\\\\d{1,2}.*|\\\\s+season\\\\s+\\\\d+.*|\\\\s+episode\\\\s+\\\\d+.*")

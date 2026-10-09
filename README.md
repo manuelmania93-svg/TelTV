@@ -22,6 +22,18 @@ is retained in the app's About screen.
 
 ## Setup
 
+### TMDB API key
+
+Poster and rating lookups use a TMDB v3 API key that is not stored in the repo. Add this line to
+`local.properties` in the project root (the file is git-ignored):
+
+```
+TMDB_API_KEY=<your TMDB v3 key>
+```
+
+Without a key the app still builds; the TMDB fallback lookup is simply skipped. CI builds can set
+the `TMDB_API_KEY` environment variable (for example from a repository secret) instead.
+
 ### Download the latest APK
 
 The latest signed APK is published here after a successful release workflow:
