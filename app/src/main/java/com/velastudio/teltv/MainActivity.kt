@@ -815,28 +815,26 @@ class MainActivity : ComponentActivity() {
                         var nextEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
                         var prevEntity by remember { mutableStateOf<com.velastudio.teltv.data.local.VideoIndexEntity?>(null) }
                         LaunchedEffect(currentMediaId, playlistId) {
-                            val cur = app.database.videoIndexDao().getByMediaId(currentMediaId)
+                            val dao = app.database.videoIndexDao()
+                            val cur = dao.getByMediaId(currentMediaId)
                             val playlistItems = if (playlistId != null) app.database.playlistDao().getItems(playlistId) else emptyList()
                             val curPos = playlistItems.firstOrNull { it.mediaId == currentMediaId }?.position ?: -1
-                            nextEntity = if (playlistId != null) {
-                                app.database.playlistDao().nextItem(playlistId, curPos)?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
+                            if (playlistId != null) {
+                                nextEntity = app.database.playlistDao().nextItem(playlistId, curPos)?.let { dao.getByMediaId(it.mediaId) }
+                                prevEntity = app.database.playlistDao().previousItem(playlistId, curPos)?.let { dao.getByMediaId(it.mediaId) }
                             } else if (cur != null) {
-                                var foundNext = com.velastudio.teltv.util.HybridEpisodeMatcher.findNext(cur, app.database.videoIndexDao())
-                                if (foundNext == null) {
+                                // Matching runs on Dispatchers.Default inside the matcher; one channel snapshot for both directions.
+                                var adjacent = com.velastudio.teltv.util.HybridEpisodeMatcher.findAdjacent(cur, dao)
+                                if (adjacent.next == null) {
                                     // Next episode might be on the next Telegram batch; prefetch into Room and retry
                                     runCatching { app.channelVideoRepository.ensureNextPage(cur.chatId) }
-                                    foundNext = com.velastudio.teltv.util.HybridEpisodeMatcher.findNext(cur, app.database.videoIndexDao())
+                                    adjacent = com.velastudio.teltv.util.HybridEpisodeMatcher.findAdjacent(cur, dao)
                                 }
-                                foundNext
+                                nextEntity = adjacent.next
+                                prevEntity = adjacent.previous
                             } else {
-                                null
-                            }
-                            prevEntity = if (playlistId != null) {
-                                app.database.playlistDao().previousItem(playlistId, curPos)?.let { app.database.videoIndexDao().getByMediaId(it.mediaId) }
-                            } else if (cur != null) {
-                                com.velastudio.teltv.util.HybridEpisodeMatcher.findPrevious(cur, app.database.videoIndexDao())
-                            } else {
-                                null
+                                nextEntity = null
+                                prevEntity = null
                             }
                         }
 
