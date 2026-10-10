@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 
 import android.os.Bundle
+import kotlinx.coroutines.ensureActive
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
@@ -558,6 +559,7 @@ class MainActivity : ComponentActivity() {
                                         createdEpochSec = System.currentTimeMillis() / 1000
                                     ).let { it.copy(id = dao.insert(it)) }
 
+                                    preloadJob?.join()
                                     // Sort all videos in chronological order (oldest to newest)
                                     val allVideos = app.database.videoIndexDao().getAllForChat(chatId).sortedBy { it.messageId }
                                     val startIndex = allVideos.indexOfFirst { it.mediaId == startMedia.id }.coerceAtLeast(0)
@@ -677,6 +679,7 @@ class MainActivity : ComponentActivity() {
                                         createdEpochSec = System.currentTimeMillis() / 1000
                                     ).let { it.copy(id = dao.insert(it)) }
 
+                                    preloadJob?.join()
                                     val allVideos = app.database.videoIndexDao().getAllForChat(chatId).sortedBy { it.messageId }
                                     allVideos.forEachIndexed { index, video ->
                                         dao.addItem(
@@ -703,6 +706,13 @@ class MainActivity : ComponentActivity() {
                         var localResults by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
                         var remoteResults by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
                         var isSearchingRemote by remember { mutableStateOf(false) }
+                        var localSearchJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+                        var remoteSearchJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+                        var localGeneration by remember { mutableStateOf(0) }
+                        var remoteGeneration by remember { mutableStateOf(0) }
+                        DisposableEffect(Unit) {
+                            onDispose { localSearchJob?.cancel(); remoteSearchJob?.cancel() }
+                        }
 
                         LaunchedEffect(Unit) {
                             recentQueries = app.database.searchHistoryDao().recent().map { it.query }
@@ -716,8 +726,14 @@ class MainActivity : ComponentActivity() {
                             remoteResults = remoteResults,
                             isSearchingRemote = isSearchingRemote,
                             onLocalQueryChanged = { q ->
-                                scope.launch {
-                                    localResults = if (q.isBlank()) emptyList()
+                                localSearchJob?.cancel()
+                                remoteSearchJob?.cancel()
+                                remoteGeneration++
+                                remoteResults = emptyList()
+                                isSearchingRemote = false
+                                val generation = ++localGeneration
+                                localSearchJob = scope.launch {
+                                    val results = if (q.isBlank()) emptyList()
                                     else app.database.videoIndexDao().searchLocal(q).map {
                                         MediaItem(
                                             id = it.mediaId,
@@ -729,16 +745,26 @@ class MainActivity : ComponentActivity() {
                                             addedAtEpochSec = it.addedAtEpochSec
                                         )
                                     }
+                                    if (generation == localGeneration) localResults = results
                                 }
                             },
                             onRemoteQueryChanged = { q ->
-                                if (q.isBlank() || pinnedChatIds.isEmpty()) return@SearchScreen
-                                scope.launch {
+                                remoteSearchJob?.cancel()
+                                val generation = ++remoteGeneration
+                                if (q.length < 2 || pinnedChatIds.isEmpty()) {
+                                    remoteResults = emptyList()
+                                    isSearchingRemote = false
+                                    return@SearchScreen
+                                }
+                                remoteSearchJob = scope.launch {
                                     isSearchingRemote = true
-                                    remoteResults = runCatching {
+                                    val results = runCatching {
                                         app.telegramClient.searchAcrossChannels(pinnedChatIds, q)
                                     }.onFailure { Timber.w(it, "Remote search failed for query=%s", q) }
                                         .getOrDefault(emptyList())
+                                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                                    if (generation != remoteGeneration) return@launch
+                                    remoteResults = results
                                     isSearchingRemote = false
                                     app.database.searchHistoryDao().upsert(
                                         com.velastudio.teltv.data.local.SearchHistoryEntity(
@@ -776,6 +802,8 @@ class MainActivity : ComponentActivity() {
                         var title by remember { mutableStateOf(currentMediaId) }
                         var resumeMs by remember { mutableStateOf(0L) }
                         var isResolving by remember { mutableStateOf(true) }
+                        var resolvedPlaybackId by remember { mutableStateOf(currentMediaId) }
+                        var resolvedPlaybackTitle by remember { mutableStateOf(title) }
 
                         LaunchedEffect(currentMediaId) {
                             isResolving = true
@@ -809,6 +837,8 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 fileId = cachedEntity?.streamUrl?.removePrefix("tdlib://file/")?.toIntOrNull()
                             }
+                            resolvedPlaybackId = currentMediaId
+                            resolvedPlaybackTitle = title
                             isResolving = false
                         }
 
@@ -846,9 +876,11 @@ class MainActivity : ComponentActivity() {
                                 finalShowName = app.database.playlistDao().getById(playlistId)?.name
                             }
                         }
+                        val playbackMediaId = resolvedPlaybackId
+                        val playbackTitle = resolvedPlaybackTitle
                         val searchTitle = if (finalShowName != null && !title.contains(finalShowName ?: "", ignoreCase = true)) "$finalShowName $title" else title
 
-                        if (isResolving && fileId == null) {
+                        if (isResolving) {
                             Box(
                                 modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF0F172A)),
                                 contentAlignment = Alignment.Center
@@ -858,6 +890,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         } else {
+                            key(playbackMediaId) {
                             PlayerScreen(
                             fileId = fileId,
                             directUri = null,
@@ -878,14 +911,16 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onPositionUpdate = { positionMs, durationMs ->
+                                val savedMediaId = playbackMediaId
+                                val savedTitle = playbackTitle
                                 scope.launch {
                                     app.database.watchStateDao().upsert(
                                         WatchStateEntity(
-                                            mediaId = currentMediaId,
+                                            mediaId = savedMediaId,
                                             positionMs = positionMs,
                                             durationMs = durationMs,
                                             lastWatchedEpochSec = System.currentTimeMillis() / 1000,
-                                            title = title,
+                                            title = savedTitle,
                                             finished = durationMs > 0 && positionMs >= durationMs * 0.95
                                         )
                                     )
@@ -902,6 +937,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+                            }
                         }
                     }
 
@@ -989,6 +1025,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onDelete = { playlist ->
                                     scope.launch {
+                                        app.database.playlistDao().clearItems(playlist.id)
                                         app.database.playlistDao().delete(playlist.id)
                                         playlists = app.database.playlistDao().getAll()
                                     }

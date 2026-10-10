@@ -57,8 +57,10 @@ fun SearchScreen(
     onOpenItem: (MediaItem) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    val fireRemoteSearch = rememberDebounced(deviceProfile.searchDebounceMs, query) { q ->
-        onRemoteQueryChanged(q)
+    val latestRemoteQueryChanged by rememberUpdatedState(onRemoteQueryChanged)
+    LaunchedEffect(query, deviceProfile.searchDebounceMs) {
+        if (query.length >= 2) kotlinx.coroutines.delay(deviceProfile.searchDebounceMs)
+        latestRemoteQueryChanged(query)
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 24.dp)) {
@@ -70,7 +72,7 @@ fun SearchScreen(
             onValueChange = { newValue ->
                 query = newValue
                 onLocalQueryChanged(newValue) // instant, on-device -- no debounce needed
-                if (newValue.length >= 2) fireRemoteSearch()
+
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onRemoteQueryChanged(query) }),
@@ -87,7 +89,7 @@ fun SearchScreen(
                     Button(onClick = {
                         query = recent
                         onLocalQueryChanged(recent)
-                        onRemoteQueryChanged(recent)
+
                     }) { Text(recent) }
                 }
             }

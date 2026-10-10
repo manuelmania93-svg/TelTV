@@ -65,6 +65,9 @@ fun PlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var currentPositionMs by remember { mutableStateOf(resumePositionMs) }
     val latestOnPositionUpdate by rememberUpdatedState(onPositionUpdate)
+    val latestOnPlayNext by rememberUpdatedState(onPlayNext)
+    val latestNextTitle by rememberUpdatedState(nextTitle)
+    val latestOnPlaybackEnded by rememberUpdatedState(onPlaybackEnded)
     var resumeAfterLifecycleStop by remember { mutableStateOf(false) }
     var durationMs by remember { mutableStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -328,11 +331,12 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_ENDED) {
-                    if (autoPlayNext && onPlayNext != null && nextTitle != null) {
+                    val next = latestOnPlayNext
+                    if (autoPlayNext && next != null && latestNextTitle != null) {
                         showAutoPlayOverlay = false
-                        onPlayNext()
+                        next()
                     } else {
-                        onPlaybackEnded()
+                        latestOnPlaybackEnded()
                     }
                 }
             }
@@ -359,13 +363,25 @@ fun PlayerScreen(
             }
         }
 
+        var disposed = false
         controllerFuture.addListener({
-            val mediaController = controllerFuture.get()
-            mediaController.addListener(listener)
-            controller = mediaController
-        }, MoreExecutors.directExecutor())
+            if (!disposed) {
+                try {
+                    val mediaController = controllerFuture.get()
+                    mediaController.addListener(listener)
+                    controller = mediaController
+                } catch (_: java.util.concurrent.CancellationException) {
+                    // The screen was closed before the service connected.
+                } catch (error: Exception) {
+                    Timber.e(error, "Could not connect playback controller")
+                    isBuffering = false
+                    playerErrorMessage = "Could not connect playback service. Go back and try again."
+                }
+            }
+        }, androidx.core.content.ContextCompat.getMainExecutor(context))
 
         onDispose {
+            disposed = true
             controller?.let { mediaController ->
                 mediaController.removeListener(listener)
                 latestOnPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0))
