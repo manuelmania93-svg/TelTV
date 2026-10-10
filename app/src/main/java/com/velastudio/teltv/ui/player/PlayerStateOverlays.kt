@@ -501,6 +501,12 @@ fun TrackSelectorDialog(
                                 coroutineScope.launch {
                                     autoSyncStatus = try {
                                         onAutoSync()
+                                    } catch (e: kotlinx.coroutines.CancellationException) {
+                                        autoSyncStatus = ""
+                                        throw e
+                                    } catch (e: Exception) {
+                                        timber.log.Timber.w(e, "Auto-sync failed")
+                                        "Auto-sync failed: ${e.message ?: e.javaClass.simpleName}"
                                     } finally {
                                         autoSyncBusy = false
                                     }

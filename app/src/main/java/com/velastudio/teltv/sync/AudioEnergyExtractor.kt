@@ -6,6 +6,7 @@ import android.media.MediaDataSource
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import androidx.annotation.RequiresApi
+import timber.log.Timber
 import java.nio.ByteOrder
 
 /**
@@ -21,14 +22,32 @@ object AudioEnergyExtractor {
      * track cannot be decoded on this device (for example some AC-3/DTS tracks) or too little
      * audio came out.
      */
-    fun extract(source: MediaDataSource, startMs: Long, lengthMs: Long, isCancelled: () -> Boolean): FloatArray {
+    fun extract(
+        source: MediaDataSource,
+        startMs: Long,
+        lengthMs: Long,
+        audio: AudioTrackRef?,
+        isCancelled: () -> Boolean
+    ): FloatArray {
         val extractor = MediaExtractor()
         var opened: MediaCodec? = null
         try {
             extractor.setDataSource(source)
-            val track = (0 until extractor.trackCount).firstOrNull {
-                extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
-            } ?: throw Unsupported("no audio track")
+            var ordinal = 0
+            val candidates = ArrayList<AudioTrackCandidate>()
+            for (i in 0 until extractor.trackCount) {
+                val f = extractor.getTrackFormat(i)
+                if (f.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true) {
+                    val lang = if (f.containsKey(MediaFormat.KEY_LANGUAGE)) f.getString(MediaFormat.KEY_LANGUAGE) else null
+                    candidates.add(AudioTrackCandidate(i, ordinal++, lang))
+                }
+            }
+            val choice = AudioTrackSelection.resolve(candidates, audio) ?: throw Unsupported("no audio track")
+            if (choice.reason != AudioTrackChoice.Reason.EXACT) {
+                Timber.w("Audio track %s not found exactly (%s of %d audio tracks); using %s, extractor track %d",
+                    audio, choice.reason, candidates.size, choice.reason, choice.extractorIndex)
+            }
+            val track = choice.extractorIndex
             val format = extractor.getTrackFormat(track)
             val mime = format.getString(MediaFormat.KEY_MIME)!!
             extractor.selectTrack(track)

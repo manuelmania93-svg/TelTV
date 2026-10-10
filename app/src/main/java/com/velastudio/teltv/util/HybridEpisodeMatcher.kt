@@ -3,6 +3,8 @@ package com.velastudio.teltv.util
 import com.velastudio.teltv.data.local.VideoIndexDao
 import com.velastudio.teltv.data.local.VideoIndexEntity
 import com.velastudio.teltv.util.matcher.UniversalMatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 object HybridEpisodeMatcher {
@@ -75,99 +77,99 @@ object HybridEpisodeMatcher {
             .replace(Regex("[^a-z0-9]"), "")
     }
 
-    suspend fun findNext(
+    /** Parses each (mediaId, title) at most once per cache instance. Not thread safe: use one per call. */
+    class SignatureCache {
+        private val map = HashMap<String, EpisodeSignature?>()
+        fun of(e: VideoIndexEntity): EpisodeSignature? {
+            val key = e.mediaId + "\u0000" + e.title
+            if (map.containsKey(key)) return map[key]
+            return parseSignature(e.title).also { map[key] = it }
+        }
+    }
+
+    /** Next and previous episode for one item, from a single channel snapshot. */
+    data class Adjacent(val next: VideoIndexEntity?, val previous: VideoIndexEntity?)
+
+    /**
+     * Pure steps 1, 2 and 2b (series numbering, season rollover, universal matcher) over an
+     * in-memory snapshot. Returns null when only the timeline fallback is left.
+     */
+    fun nextFromSnapshot(
         current: VideoIndexEntity,
-        dao: VideoIndexDao
+        all: List<VideoIndexEntity>,
+        cache: SignatureCache = SignatureCache()
     ): VideoIndexEntity? {
-        val currentSig = parseSignature(current.title)
-
+        val currentSig = cache.of(current)
         if (currentSig != null) {
-            val candidates = dao.getAllForChat(current.chatId)
-
-            // Step 1: Look for same show stem + next episode (e.g. Naruto 50 -> 51)
-            val nextInSeries = candidates.firstOrNull { candidate ->
-                val candSig = parseSignature(candidate.title)
-                candSig != null &&
-                candSig.stem == currentSig.stem &&
-                candSig.season == currentSig.season &&
-                candSig.episode == currentSig.episode + 1
-            }
-            if (nextInSeries != null) return nextInSeries
-
-            // Step 2: Next Season Premiere (e.g. S01E10 -> S02E01)
+            all.firstOrNull { c ->
+                val s = cache.of(c)
+                s != null && s.stem == currentSig.stem && s.season == currentSig.season &&
+                    s.episode == currentSig.episode + 1
+            }?.let { return it }
             if (currentSig.season != null) {
-                val nextSeasonPremiere = candidates.firstOrNull { candidate ->
-                    val candSig = parseSignature(candidate.title)
-                    candSig != null &&
-                    candSig.stem == currentSig.stem &&
-                    candSig.season == currentSig.season + 1 &&
-                    (candSig.episode == 1 || candSig.episode == 0)
-                }
-                if (nextSeasonPremiere != null) return nextSeasonPremiere
+                all.firstOrNull { c ->
+                    val s = cache.of(c)
+                    s != null && s.stem == currentSig.stem && s.season == currentSig.season + 1 &&
+                        (s.episode == 1 || s.episode == 0)
+                }?.let { return it }
             }
         }
-
-        // Step 2b: universal matcher (date-named shows, anime absolute numbering, bare numbers)
-        universalNext(current, dao)?.let { return it }
-
-        // Step 3: Timeline Fallback (The Bridge)
-        return dao.getNextInChannel(current.chatId, current.messageId)
+        return universal(current, all) { cur, lib -> UniversalMatcher.findNext(cur, lib) }
     }
 
-    suspend fun findPrevious(
+    fun previousFromSnapshot(
         current: VideoIndexEntity,
-        dao: VideoIndexDao
+        all: List<VideoIndexEntity>,
+        cache: SignatureCache = SignatureCache()
     ): VideoIndexEntity? {
-        val currentSig = parseSignature(current.title)
-
+        val currentSig = cache.of(current)
         if (currentSig != null) {
-            val candidates = dao.getAllForChat(current.chatId)
-
-            // Step 1: Look for same show stem + previous episode (e.g. Naruto 51 -> 50)
             if (currentSig.episode > 1) {
-                val prevInSeries = candidates.firstOrNull { candidate ->
-                    val candSig = parseSignature(candidate.title)
-                    candSig != null &&
-                    candSig.stem == currentSig.stem &&
-                    candSig.season == currentSig.season &&
-                    candSig.episode == currentSig.episode - 1
-                }
-                if (prevInSeries != null) return prevInSeries
+                all.firstOrNull { c ->
+                    val s = cache.of(c)
+                    s != null && s.stem == currentSig.stem && s.season == currentSig.season &&
+                        s.episode == currentSig.episode - 1
+                }?.let { return it }
             }
-
-            // Step 2: Previous Season Finale (e.g. S02E01 -> S01E[max])
             if (currentSig.season != null && currentSig.season > 1) {
-                val prevSeasonCandidates = candidates.filter { candidate ->
-                    val candSig = parseSignature(candidate.title)
-                    candSig != null &&
-                    candSig.stem == currentSig.stem &&
-                    candSig.season == currentSig.season - 1
-                }
-                val prevSeasonFinale = prevSeasonCandidates.maxByOrNull {
-                    parseSignature(it.title)?.episode ?: 0
-                }
-                if (prevSeasonFinale != null) return prevSeasonFinale
+                all.filter { c ->
+                    val s = cache.of(c)
+                    s != null && s.stem == currentSig.stem && s.season == currentSig.season - 1
+                }.maxByOrNull { cache.of(it)?.episode ?: 0 }?.let { return it }
             }
         }
-
-        universalPrevious(current, dao)?.let { return it }
-
-        // Step 3: Timeline Fallback (previous uploaded video in channel)
-        return dao.getPreviousInChannel(current.chatId, current.messageId)
+        return universal(current, all) { cur, lib -> UniversalMatcher.findPrevious(cur, lib) }
     }
 
-    private suspend fun universalNext(current: VideoIndexEntity, dao: VideoIndexDao): VideoIndexEntity? =
-        universal(current, dao) { cur, lib -> UniversalMatcher.findNext(cur, lib) }
+    /** One channel read and one parse per title for both directions. Safe to call off the main thread. */
+    suspend fun findAdjacent(current: VideoIndexEntity, dao: VideoIndexDao): Adjacent =
+        withContext(Dispatchers.Default) {
+            val all = dao.getAllForChat(current.chatId)
+            val cache = SignatureCache()
+            Adjacent(
+                next = nextFromSnapshot(current, all, cache) ?: dao.getNextInChannel(current.chatId, current.messageId),
+                previous = previousFromSnapshot(current, all, cache)
+                    ?: dao.getPreviousInChannel(current.chatId, current.messageId)
+            )
+        }
 
-    private suspend fun universalPrevious(current: VideoIndexEntity, dao: VideoIndexDao): VideoIndexEntity? =
-        universal(current, dao) { cur, lib -> UniversalMatcher.findPrevious(cur, lib) }
+    suspend fun findNext(current: VideoIndexEntity, dao: VideoIndexDao): VideoIndexEntity? =
+        withContext(Dispatchers.Default) {
+            nextFromSnapshot(current, dao.getAllForChat(current.chatId))
+                ?: dao.getNextInChannel(current.chatId, current.messageId)
+        }
 
-    private suspend fun universal(
+    suspend fun findPrevious(current: VideoIndexEntity, dao: VideoIndexDao): VideoIndexEntity? =
+        withContext(Dispatchers.Default) {
+            previousFromSnapshot(current, dao.getAllForChat(current.chatId))
+                ?: dao.getPreviousInChannel(current.chatId, current.messageId)
+        }
+
+    private fun universal(
         current: VideoIndexEntity,
-        dao: VideoIndexDao,
+        all: List<VideoIndexEntity>,
         step: (UniversalMatcher.Entry, List<UniversalMatcher.Entry>) -> UniversalMatcher.Entry?
     ): VideoIndexEntity? {
-        val all = dao.getAllForChat(current.chatId)
         val hit = step(
             UniversalMatcher.Entry(current.mediaId, current.title),
             all.map { UniversalMatcher.Entry(it.mediaId, it.title) }

@@ -163,7 +163,17 @@ class TelegramClient(private val context: Context) {
         client?.send(fn) {}
     }
 
-    fun downloadFileRangeBlocking(fileId: Int, offset: Long, limit: Long): TdApi.File? {
+    /**
+     * Blocks until bytes for the range are on disk. Waits are sliced so [isCancelled] (and thread
+     * interrupts) end them promptly; the TDLib download itself is never cancelled here because
+     * playback shares it. Returns null when cancelled, timed out or failed.
+     */
+    fun downloadFileRangeBlocking(
+        fileId: Int,
+        offset: Long,
+        limit: Long,
+        isCancelled: () -> Boolean = { false }
+    ): TdApi.File? {
         val c = client
         if (c == null) {
             lastDownloadErrors[fileId] = "TDLib client is not initialized"
@@ -235,15 +245,18 @@ class TelegramClient(private val context: Context) {
                 }
             }
 
-            val completed = latch.await(10, TimeUnit.SECONDS)
+            com.velastudio.teltv.util.CancellableWait.await(latch, 10_000L, 200L) {
+                isCancelled() || Thread.currentThread().isInterrupted
+            }
             unregisterFileListener(fileId, listener)
+            if (isCancelled() || Thread.currentThread().isInterrupted) break
 
             if (result != null && hasBytes(result)) {
                 return result
             }
 
             if (attempts < maxAttempts) {
-                try { Thread.sleep(1200) } catch (_: InterruptedException) { break }
+                if (!com.velastudio.teltv.util.CancellableWait.sleep(1200L, 200L, isCancelled)) break
             }
         }
 

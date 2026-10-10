@@ -6,8 +6,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -46,7 +49,8 @@ object SubtitleAutoSync {
         factory: DataSource.Factory,
         mediaUri: Uri,
         subtitleFile: File,
-        durationMs: Long
+        durationMs: Long,
+        audio: AudioTrackRef? = null
     ): AutoSyncOutcome = withContext(Dispatchers.Default) {
         if (Build.VERSION.SDK_INT < 23) return@withContext AutoSyncOutcome.Failed("Needs Android 6 or newer")
         val cues = try {
@@ -60,22 +64,37 @@ object SubtitleAutoSync {
 
         val estimates = ArrayList<WindowEstimate>()
         var lastError: String? = null
+        val job = currentCoroutineContext()[Job]
+        val cancelled = { job?.isActive == false }
         val ds = Media3MediaDataSource(factory, mediaUri)
         try {
             for (start in starts) {
-                if (!currentCoroutineContext().isActive) throw CancellationException()
+                ensureActive()
                 try {
-                    val rms = AudioEnergyExtractor.extract(ds, start, WINDOW_MS) { !isActiveBlocking() }
+                    // runInterruptible interrupts the blocking reads (TDLib waits) as soon as the job is cancelled.
+                    val rms = runInterruptible(Dispatchers.IO) {
+                        AudioEnergyExtractor.extract(ds, start, WINDOW_MS, audio, cancelled)
+                    }
                     val speech = SpeechDetector.detect(rms)
                     SubtitleAligner.alignWindow(speech, start, cues, MAX_SHIFT_MS)?.let { estimates.add(it) }
                 } catch (e: AudioEnergyExtractor.Unsupported) {
                     lastError = e.message
                     // A track the device cannot decode will not decode in the next window either.
                     break
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: InterruptedException) {
-                    throw CancellationException()
+                    ensureActive()
+                    lastError = "interrupted"
+                    break
                 } catch (e: java.io.IOException) {
+                    ensureActive()
                     lastError = "read error"
+                } catch (e: RuntimeException) {
+                    // MediaCodec.CodecException, IllegalStateException, IllegalArgumentException from the platform decoder.
+                    ensureActive()
+                    lastError = "decoder error"
+                    break
                 }
             }
         } finally {
@@ -94,7 +113,4 @@ object SubtitleAutoSync {
             else -> AutoSyncOutcome.Synced(result.offsetMs, result)
         }
     }
-
-    // The extractor loop polls this from a blocking thread; coroutine cancellation is checked between windows.
-    private fun isActiveBlocking(): Boolean = !Thread.currentThread().isInterrupted
 }

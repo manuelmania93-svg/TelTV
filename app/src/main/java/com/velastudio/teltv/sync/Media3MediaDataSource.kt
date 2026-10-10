@@ -42,6 +42,7 @@ class Media3MediaDataSource(
     @Synchronized
     override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
         if (size == 0) return 0
+        if (Thread.currentThread().isInterrupted) throw IOException("cancelled")
         if (source == null || position != streamPos) {
             runCatching { source?.close() }
             source = factory.createDataSource().also {
