@@ -304,7 +304,7 @@ fun AppInfoSection() {
             style = MaterialTheme.typography.bodySmall
         )
         Text(
-            text = "Copyright © 2026 Manuel Durnig",
+            text = "Copyright © 2026",
             color = TelTvMuted,
             style = MaterialTheme.typography.bodySmall
         )
