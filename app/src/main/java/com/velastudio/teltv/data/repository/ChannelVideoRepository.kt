@@ -51,7 +51,8 @@ class ChannelVideoRepository(
                 pageSize = deviceProfile.pageSize,
                 prefetchDistance = deviceProfile.prefetchDistance,
                 enablePlaceholders = false,
-                initialLoadSize = deviceProfile.pageSize
+                initialLoadSize = deviceProfile.pageSize,
+                maxSize = maxOf(deviceProfile.pageSize * 3, deviceProfile.pageSize + 2 * deviceProfile.prefetchDistance)
             ),
             pagingSourceFactory = {
                 if (ascending) videoIndexDao.pagingSource(chatId)
