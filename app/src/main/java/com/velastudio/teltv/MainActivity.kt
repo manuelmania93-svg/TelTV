@@ -880,7 +880,7 @@ class MainActivity : ComponentActivity() {
                         val playbackTitle = resolvedPlaybackTitle
                         val searchTitle = if (finalShowName != null && !title.contains(finalShowName ?: "", ignoreCase = true)) "$finalShowName $title" else title
 
-                        if (isResolving && fileId == null) {
+                        if (isResolving) {
                             Box(
                                 modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF0F172A)),
                                 contentAlignment = Alignment.Center
@@ -890,6 +890,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         } else {
+                            key(playbackMediaId) {
                             PlayerScreen(
                             fileId = fileId,
                             directUri = null,
@@ -936,6 +937,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+                            }
                         }
                     }
 
