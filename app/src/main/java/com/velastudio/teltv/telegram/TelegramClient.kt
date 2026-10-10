@@ -13,6 +13,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -254,8 +255,8 @@ class TelegramClient(private val context: Context) {
     private val fileListeners = ConcurrentHashMap<Int, MutableList<(TdApi.File) -> Unit>>()
 
     fun registerFileListener(fileId: Int, listener: (TdApi.File) -> Unit) {
-        fileCache[fileId]?.let(listener)
         fileListeners.getOrPut(fileId) { java.util.concurrent.CopyOnWriteArrayList() }.add(listener)
+        fileCache[fileId]?.let(listener)
     }
 
     fun unregisterFileListener(fileId: Int, listener: (TdApi.File) -> Unit) {
@@ -321,19 +322,22 @@ class TelegramClient(private val context: Context) {
     }
 
     /** Emits authorization states so the UI can drive phone-number / code / 2FA screens. */
-    fun authorizationFlow(): Flow<TdApi.AuthorizationState> = callbackFlow {
-        authState?.let { trySend(it) }
-        val existing = client
-        if (existing != null) {
-            awaitClose { }
-            return@callbackFlow
-        }
+    private val authorizationStates = kotlinx.coroutines.flow.MutableStateFlow<TdApi.AuthorizationState?>(null)
+
+    fun authorizationFlow(): Flow<TdApi.AuthorizationState> {
+        ensureStarted()
+        return authorizationStates.filterNotNull()
+    }
+
+    @Synchronized
+    private fun ensureStarted() {
+        if (client != null) return
         val c = Client.create(
             { update ->
                 when (update) {
                     is TdApi.UpdateAuthorizationState -> {
                         authState = update.authorizationState
-                        trySend(update.authorizationState)
+                        authorizationStates.value = update.authorizationState
                     }
                     is TdApi.UpdateConnectionState -> {
                         connectionState = update.state
@@ -384,7 +388,6 @@ class TelegramClient(private val context: Context) {
                 Timber.e("SetTdlibParameters failed: [%d] %s", res.code, res.message)
             }
         }
-        awaitClose { }
     }
 
     suspend fun setPhoneNumber(phone: String) = send(TdApi.SetAuthenticationPhoneNumber(phone, null))
@@ -697,23 +700,30 @@ class TelegramClient(private val context: Context) {
             return@withContext cached.local.path
         }
         suspendCancellableCoroutine { cont ->
-            val listener: (TdApi.File) -> Unit = { file ->
+            val completed = java.util.concurrent.atomic.AtomicBoolean(false)
+            lateinit var listener: (TdApi.File) -> Unit
+            fun finish(path: String) {
+                if (completed.compareAndSet(false, true)) {
+                    unregisterFileListener(fileId, listener)
+                    cont.resume(path)
+                }
+            }
+            listener = { file ->
                 if (file.local?.isDownloadingCompleted == true && !file.local.path.isNullOrBlank()) {
-                    if (cont.isActive) cont.resume(file.local.path)
+                    finish(file.local.path)
                 }
             }
             registerFileListener(fileId, listener)
             cont.invokeOnCancellation {
+                completed.set(true)
                 unregisterFileListener(fileId, listener)
-                cancelDownload(fileId)
+                // Another visible card can still be waiting for the same TDLib file.
             }
             c.send(TdApi.DownloadFile(fileId, 16, 0, 0, false)) { res ->
                 if (res is TdApi.File && res.local?.isDownloadingCompleted == true && !res.local.path.isNullOrBlank()) {
-                    unregisterFileListener(fileId, listener)
-                    if (cont.isActive) cont.resume(res.local.path)
+                    finish(res.local.path)
                 } else if (res is TdApi.Error) {
-                    unregisterFileListener(fileId, listener)
-                    if (cont.isActive) cont.resume("")
+                    finish("")
                 }
             }
         }
