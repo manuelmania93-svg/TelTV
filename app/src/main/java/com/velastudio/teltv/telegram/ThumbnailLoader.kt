@@ -7,22 +7,10 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * Bridges TDLib thumbnail downloads to Compose's `AsyncImage`/Coil without ever letting an
- * off-screen row keep downloading in the background -- the single biggest cause of "channel with
- * 1,000s of videos scrolls fine for a second, then grinds to a halt" on a low-RAM box: every row
- * that's ever been on screen quietly kept fetching, and Coil's own memory cache filled up with
- * full-size decoded bitmaps for thumbnails nobody's looking at anymore.
- *
- * Usage from a Composable, per grid cell:
- * ```
- * DisposableEffect(fileId) {
- *     val job = thumbnailLoader.request(fileId) { path -> localPath = path }
- *     onDispose { job.cancel() }
- * }
- * ```
- * Cancelling the returned [Job] cancels the coroutine *and* tells TDLib to stop prioritizing that
- * download (see [TelegramClient.cancelDownload]), so it goes back to background/idle priority
- * instead of continuing to compete with whatever the player or the next visible row needs.
+ * Resolves TDLib thumbnail paths for visible Compose cards.
+ * Cancelling a card's Job removes its listener and stops awaiting the result.
+ * The shared TDLib download is left running because another card may need it.
+ * Resolved paths are bounded; decoded bitmap caching is handled by Coil.
  */
 class ThumbnailLoader(
     private val telegram: TelegramClient,
