@@ -47,11 +47,12 @@ class CacheManager(
 
     suspend fun trimToLimit(limitBytes: Long) {
         require(limitBytes >= 0L) { "Cache limit must not be negative" }
+        if (getCurrentSizeBytes() <= limitBytes) return
         val appCacheSize = context?.cacheDir?.let(::directorySizeBytes) ?: 0L
         val telegramLimitBytes = telegramLimitFor(limitBytes, appCacheSize)
         telegramSend(
             TdApi.OptimizeStorage(
-                telegramLimitBytes, 0, -1, 0,
+                telegramLimitBytes, Int.MAX_VALUE, Int.MAX_VALUE, 60,
                 arrayOf(),
                 longArrayOf(), longArrayOf(),
                 false, 50
