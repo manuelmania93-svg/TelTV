@@ -17,8 +17,7 @@ It is branded **Manuel Mania** and is designed for remote-first navigation on An
 - Manage playback preferences, playlists, cache usage, and automatic cache cleanup.
 - Navigate screens and actions with an Android TV D-pad and OK/Center button.
 
-**Attribution:** The app's visible brand is Manuel Mania. Copyright attribution to Manuel Durnig
-is retained in the app's About screen.
+**Attribution:** The app's visible brand is Manuel Mania.
 
 ## Setup
 
