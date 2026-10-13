@@ -33,6 +33,7 @@ import com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory
 import com.velastudio.teltv.util.MediaTitleCleaner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import com.velastudio.teltv.util.OnlineSubtitle
 import com.velastudio.teltv.util.OnlineSubtitleProvider
 import timber.log.Timber
@@ -68,7 +69,26 @@ fun PlayerScreen(
     val latestOnPlayNext by rememberUpdatedState(onPlayNext)
     val latestNextTitle by rememberUpdatedState(nextTitle)
     val latestOnPlaybackEnded by rememberUpdatedState(onPlaybackEnded)
-    var resumeAfterLifecycleStop by remember { mutableStateOf(false) }
+    var foreground by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    var connectionAttempt by remember { mutableStateOf(0) }
+    var recoveryRequest by remember { mutableStateOf(0) }
+    var needsRecovery by remember(fileId, directUri) { mutableStateOf(false) }
+    var savedMediaItem by remember(fileId, directUri) { mutableStateOf<ExoMediaItem?>(null) }
+    var savedPosition by remember(fileId, directUri) { mutableStateOf(resumePositionMs) }
+    var savedPlayIntent by remember(fileId, directUri) { mutableStateOf(true) }
+    var savedTracks by remember(fileId, directUri) { mutableStateOf<androidx.media3.common.TrackSelectionParameters?>(null) }
+    var disconnectedRebindUsed by remember { mutableStateOf(false) }
+
+    fun snapshotPlayback() {
+        controller?.takeIf { it.isConnected && it.mediaItemCount > 0 }?.let { mc ->
+            savedMediaItem = mc.currentMediaItem
+            savedPosition = mc.currentPosition.coerceAtLeast(0L)
+            savedPlayIntent = mc.playWhenReady
+            savedTracks = mc.trackSelectionParameters
+            currentPositionMs = savedPosition
+            latestOnPositionUpdate(savedPosition, mc.duration.coerceAtLeast(0L))
+        }
+    }
     var durationMs by remember { mutableStateOf(0L) }
     var controlsVisible by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(false) }
@@ -90,20 +110,48 @@ fun PlayerScreen(
     fun resolvedUri(): String? =
         directUri ?: fileId?.let { TdLibAwareDataSourceFactory.uriForFile(it).toString() }
 
-    LaunchedEffect(controller, fileId, directUri) {
-        val mc = controller ?: return@LaunchedEffect
+    // One cancellable recovery per foreground attempt. Stop/dispose/media changes cancel it.
+    LaunchedEffect(controller, fileId, directUri, foreground, recoveryRequest) {
+        val mc = controller?.takeIf { it.isConnected } ?: return@LaunchedEffect
+        if (!foreground) return@LaunchedEffect
         val uri = resolvedUri() ?: return@LaunchedEffect
-        currentPositionMs = resumePositionMs
-        durationMs = 0L
-        autoPlayTriggered = false
-        showAutoPlayOverlay = false
+        val recovering = needsRecovery
+        if (recovering && fileId != null && directUri == null) {
+            isBuffering = true
+            val app = context.applicationContext as com.velastudio.teltv.TelTvApp
+            if (!app.telegramClient.awaitConnectionReady(15_000L)) {
+                isBuffering = false
+                playerErrorMessage = "Telegram is not connected yet. Check the network and retry."
+                return@LaunchedEffect
+            }
+        }
+        if (!mc.isConnected) return@LaunchedEffect
+        val item = savedMediaItem ?: ExoMediaItem.fromUri(uri)
         playerErrorMessage = null
-        autoSubtitleAppliedUri = null
-        mc.setMediaItem(ExoMediaItem.fromUri(uri))
-        mc.seekTo(resumePositionMs)
+        if (!recovering) {
+            durationMs = 0L
+            autoPlayTriggered = false
+            showAutoPlayOverlay = false
+            autoSubtitleAppliedUri = null
+        }
+        savedTracks?.let { mc.trackSelectionParameters = it }
+        mc.setMediaItem(item, savedPosition)
         mc.prepare()
-        mc.playWhenReady = true
-        mc.play()
+        mc.playWhenReady = savedPlayIntent
+        if (recovering) {
+            val ready = withTimeoutOrNull(20_000L) {
+                while (mc.isConnected && mc.playerError == null && mc.playbackState != Player.STATE_READY) delay(100L)
+                mc.isConnected && mc.playerError == null && mc.playbackState == Player.STATE_READY
+            } == true
+            if (ready) {
+                needsRecovery = false
+                disconnectedRebindUsed = false
+            } else {
+                mc.takeIf { it.isConnected }?.pause()
+                isBuffering = false
+                playerErrorMessage = "Playback could not reconnect. Check the network and retry."
+            }
+        }
     }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     val savedAutoPlay by prefs.autoPlayEnabled.collectAsState(initial = true)
@@ -283,9 +331,24 @@ fun PlayerScreen(
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(connectionAttempt, fileId, directUri) {
         val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
+        val controllerFuture = MediaController.Builder(context, sessionToken)
+            .setListener(object : MediaController.Listener {
+                override fun onDisconnected(mediaController: MediaController) {
+                    if (controller !== mediaController) return
+                    // Cached snapshot is retained even when the service is gone.
+                    controller = null
+                    needsRecovery = true
+                    isBuffering = false
+                    if (foreground && !disconnectedRebindUsed) {
+                        disconnectedRebindUsed = true
+                        connectionAttempt++
+                    } else if (foreground) {
+                        playerErrorMessage = "Playback service disconnected. Retry to reconnect."
+                    }
+                }
+            }).buildAsync()
 
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
@@ -381,6 +444,14 @@ fun PlayerScreen(
         }
 
         var disposed = false
+        val connectTimeout = coroutineScope.launch {
+            delay(10_000L)
+            if (!controllerFuture.isDone) {
+                MediaController.releaseFuture(controllerFuture)
+                isBuffering = false
+                playerErrorMessage = "Playback service did not respond. Retry to reconnect."
+            }
+        }
         controllerFuture.addListener({
             if (!disposed) {
                 try {
@@ -392,47 +463,41 @@ fun PlayerScreen(
                 } catch (error: Exception) {
                     Timber.e(error, "Could not connect playback controller")
                     isBuffering = false
-                    playerErrorMessage = "Could not connect playback service. Go back and try again."
+                    playerErrorMessage = "Could not connect playback service. Retry to reconnect."
                 }
             }
         }, androidx.core.content.ContextCompat.getMainExecutor(context))
 
         onDispose {
             disposed = true
+            connectTimeout.cancel()
             controller?.let { mediaController ->
                 mediaController.removeListener(listener)
-                latestOnPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0))
-                mediaController.stop()
+                if (mediaController.isConnected) {
+                    if (!needsRecovery) latestOnPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0L))
+                    // Rebind attempts only replace null/disconnected controllers.
+                    mediaController.stop()
+                }
             }
             MediaController.releaseFuture(controllerFuture)
             controller = null
         }
     }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, fileId, directUri) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
-                    controller?.let { mediaController ->
-                        resumeAfterLifecycleStop = mediaController.mediaItemCount > 0 && mediaController.playWhenReady
-                        if (mediaController.mediaItemCount > 0) {
-                            latestOnPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0L))
-                        }
-                        mediaController.pause()
-                    }
+                    if (!needsRecovery) snapshotPlayback()
+                    foreground = false
+                    needsRecovery = true
+                    controller?.takeIf { it.isConnected }?.pause()
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    if (resumeAfterLifecycleStop) {
-                        resumeAfterLifecycleStop = false
-                        playerErrorMessage = null
-                        controller?.let { mediaController ->
-                            if (mediaController.mediaItemCount > 0) {
-                                mediaController.prepare()
-                                mediaController.playWhenReady = true
-                                mediaController.play()
-                            }
-                        }
-                    }
+                    foreground = true
+                    disconnectedRebindUsed = false
+                    if (controller?.isConnected != true) connectionAttempt++
+                    else if (needsRecovery) recoveryRequest++
                 }
                 else -> Unit
             }
@@ -444,7 +509,13 @@ fun PlayerScreen(
     LaunchedEffect(controller) {
         val mediaController = controller ?: return@LaunchedEffect
         while (true) {
-            currentPositionMs = mediaController.currentPosition
+            if (foreground && mediaController.isConnected && !needsRecovery) {
+                currentPositionMs = mediaController.currentPosition
+                savedPosition = currentPositionMs.coerceAtLeast(0L)
+                savedMediaItem = mediaController.currentMediaItem ?: savedMediaItem
+                savedTracks = mediaController.trackSelectionParameters
+                savedPlayIntent = mediaController.playWhenReady
+            }
             delay(500)
         }
     }
@@ -522,22 +593,22 @@ fun PlayerScreen(
 
     fun togglePlayPause() {
         val mediaController = controller ?: return
-        if (mediaController.isPlaying) {
+        if (mediaController.playWhenReady) {
             mediaController.pause()
         } else {
             mediaController.play()
         }
+        savedPlayIntent = mediaController.playWhenReady
         controlsVisible = true
     }
 
     fun retryPlayback() {
-        val mediaController = controller ?: return
-        val uri = resolvedUri() ?: return
+        // Preserve subtitle configuration, track selection, position and pause intent.
+        if (!needsRecovery) snapshotPlayback()
+        needsRecovery = true
         playerErrorMessage = null
-        mediaController.setMediaItem(ExoMediaItem.fromUri(uri))
-        mediaController.seekTo(currentPositionMs)
-        mediaController.prepare()
-        mediaController.playWhenReady = true
+        disconnectedRebindUsed = false
+        if (controller?.isConnected != true) connectionAttempt++ else recoveryRequest++
     }
 
     LaunchedEffect(controller) {
