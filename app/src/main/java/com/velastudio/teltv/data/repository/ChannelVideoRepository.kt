@@ -34,11 +34,16 @@ import kotlinx.coroutines.sync.withLock
  * page" pile-up that's the other classic cause of a low-RAM TV box grinding to a halt.
  */
 class ChannelVideoRepository(
-    private val telegram: TelegramClient,
+    private val fetchPage: suspend (Long, Long, Int) -> com.velastudio.teltv.telegram.VideoMessagesResult,
     private val videoIndexDao: VideoIndexDao,
     private val syncStateDao: ChannelSyncStateDao,
     private val deviceProfile: DeviceCapabilities.Profile
 ) {
+    constructor(telegram: TelegramClient, videoIndexDao: VideoIndexDao, syncStateDao: ChannelSyncStateDao,
+                deviceProfile: DeviceCapabilities.Profile) : this(
+        { chat, cursor, limit -> telegram.getVideoMessages(chat, cursor, limit) },
+        videoIndexDao, syncStateDao, deviceProfile)
+
     private val loadLocks = mutableMapOf<Long, Mutex>()
     private fun lockFor(chatId: Long) = synchronized(loadLocks) {
         loadLocks.getOrPut(chatId) { Mutex() }
@@ -73,11 +78,7 @@ class ChannelVideoRepository(
             if (state.fullyLoaded && !forceContinue) return@withLock
 
             val page = try {
-                telegram.getVideoMessages(
-                    chatId = chatId,
-                    fromMessageId = state.oldestLoadedMessageId,
-                    limit = deviceProfile.pageSize
-                )
+                fetchPage(chatId, state.oldestLoadedMessageId, deviceProfile.pageSize)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -171,43 +172,46 @@ class ChannelVideoRepository(
         lock.withLock {
             if (videoIndexDao.count(chatId) == 0) return@withLock // nothing cached yet; let ensureNextPage handle first load
 
-            val fetched = runCatching {
-                telegram.getVideoMessages(chatId = chatId, fromMessageId = 0L, limit = deviceProfile.pageSize).items
-            }.onFailure { Timber.w(it, "refreshNewest failed for chatId=%d", chatId) }
-                .getOrDefault(emptyList())
-            if (fetched.isEmpty()) return@withLock
-
-            // Split into brand-new items vs already-cached items that may have a stale title.
-            val cachedIds = fetched.map { it.id }.filter { videoIndexDao.getByMediaId(it) != null }.toSet()
-            val brandNew = fetched.filter { it.id !in cachedIds }
-
-            // Fix stale titles on already-cached rows (e.g. after the caption-title fix shipped).
-            for (item in fetched) {
-                if (item.id in cachedIds) {
-                    val cached = videoIndexDao.getByMediaId(item.id) ?: continue
-                    if (cached.title != item.title) {
-                        videoIndexDao.updateTitle(item.id, item.title)
-                    }
-                }
+            var state = syncStateDao.get(chatId) ?: ChannelSyncStateEntity(chatId = chatId, itemCount = videoIndexDao.count(chatId))
+            if (state.refreshBoundary == 0L) {
+                state = state.copy(refreshBoundary = videoIndexDao.newestMessageId(chatId) ?: return@withLock,
+                    refreshCursor = 0L, refreshInserted = 0)
             }
-
-            // Prepend genuinely new items: shift all existing positions down, then insert at top.
-            if (brandNew.isNotEmpty()) {
-                videoIndexDao.shiftPositions(chatId, brandNew.size)
-                val newEntities = brandNew.mapIndexed { i, item ->
-                    item.toEntity(chatId = chatId, position = i)
+            // Each page is committed with its checkpoint. Cancellation/errors cannot hide a gap:
+            // the next open resumes behind the already imported prefix, not from its new head.
+            // Bound both memory and work per open on small TVs; later opens continue the checkpoint.
+            repeat(50) {
+                val page = try {
+                    fetchPage(chatId, state.refreshCursor, deviceProfile.pageSize)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Timber.w(error, "refreshNewest failed for chatId=%d", chatId)
+                    return@withLock
                 }
-                videoIndexDao.insertAll(newEntities)
-
-                // Update sync state: item count grows, but the oldest cursor is unchanged
-                // (we only prepended to the top, not appended to the bottom).
-                val state = syncStateDao.get(chatId) ?: ChannelSyncStateEntity(chatId = chatId)
-                syncStateDao.upsert(
-                    state.copy(
-                        itemCount = state.itemCount + brandNew.size,
-                        lastSyncedEpochSec = System.currentTimeMillis() / 1000
-                    )
+                val fetched = page.items
+                val brandNew = mutableListOf<MediaItem>()
+                for (item in fetched) {
+                    val cached = videoIndexDao.getByMediaId(item.id)
+                    if (cached == null && (item.id.substringAfterLast(':').toLongOrNull() ?: 0L) > state.refreshBoundary) brandNew += item
+                    else if (cached.title != item.title) videoIndexDao.updateTitle(item.id, item.title)
+                }
+                val reachedBoundary = fetched.any { it.id.substringAfterLast(':').toLongOrNull()?.let { id -> id <= state.refreshBoundary } == true }
+                val done = reachedBoundary || page.nextFromMessageId == 0L
+                val stalled = !done && page.nextFromMessageId == state.refreshCursor
+                val offset = state.refreshInserted
+                val updated = state.copy(
+                    itemCount = state.itemCount + brandNew.size,
+                    lastSyncedEpochSec = System.currentTimeMillis() / 1000,
+                    refreshCursor = if (done) 0L else page.nextFromMessageId,
+                    refreshBoundary = if (done) 0L else state.refreshBoundary,
+                    refreshInserted = if (done) 0 else offset + brandNew.size
                 )
+                videoIndexDao.commitRefreshPage(chatId, offset,
+                    brandNew.mapIndexed { index, item -> item.toEntity(chatId, offset + index) }, updated)
+                state = updated
+                if (done || stalled) return@withLock
+                kotlinx.coroutines.delay(120)
             }
         }
     }
