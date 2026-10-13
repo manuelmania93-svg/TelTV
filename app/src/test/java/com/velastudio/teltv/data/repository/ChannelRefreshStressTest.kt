@@ -80,7 +80,7 @@ class ChannelRefreshStressTest {
             server.page(cursor, limit)
         }
         var opens = 0
-        withTimeout(120_000) { while (!cache.settled() || opens == 0) { repo.refreshNewest(1); opens++; assertTrue("never converged", opens < 200) } }
+        withTimeout(120_000) { while (cache.rows.size < 701 || !cache.settled()) { repo.refreshNewest(1); opens++; assertTrue("never converged", opens < 200) } }
         assertTrue("test did not inject failures", failures > 0)
         assertEquals((1700L downTo 1000L).toList(), cache.order())
     }
