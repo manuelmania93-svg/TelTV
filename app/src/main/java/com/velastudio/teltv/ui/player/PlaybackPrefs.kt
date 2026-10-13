@@ -8,7 +8,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import com.velastudio.teltv.player.SubtitleSync
+import com.velastudio.teltv.player.SubtitleTiming
 
 private val Context.playbackDataStore by preferencesDataStore(name = "playback_prefs")
 
@@ -102,4 +105,16 @@ class PlaybackPrefs(private val context: Context) {
         context.playbackDataStore.edit { it[KEY_ASPECT_RATIO_4X3] = mode }
     }
 
+    private fun subtitleSyncKey(videoKey: String) = stringPreferencesKey("subtitle_sync_$videoKey")
+
+    /** Saved subtitle shift and speed for one video; no correction when nothing was saved. */
+    suspend fun getSubtitleSync(videoKey: String): SubtitleSync =
+        SubtitleTiming.decode(context.playbackDataStore.data.first()[subtitleSyncKey(videoKey)])
+
+    suspend fun setSubtitleSync(videoKey: String, sync: SubtitleSync) {
+        context.playbackDataStore.edit {
+            if (sync.isDefault) it.remove(subtitleSyncKey(videoKey))
+            else it[subtitleSyncKey(videoKey)] = SubtitleTiming.encode(sync)
+        }
+    }
 }
