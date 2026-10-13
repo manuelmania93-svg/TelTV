@@ -5,6 +5,8 @@ import java.util.concurrent.ConcurrentHashMap
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Network
+import android.net.NetworkRequest
 import android.os.Build
 import com.velastudio.teltv.data.model.MediaItem
 import com.velastudio.teltv.data.model.SourceType
@@ -13,6 +15,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -282,10 +287,44 @@ class TelegramClient(private val context: Context) {
     var connectionState: TdApi.ConnectionState? = null
         private set
 
-    private var client: Client? = null
+    private val connectionStates = MutableStateFlow<TdApi.ConnectionState?>(null)
+    private val networkAvailable = MutableStateFlow(false)
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    @Volatile private var lastNetworkType: Int? = null
+
+    suspend fun awaitConnectionReady(timeoutMs: Long): Boolean = withTimeoutOrNull(timeoutMs) {
+        kotlinx.coroutines.flow.combine(networkAvailable, connectionStates) { online, state ->
+            online && state is TdApi.ConnectionStateReady
+        }.first { it }
+    } == true
+
+    private fun watchNetwork() {
+        if (networkCallback != null) return
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = refreshNetworkState()
+            override fun onLost(network: Network) = refreshNetworkState()
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = refreshNetworkState()
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                manager.registerDefaultNetworkCallback(callback)
+            } else {
+                manager.registerNetworkCallback(NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(), callback)
+            }
+            networkCallback = callback
+        } catch (error: Exception) {
+            Timber.w(error, "Could not register network callback")
+        }
+        refreshNetworkState()
+    }
+
+    @Volatile private var client: Client? = null
     var authState: TdApi.AuthorizationState? = null
         private set
 
+    @Synchronized
     fun refreshNetworkState() {
         val activeClient = client ?: return
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -311,19 +350,14 @@ class TelegramClient(private val context: Context) {
             }
         }
 
-        if (networkType is TdApi.NetworkTypeNone) {
-            activeClient.send(TdApi.SetNetworkType(networkType)) {}
-        } else {
-            // Force TDLib through an offline/online transition after Android TV sleep.
-            activeClient.send(TdApi.SetNetworkType(TdApi.NetworkTypeNone())) { result ->
-                if (result is TdApi.Error) {
-                    Timber.w("TDLib network reset failed: [%d] %s", result.code, result.message)
-                }
-                activeClient.send(TdApi.SetNetworkType(networkType)) { reconnectResult ->
-                    if (reconnectResult is TdApi.Error) {
-                        Timber.w("TDLib network refresh failed: [%d] %s", reconnectResult.code, reconnectResult.message)
-                    }
-                }
+        networkAvailable.value = networkType !is TdApi.NetworkTypeNone
+        // Actual changes only. Do not race a forced offline reset against player resume.
+        if (lastNetworkType == networkType.constructor) return
+        lastNetworkType = networkType.constructor
+        activeClient.send(TdApi.SetNetworkType(networkType)) { result ->
+            if (result is TdApi.Error) {
+                lastNetworkType = null // allow a later resume/callback to retry
+                Timber.w("TDLib network refresh failed: [%d] %s", result.code, result.message)
             }
         }
     }
@@ -354,6 +388,7 @@ class TelegramClient(private val context: Context) {
                     }
                     is TdApi.UpdateConnectionState -> {
                         connectionState = update.state
+                        connectionStates.value = update.state
                         Timber.i("TDLib connection state: %s", update.state.javaClass.simpleName)
                     }
                     is TdApi.UpdateChatFolders -> {
@@ -382,6 +417,7 @@ class TelegramClient(private val context: Context) {
             { exception -> Timber.e(exception, "TDLib default exception handler") }
         )
         client = c
+        watchNetwork()
         c.send(TdApi.SetTdlibParameters().apply {
             databaseDirectory = context.filesDir.resolve("tdlib").absolutePath
             filesDirectory = context.filesDir.resolve("tdlib-files").absolutePath
@@ -871,6 +907,11 @@ class TelegramClient(private val context: Context) {
     }
 
     fun close() {
+        networkCallback?.let { callback ->
+            val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            runCatching { manager?.unregisterNetworkCallback(callback) }
+            networkCallback = null
+        }
         client?.send(TdApi.Close()) {}
     }
 }
