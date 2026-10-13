@@ -194,7 +194,7 @@ class ChannelVideoRepository(
                 for (item in fetched) {
                     val cached = videoIndexDao.getByMediaId(item.id)
                     if (cached == null && (item.id.substringAfterLast(':').toLongOrNull() ?: 0L) > state.refreshBoundary) brandNew += item
-                    else if (cached.title != item.title) videoIndexDao.updateTitle(item.id, item.title)
+                    else if (cached != null && cached.title != item.title) videoIndexDao.updateTitle(item.id, item.title)
                 }
                 val reachedBoundary = fetched.any { it.id.substringAfterLast(':').toLongOrNull()?.let { id -> id <= state.refreshBoundary } == true }
                 val done = reachedBoundary || page.nextFromMessageId == 0L
