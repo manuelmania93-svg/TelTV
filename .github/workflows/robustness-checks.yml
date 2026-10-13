@@ -1,0 +1,82 @@
+name: Robustness checks
+# Test-only checks: lint, JVM tests with fake Telegram data, emulator lifecycle/network stress.
+on:
+  pull_request:
+    branches: [main, fix/review-bug-pack]
+  workflow_dispatch:
+jobs:
+  lint-and-jvm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - run: chmod +x gradlew
+      - name: JVM tests
+        run: |
+          set +e
+          ./gradlew testDebugUnitTest --stacktrace > jvm.log 2>&1
+          rc=$?
+          grep -E '^e: |FAILED|AssertionError|Exception|Unresolved' jvm.log | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+          tail -25 jvm.log
+          exit $rc
+      - name: Android lint (report only)
+        continue-on-error: true
+        run: ./gradlew lintDebug --stacktrace
+      - name: Lint summary
+        if: always()
+        run: |
+          f=app/build/reports/lint-results-debug.xml
+          if [ -f "$f" ]; then
+            {
+              echo "### Lint (report only)"
+              echo "errors: $(grep -c 'severity="Error"' $f), warnings: $(grep -c 'severity="Warning"' $f)"
+              echo '```'
+              grep -oE '<issue id="[A-Za-z0-9]+"' $f | sort | uniq -c | sort -rn | head -40
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No lint report produced" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-and-jvm-reports
+          path: |
+            jvm.log
+            app/build/reports/lint-results-debug.*
+            app/build/reports/tests/testDebugUnitTest/
+  emulator-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - run: chmod +x gradlew .github/stress.sh
+      - run: ./gradlew assembleDebug --stacktrace
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Lifecycle, network and input stress
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: bash .github/stress.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stress-evidence
+          path: stress/
