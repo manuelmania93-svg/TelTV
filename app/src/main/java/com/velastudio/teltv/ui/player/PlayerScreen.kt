@@ -473,20 +473,14 @@ fun PlayerScreen(
             connectTimeout.cancel()
             controller?.let { mediaController ->
                 mediaController.removeListener(listener)
-                // Rebinding must not stop the session or overwrite the saved standby snapshot.
+                if (mediaController.isConnected) {
+                    if (!needsRecovery) latestOnPositionUpdate(mediaController.currentPosition, mediaController.duration.coerceAtLeast(0L))
+                    // Rebind attempts only replace null/disconnected controllers.
+                    mediaController.stop()
+                }
             }
             MediaController.releaseFuture(controllerFuture)
             controller = null
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            // Only leaving the player stops playback; a controller rebind does not.
-            controller?.takeIf { it.isConnected }?.let { mc ->
-                if (!needsRecovery) latestOnPositionUpdate(mc.currentPosition, mc.duration.coerceAtLeast(0L))
-                mc.stop()
-            }
         }
     }
 
@@ -494,7 +488,7 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
-                    snapshotPlayback()
+                    if (!needsRecovery) snapshotPlayback()
                     foreground = false
                     needsRecovery = true
                     controller?.takeIf { it.isConnected }?.pause()
