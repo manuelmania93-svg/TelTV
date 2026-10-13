@@ -21,6 +21,14 @@ data class UpdateInfo(
     val changelog: String
 )
 
+sealed interface UpdateCheckResult {
+    data class Available(val info: UpdateInfo) : UpdateCheckResult
+    data object UpToDate : UpdateCheckResult
+    data class Failed(val message: String) : UpdateCheckResult
+}
+
+enum class InstallResult { INSTALLER_OPENED, PERMISSION_REQUIRED, FAILED }
+
 object AppUpdater {
     private val client = OkHttpClient.Builder().build()
     private const val GITHUB_REPO = "manuelmania93-svg/TelTV"
@@ -45,7 +53,10 @@ object AppUpdater {
         return false
     }
 
-    suspend fun checkForUpdate(force: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(force: Boolean = false): UpdateInfo? =
+        (checkForUpdateResult(force) as? UpdateCheckResult.Available)?.info
+
+    suspend fun checkForUpdateResult(force: Boolean = false): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
             val releaseUrls = listOf(
                 "https://api.github.com/repos/$GITHUB_REPO/releases/latest",
@@ -101,19 +112,21 @@ object AppUpdater {
                 if (downloadUrl != null) {
                     if (!force) {
                         if (remoteVersion.isBlank() || !isNewer(remoteVersion, currentVersion)) {
-                            return@withContext null
+                            return@withContext UpdateCheckResult.UpToDate
                         }
                     }
-                    return@withContext UpdateInfo(
+                    return@withContext UpdateCheckResult.Available(UpdateInfo(
                         remoteVersion,
                         downloadUrl,
                         json.optString("body", "Continuous release update with latest fixes.")
-                    )
+                    ))
                 }
             }
-            null
+            UpdateCheckResult.Failed("Could not find a downloadable release. Please retry.")
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            null
+            UpdateCheckResult.Failed("Update check failed. Check the network and retry.")
         }
     }
 
@@ -132,16 +145,16 @@ object AppUpdater {
         context: Context,
         downloadUrl: String,
         onProgress: (Float) -> Unit
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): InstallResult = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url(downloadUrl)
                 .header("User-Agent", "TelTV-AndroidTV-Updater")
                 .build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext false
+            return@withContext client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext InstallResult.FAILED
 
-                val body = response.body ?: return@withContext false
+                val body = response.body ?: return@withContext InstallResult.FAILED
                 val contentLength = body.contentLength()
                 val apkFile = File(context.cacheDir, "TelTV_update.apk").apply {
                     if (exists()) delete()
@@ -170,6 +183,7 @@ object AppUpdater {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                         context.startActivity(permIntent)
+                        InstallResult.PERMISSION_REQUIRED
                     } else {
                         val uri = FileProvider.getUriForFile(
                             context,
@@ -182,12 +196,14 @@ object AppUpdater {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                         context.startActivity(intent)
+                        InstallResult.INSTALLER_OPENED
                     }
                 }
             }
-            true
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            false
+            InstallResult.FAILED
         }
     }
 }
