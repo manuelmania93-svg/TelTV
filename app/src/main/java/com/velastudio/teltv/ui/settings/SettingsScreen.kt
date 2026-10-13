@@ -376,22 +376,24 @@ fun AppUpdateSection() {
                     isChecking = true
                     statusMessage = "Connecting to GitHub..."
                     scope.launch {
-                        val updateInfo = com.velastudio.teltv.util.AppUpdater.checkForUpdate(force = true)
+                        val result = com.velastudio.teltv.util.AppUpdater.checkForUpdateResult(force = true)
                         isChecking = false
-                        if (updateInfo != null) {
-                            statusMessage = "Found update! Downloading APK..."
-                            isDownloading = true
-                            val success = com.velastudio.teltv.util.AppUpdater.downloadAndInstall(context, updateInfo.downloadUrl) { progress ->
-                                downloadProgress = progress
+                        when (result) {
+                            is com.velastudio.teltv.util.UpdateCheckResult.Available -> {
+                                statusMessage = "Found update! Downloading APK..."
+                                isDownloading = true
+                                val installResult = com.velastudio.teltv.util.AppUpdater.downloadAndInstall(context, result.info.downloadUrl) { progress ->
+                                    downloadProgress = progress
+                                }
+                                isDownloading = false
+                                statusMessage = when (installResult) {
+                                    com.velastudio.teltv.util.InstallResult.INSTALLER_OPENED -> "Opening package installer..."
+                                    com.velastudio.teltv.util.InstallResult.PERMISSION_REQUIRED -> "Grant install permission, return here, then click again."
+                                    com.velastudio.teltv.util.InstallResult.FAILED -> "Download or installer failed. Please retry."
+                                }
                             }
-                            isDownloading = false
-                            if (!success) {
-                                statusMessage = "Grant install permission if prompted, then click again."
-                            } else {
-                                statusMessage = "Opening package installer..."
-                            }
-                        } else {
-                            statusMessage = "Already on latest version."
+                            is com.velastudio.teltv.util.UpdateCheckResult.Failed -> statusMessage = result.message
+                            com.velastudio.teltv.util.UpdateCheckResult.UpToDate -> statusMessage = "Already on latest version."
                         }
                     }
                 },

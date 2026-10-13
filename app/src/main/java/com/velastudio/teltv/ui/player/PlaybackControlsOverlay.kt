@@ -53,7 +53,7 @@ fun PlaybackControlsOverlay(
     onPlayNext: (() -> Unit)? = null,
     onOpenTracks: () -> Unit,
     onCycleAspectRatio: () -> Unit,
-    onOpenExternal: () -> Unit,
+    onOpenExternal: (() -> Unit)?,
     autoPlayNext: Boolean,
     onToggleAutoPlay: () -> Unit,
     playPauseModifier: Modifier = Modifier
@@ -94,7 +94,7 @@ fun PlaybackControlsOverlay(
                             contentDescription = "Audio & Subtitles",
                             onClick = onOpenTracks
                         )
-                        ControlButton(
+                        if (onOpenExternal != null) ControlButton(
                             icon = Icons.Filled.OpenInNew,
                             contentDescription = "Open in External Player",
                             onClick = onOpenExternal

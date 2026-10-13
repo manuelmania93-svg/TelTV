@@ -83,7 +83,10 @@ data class ChannelSyncStateEntity(
     val oldestLoadedMessageId: Long = 0L,
     val itemCount: Int = 0,
     val fullyLoaded: Boolean = false,
-    val lastSyncedEpochSec: Long = 0L
+    val lastSyncedEpochSec: Long = 0L,
+    @androidx.room.ColumnInfo(defaultValue = "0") val refreshCursor: Long = 0L,
+    @androidx.room.ColumnInfo(defaultValue = "0") val refreshBoundary: Long = 0L,
+    @androidx.room.ColumnInfo(defaultValue = "0") val refreshInserted: Int = 0
 )
 
 /** Recent on-device search terms, shown as quick-pick chips so typing on a remote is rare. */
@@ -207,6 +210,21 @@ interface VideoIndexDao {
     @Query("UPDATE video_index SET position = position + :shift WHERE chatId = :chatId")
     suspend fun shiftPositions(chatId: Long, shift: Int)
 
+    @Query("UPDATE video_index SET position = position + :shift WHERE chatId = :chatId AND position >= :offset")
+    suspend fun shiftFrom(chatId: Long, offset: Int, shift: Int)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveRefreshState(state: ChannelSyncStateEntity)
+
+    @androidx.room.Transaction
+    suspend fun commitRefreshPage(chatId: Long, offset: Int, items: List<VideoIndexEntity>, state: ChannelSyncStateEntity) {
+        if (items.isNotEmpty()) {
+            shiftFrom(chatId, offset, items.size)
+            insertAll(items)
+        }
+        saveRefreshState(state)
+    }
+
     @Query("DELETE FROM video_index WHERE chatId = :chatId")
     suspend fun clearChannel(chatId: Long)
 
@@ -289,7 +307,7 @@ interface PlaylistDao {
         PlaylistEntity::class,
         PlaylistItemEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class TelTvDatabase : RoomDatabase() {
@@ -314,6 +332,13 @@ abstract class TelTvDatabase : RoomDatabase() {
                     // Pre-1.0 scaffold, no real users/data yet -- destructive migration is the
                     // right tradeoff over hand-writing Migration objects for a schema that's
                     // still moving. Switch to real Migrations before shipping.
+                    .addMigrations(object : androidx.room.migration.Migration(4, 5) {
+                        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            db.execSQL("ALTER TABLE channel_sync_state ADD COLUMN refreshCursor INTEGER NOT NULL DEFAULT 0")
+                            db.execSQL("ALTER TABLE channel_sync_state ADD COLUMN refreshBoundary INTEGER NOT NULL DEFAULT 0")
+                            db.execSQL("ALTER TABLE channel_sync_state ADD COLUMN refreshInserted INTEGER NOT NULL DEFAULT 0")
+                        }
+                    })
                     .fallbackToDestructiveMigration()
                     .build().also { INSTANCE = it }
             }
