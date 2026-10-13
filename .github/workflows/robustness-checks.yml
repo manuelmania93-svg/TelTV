@@ -18,7 +18,13 @@ jobs:
           cache: gradle
       - run: chmod +x gradlew
       - name: JVM tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+        run: |
+          set +e
+          ./gradlew testDebugUnitTest --stacktrace > jvm.log 2>&1
+          rc=$?
+          grep -E '^e: |FAILED|AssertionError|Exception|Unresolved' jvm.log | head -40 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+          tail -25 jvm.log
+          exit $rc
       - name: Android lint (report only)
         continue-on-error: true
         run: ./gradlew lintDebug --stacktrace
@@ -42,6 +48,7 @@ jobs:
         with:
           name: lint-and-jvm-reports
           path: |
+            jvm.log
             app/build/reports/lint-results-debug.*
             app/build/reports/tests/testDebugUnitTest/
   emulator-stress:
