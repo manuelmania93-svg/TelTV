@@ -53,6 +53,7 @@ fun PlayerScreen(
     onPlayPrevious: (() -> Unit)? = null,
     onPlayNext: (() -> Unit)? = null,
     autoPlayByDefault: Boolean = false,
+    syncKey: String? = null,
     onPositionUpdate: (positionMs: Long, durationMs: Long) -> Unit,
     onPlaybackEnded: () -> Unit = {},
     onBack: () -> Unit
@@ -174,11 +175,15 @@ fun PlayerScreen(
 
     var activeSubtitleFile by remember { mutableStateOf<java.io.File?>(null) }
     var subtitleSyncOffsetMs by remember { mutableStateOf(0L) }
+    var subtitleScale by remember { mutableStateOf(1.0) }
 
-    LaunchedEffect(fileId, directUri) {
+    // Subtitle timing is remembered per video: restore it here, save it on every change.
+    LaunchedEffect(fileId, directUri, syncKey) {
         activeSubtitleFile = null
-        subtitleSyncOffsetMs = 0L
-        SubtitleSyncOffset.setOffsetMs(0L)
+        val saved = if (syncKey != null) prefs.getSubtitleSync(syncKey) else com.velastudio.teltv.player.SubtitleSync()
+        subtitleSyncOffsetMs = saved.offsetMs
+        subtitleScale = saved.scale
+        SubtitleSyncOffset.set(saved)
     }
 
     val subFontSize = when (subSize) {
@@ -266,23 +271,31 @@ fun PlayerScreen(
             return false
         }
         activeSubtitleFile = file
-        subtitleSyncOffsetMs = 0L
-        SubtitleSyncOffset.setOffsetMs(0L)
         applySubtitleFile(file, sub.lang, sub.langDisplay)
         seekingText = "Subtitles: ${sub.langDisplay}"
         return true
     }
 
-    fun adjustSubtitleSync(newOffset: Long) {
-        subtitleSyncOffsetMs = newOffset
-        SubtitleSyncOffset.setOffsetMs(newOffset)
+    fun applySubtitleSync(offsetMs: Long, scale: Double) {
+        val offset = com.velastudio.teltv.player.SubtitleTiming.clampOffset(offsetMs)
+        val newScale = com.velastudio.teltv.player.SubtitleTiming.clampScale(scale)
+        val sync = com.velastudio.teltv.player.SubtitleSync(offset, newScale)
+        subtitleSyncOffsetMs = offset
+        subtitleScale = newScale
+        SubtitleSyncOffset.set(sync)
+        syncKey?.let { key -> coroutineScope.launch { prefs.setSubtitleSync(key, sync) } }
         controller?.let { mediaController ->
             if (mediaController.currentMediaItem != null) {
                 mediaController.seekTo(mediaController.currentPosition)
-                seekingText = "Subtitle delay: ${if (newOffset >= 0) "+" else ""}${newOffset}ms"
+                seekingText = "Subtitles: ${com.velastudio.teltv.player.SubtitleTiming.formatOffset(offset)}, " +
+                    com.velastudio.teltv.player.SubtitleTiming.formatScale(newScale)
             }
         }
     }
+
+    fun adjustSubtitleSync(newOffset: Long) = applySubtitleSync(newOffset, subtitleScale)
+
+    fun adjustSubtitleScale(newScale: Double) = applySubtitleSync(subtitleSyncOffsetMs, newScale)
 
     /** The audio track ExoPlayer is playing now: its position among audio tracks and language. */
     fun selectedAudioTrack(): com.velastudio.teltv.sync.AudioTrackRef? {
@@ -813,6 +826,8 @@ fun PlayerScreen(
                 onSelectEmbeddedSubtitle = { activeSubtitleFile = null },
                 syncOffsetMs = subtitleSyncOffsetMs,
                 onAdjustSyncOffset = ::adjustSubtitleSync,
+                subtitleScale = subtitleScale,
+                onAdjustSubtitleScale = ::adjustSubtitleScale,
                 onlineSubtitleSelected = activeSubtitleFile != null,
                 onAutoSync = ::autoSyncSubtitle,
                 prefs = prefs,
