@@ -249,6 +249,8 @@ fun TrackSelectorDialog(
     onSelectEmbeddedSubtitle: () -> Unit = {},
     syncOffsetMs: Long = 0L,
     onAdjustSyncOffset: (Long) -> Unit = {},
+    subtitleScale: Double = 1.0,
+    onAdjustSubtitleScale: (Double) -> Unit = {},
     onlineSubtitleSelected: Boolean = false,
     onAutoSync: suspend () -> String = { "" },
     prefs: PlaybackPrefs? = null,
@@ -484,14 +486,14 @@ fun TrackSelectorDialog(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${if (syncOffsetMs >= 0) "+" else ""}${"%.2f".format(syncOffsetMs / 1000.0)}s",
+                            text = com.velastudio.teltv.player.SubtitleTiming.formatOffset(syncOffsetMs),
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Text(
-                        "Positive delays subtitles; negative moves them earlier.",
+                        "Positive delays subtitles; negative moves them earlier. Saved for this video.",
                         color = Color.LightGray,
                         fontSize = 12.sp
                     )
@@ -506,16 +508,16 @@ fun TrackSelectorDialog(
                         ) { Text("-1s") }
                         Button(
                             enabled = canAdjustSync,
-                            onClick = { onAdjustSyncOffset(syncOffsetMs - 250L) }
-                        ) { Text("-250ms") }
+                            onClick = { onAdjustSyncOffset(com.velastudio.teltv.player.SubtitleTiming.stepOffset(syncOffsetMs, -1)) }
+                        ) { Text("-100ms") }
                         Button(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(0L) }
                         ) { Text("Reset") }
                         Button(
                             enabled = canAdjustSync,
-                            onClick = { onAdjustSyncOffset(syncOffsetMs + 250L) }
-                        ) { Text("+250ms") }
+                            onClick = { onAdjustSyncOffset(com.velastudio.teltv.player.SubtitleTiming.stepOffset(syncOffsetMs, 1)) }
+                        ) { Text("+100ms") }
                         Button(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(syncOffsetMs + 1_000L) }
@@ -524,6 +526,52 @@ fun TrackSelectorDialog(
                             enabled = canAdjustSync,
                             onClick = { onAdjustSyncOffset(syncOffsetMs + 5_000L) }
                         ) { Text("+5s") }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Subtitle speed",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = com.velastudio.teltv.player.SubtitleTiming.formatScale(subtitleScale),
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        "Fixes drift that grows over the video (frame rate mismatch). Saved for this video.",
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.stepScale(subtitleScale, -1)) }
+                        ) { Text("-0.001") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.SCALE_23976_TO_25) }
+                        ) { Text("23.976>25 (x0.959)") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSubtitleScale(1.0) }
+                        ) { Text("Reset") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.SCALE_25_TO_23976) }
+                        ) { Text("25>23.976 (x1.043)") }
+                        Button(
+                            enabled = canAdjustSync,
+                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.stepScale(subtitleScale, 1)) }
+                        ) { Text("+0.001") }
                     }
                     if (selectedTab != 1) {
                         var autoSyncBusy by remember { mutableStateOf(false) }

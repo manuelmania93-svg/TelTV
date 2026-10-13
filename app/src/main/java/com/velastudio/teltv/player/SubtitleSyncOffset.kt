@@ -14,8 +14,21 @@ object SubtitleSyncOffset {
     var offsetUs: Long = 0L
         private set
 
+    @Volatile
+    var scale: Double = 1.0
+        private set
+
     fun setOffsetMs(offsetMs: Long) {
         offsetUs = offsetMs * 1_000L
+    }
+
+    fun setScale(newScale: Double) {
+        scale = SubtitleTiming.clampScale(newScale)
+    }
+
+    fun set(sync: SubtitleSync) {
+        setOffsetMs(sync.offsetMs)
+        setScale(sync.scale)
     }
 }
 
@@ -47,8 +60,7 @@ internal class OffsetSubtitleDecoder(
 
     override fun dequeueOutputBuffer(): SubtitleOutputBuffer? {
         val output = decoder.dequeueOutputBuffer() ?: return null
-        val offset = SubtitleSyncOffset.offsetUs
-        return OffsetSubtitleOutputBuffer(output, offset)
+        return OffsetSubtitleOutputBuffer(output, SubtitleSyncOffset.offsetUs, SubtitleSyncOffset.scale)
     }
 
     override fun setPositionUs(positionUs: Long) {
@@ -63,12 +75,13 @@ internal class OffsetSubtitleDecoder(
 @UnstableApi
 private class OffsetSubtitleOutputBuffer(
     private var source: SubtitleOutputBuffer?,
-    private val offsetUs: Long
+    private val offsetUs: Long,
+    private val scale: Double
 ) : SubtitleOutputBuffer() {
 
     init {
         val output = requireNotNull(source)
-        timeUs = output.timeUs + offsetUs
+        timeUs = SubtitleTiming.mapUs(output.timeUs, scale, offsetUs)
         skippedOutputBufferCount = output.skippedOutputBufferCount
         shouldBeSkipped = output.shouldBeSkipped
         if (output.isEndOfStream) {
@@ -76,7 +89,7 @@ private class OffsetSubtitleOutputBuffer(
         } else {
             setContent(
                 timeUs,
-                OffsetSubtitle(output, offsetUs),
+                OffsetSubtitle(output, offsetUs, scale),
                 0L
             )
         }
@@ -92,16 +105,17 @@ private class OffsetSubtitleOutputBuffer(
 @UnstableApi
 internal class OffsetSubtitle(
     private val subtitle: Subtitle,
-    private val offsetUs: Long
+    private val offsetUs: Long,
+    private val scale: Double = 1.0
 ) : Subtitle {
     override fun getNextEventTimeIndex(timeUs: Long): Int =
-        subtitle.getNextEventTimeIndex(timeUs - offsetUs)
+        subtitle.getNextEventTimeIndex(SubtitleTiming.unmapUs(timeUs, scale, offsetUs))
 
     override fun getEventTimeCount(): Int = subtitle.eventTimeCount
 
     override fun getEventTime(index: Int): Long =
-        subtitle.getEventTime(index) + offsetUs
+        SubtitleTiming.mapUs(subtitle.getEventTime(index), scale, offsetUs)
 
     override fun getCues(timeUs: Long): List<Cue> =
-        subtitle.getCues(timeUs - offsetUs)
+        subtitle.getCues(SubtitleTiming.unmapUs(timeUs, scale, offsetUs))
 }

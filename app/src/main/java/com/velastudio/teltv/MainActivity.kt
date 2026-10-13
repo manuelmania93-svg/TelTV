@@ -897,6 +897,7 @@ class MainActivity : ComponentActivity() {
                             resumePositionMs = resumeMs,
                             nextTitle = nextEntity?.title,
                             autoPlayByDefault = false,
+                            syncKey = playbackMediaId,
                             onPlayPrevious = prevEntity?.let { prev ->
                                 {
                                     resumeMs = 0L
