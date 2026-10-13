@@ -69,7 +69,7 @@ fun PlaybackErrorOverlay(
     message: String,
     onRetry: () -> Unit,
     onBack: () -> Unit,
-    onOpenExternal: () -> Unit
+    onOpenExternal: (() -> Unit)?
 ) {
     Box(
         Modifier
@@ -87,7 +87,7 @@ fun PlaybackErrorOverlay(
             Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Button(onClick = onRetry) { Text("Retry") }
-                Button(onClick = onOpenExternal) { Text("Open in External Player") }
+                if (onOpenExternal != null) Button(onClick = onOpenExternal) { Text("Open in External Player") }
                 OutlinedButton(onClick = onBack) { Text("Back") }
             }
         }
@@ -138,19 +138,26 @@ fun SeekingFeedbackBadge(seekText: String?, isForward: Boolean) {
 fun AutoPlayCountdownOverlay(
     nextTitle: String,
     initialSeconds: Int = 5,
+    countdownRunning: Boolean = true,
     onPlayNow: () -> Unit,
     onCancel: () -> Unit
 ) {
-    var secondsRemaining by remember(initialSeconds) { mutableStateOf(initialSeconds) }
+    var secondsRemaining by remember { mutableStateOf(initialSeconds.coerceAtLeast(1)) }
+    val latestPlayNow by rememberUpdatedState(onPlayNow)
     val playNowFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         playNowFocusRequester.requestFocus()
+    }
+
+    // Pausing, buffering and backgrounding cancel this job without resetting the countdown.
+    LaunchedEffect(countdownRunning) {
+        if (!countdownRunning) return@LaunchedEffect
         while (secondsRemaining > 0) {
             delay(1000)
             secondsRemaining -= 1
         }
-        onPlayNow()
+        latestPlayNow()
     }
 
     Box(
