@@ -40,11 +40,19 @@ jobs:
             adb shell am start -W -n com.velastudio.teltv/.MainActivity
             sleep 8
             adb shell pidof com.velastudio.teltv
+            adb shell input keyevent KEYCODE_HOME
+            sleep 2
+            adb shell am kill com.velastudio.teltv
+            sleep 3
+            adb shell am start -W -n com.velastudio.teltv/.MainActivity
+            sleep 10
+            adb shell pidof com.velastudio.teltv
             adb shell uiautomator dump /sdcard/window.xml
             adb pull /sdcard/window.xml smoke/window.xml
             adb shell screencap -p /sdcard/startup.png
             adb pull /sdcard/startup.png smoke/startup.png
             adb logcat -d > smoke/logcat.txt
+            test "$(grep -c 'TDLib client started' smoke/logcat.txt)" -ge 2
             if grep -E 'FATAL EXCEPTION|Fatal signal|ANR in com.velastudio.teltv' smoke/logcat.txt; then exit 1; fi
       - name: Upload startup evidence and test results
         if: always()

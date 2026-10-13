@@ -30,4 +30,24 @@ object CancellableWait {
         await(CountDownLatch(1), ms, sliceMs, isCancelled)
         return !isCancelled() && !Thread.currentThread().isInterrupted
     }
+
+    /**
+     * Polls [condition] every [sliceMs] until it is true, [timeoutMs] passes, or [isCancelled].
+     * @return true only when the condition became true.
+     */
+    fun waitUntil(
+        timeoutMs: Long,
+        sliceMs: Long = 100L,
+        isCancelled: () -> Boolean = { false },
+        condition: () -> Boolean
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (true) {
+            if (condition()) return true
+            if (isCancelled() || Thread.currentThread().isInterrupted) return false
+            val left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+            if (left <= 0) return false
+            if (!sleep(minOf(sliceMs, left), sliceMs, isCancelled)) return false
+        }
+    }
 }

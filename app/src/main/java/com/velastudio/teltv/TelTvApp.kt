@@ -48,6 +48,13 @@ class TelTvApp : Application(), ImageLoaderFactory {
         try {
             deviceProfile = DeviceCapabilities.profile(this)
             telegramClient = TelegramClient(this)
+            // Start TDLib with the process, not with the login screen: after a process restart the
+            // UI or PlaybackService can reach the player without ever composing LoginScreen.
+            try {
+                telegramClient.start()
+            } catch (tdError: Throwable) {
+                Timber.e(tdError, "TDLib start failed")
+            }
             database = TelTvDatabase.get(this)
             channelVideoRepository = ChannelVideoRepository(
                 telegram = telegramClient,

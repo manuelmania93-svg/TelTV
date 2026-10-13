@@ -109,7 +109,7 @@ class TelegramClient(private val context: Context) {
     fun getLastDownloadError(fileId: Int): String? = lastDownloadErrors[fileId]
 
     suspend fun getFreshFileId(chatId: Long, messageId: Long): Int? = withContext(Dispatchers.IO) {
-        val c = client ?: return@withContext null
+        val c = awaitReadyClientBlocking(CLIENT_READY_TIMEOUT_MS) ?: return@withContext null
         val realChatId = resolveChatAndTopic(chatId).first
 
         // 1. First attempt GetMessages (contacts Telegram server to register file into current session)
@@ -179,9 +179,15 @@ class TelegramClient(private val context: Context) {
         limit: Long,
         isCancelled: () -> Boolean = { false }
     ): TdApi.File? {
-        val c = client
+        // The client may not exist yet (fresh or restored process that never showed the login
+        // screen) or may still be starting up. Start it and wait for it to become ready.
+        val c = awaitReadyClientBlocking(CLIENT_READY_TIMEOUT_MS, isCancelled)
         if (c == null) {
-            lastDownloadErrors[fileId] = "TDLib client is not initialized"
+            lastDownloadErrors[fileId] = if (isCancelled() || Thread.currentThread().isInterrupted) {
+                "Playback was cancelled while Telegram was starting"
+            } else {
+                "Telegram is not ready yet (still starting, offline, or signed out). Press Retry."
+            }
             return null
         }
 
@@ -321,8 +327,24 @@ class TelegramClient(private val context: Context) {
     }
 
     @Volatile private var client: Client? = null
+    @Volatile
     var authState: TdApi.AuthorizationState? = null
         private set
+
+    /** Starts the TDLib client if needed. Safe to call from any thread, any number of times. */
+    fun start() = ensureStarted()
+
+    /**
+     * Starts the client if needed, then blocks until TDLib is authorized (ready for requests).
+     * Returns null on timeout, cancellation, or when the user is not signed in.
+     */
+    fun awaitReadyClientBlocking(timeoutMs: Long, isCancelled: () -> Boolean = { false }): Client? {
+        ensureStarted()
+        val ready = com.velastudio.teltv.util.CancellableWait.waitUntil(timeoutMs, 100L, isCancelled) {
+            authState is TdApi.AuthorizationStateReady
+        }
+        return if (ready) client else null
+    }
 
     @Synchronized
     fun refreshNetworkState() {
@@ -363,6 +385,9 @@ class TelegramClient(private val context: Context) {
     }
 
     companion object {
+        /** How long a playback/data call waits for a just-started TDLib client to become ready. */
+        const val CLIENT_READY_TIMEOUT_MS = 20_000L
+
         // Replace with your own values from https://my.telegram.org -- never commit real ones.
         const val API_ID = 6
         const val API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
@@ -417,6 +442,7 @@ class TelegramClient(private val context: Context) {
             { exception -> Timber.e(exception, "TDLib default exception handler") }
         )
         client = c
+        Timber.i("TDLib client started")
         watchNetwork()
         c.send(TdApi.SetTdlibParameters().apply {
             databaseDirectory = context.filesDir.resolve("tdlib").absolutePath
