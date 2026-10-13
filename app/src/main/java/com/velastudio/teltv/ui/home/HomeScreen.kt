@@ -367,10 +367,16 @@ fun HomeScreen(
             onDownload = {
                 coroutineScope.launch {
                     isDownloading = true
-                    com.velastudio.teltv.util.AppUpdater.downloadAndInstall(context, updateInfo!!.downloadUrl) { p ->
+                    val installResult = com.velastudio.teltv.util.AppUpdater.downloadAndInstall(context, updateInfo!!.downloadUrl) { p ->
                         downloadProgress = p
                     }
                     isDownloading = false
+                    val message = when (installResult) {
+                        com.velastudio.teltv.util.InstallResult.INSTALLER_OPENED -> "Opening package installer..."
+                        com.velastudio.teltv.util.InstallResult.PERMISSION_REQUIRED -> "Grant install permission, return here, then try again."
+                        com.velastudio.teltv.util.InstallResult.FAILED -> "Download or installer failed. Please retry."
+                    }
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                 }
             },
             onDismiss = {
