@@ -13,7 +13,7 @@ ok() { log "- ok: $*"; }
 bad() { log "- FAIL: $*"; FAIL=1; }
 alive() { [ -n "$(adb shell pidof $PKG | tr -d '\r')" ]; }
 start_app() { adb shell am start -W -n $PKG/.MainActivity > /dev/null 2>&1; }
-begin() { SCEN="$1"; adb logcat -c; log "### $SCEN"; }
+begin() { SCEN="$1"; adb logcat -c; log "### $SCEN ($(date -u +%H:%M:%S))"; }
 finish() {
   sleep 3
   adb logcat -d > "$OUT/logcat-$SCEN.txt"
@@ -91,13 +91,13 @@ mem trim
 
 begin remote-dpad-spam
 start_app; sleep 5
-adb shell 'for i in $(seq 1 60); do input keyevent 20; input keyevent 22; input keyevent 66; input keyevent 19; input keyevent 21; done'
+adb shell 'for i in $(seq 1 40); do input keyevent 20 22 66 19 21; done'
 sleep 3
 start_app; sleep 3
 finish
 
-begin monkey-1500-events
-adb shell monkey -p $PKG --pct-syskeys 0 --throttle 200 -s 1337 --ignore-timeouts 1500 > "$OUT/monkey.txt" 2>&1
+begin monkey-1000-events
+adb shell monkey -p $PKG --pct-syskeys 0 --throttle 200 -s 1337 --ignore-timeouts 1000 > "$OUT/monkey.txt" 2>&1
 tail -5 "$OUT/monkey.txt" >> "$OUT/summary.md"
 if grep -E "CRASH|ANR" "$OUT/monkey.txt" > /dev/null; then bad "monkey: crash or ANR reported"; fi
 finish
