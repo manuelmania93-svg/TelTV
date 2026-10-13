@@ -17,7 +17,7 @@ jobs:
           cache: gradle
       - run: chmod +x gradlew
       - name: Unit tests and debug APK
-        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
+        run: ./gradlew testDebugUnitTest assembleDebug assembleRelease --stacktrace
       - name: Enable KVM
         run: |
           sudo chmod 666 /dev/kvm
