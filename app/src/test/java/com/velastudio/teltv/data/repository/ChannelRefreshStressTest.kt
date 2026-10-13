@@ -15,7 +15,7 @@ import java.io.IOException
 import java.lang.reflect.Proxy
 import java.util.Random
 
-/** Fake-Telegram scenarios for refreshNewest: big channels, flaky/slow/dropped network, interrupted refreshes. */
+/** Fake-Telegram scenarios for refreshNewest: big channels, flaky or slow network, interrupted refreshes. */
 class ChannelRefreshStressTest {
     private class Cache(headId: Long = 1000L) {
         val rows = mutableMapOf<String, VideoIndexEntity>()
@@ -51,7 +51,7 @@ class ChannelRefreshStressTest {
         fun settled() = state.refreshCursor == 0L && state.refreshBoundary == 0L
     }
 
-    /** Server holding message ids [low..high]; newest first, like TDLib history paging. */
+    /** Server holding message ids from low up to high; newest first, like TDLib history paging. */
     private class Server(var high: Long, val low: Long) {
         fun page(cursor: Long, limit: Int): VideoMessagesResult {
             val ids = (high downTo low).filter { cursor == 0L || it < cursor }.take(limit)
