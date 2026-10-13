@@ -2,7 +2,7 @@ name: Robustness checks
 # Test-only checks: lint, JVM tests with fake Telegram data, emulator lifecycle/network stress.
 on:
   pull_request:
-    branches: [main, fix/review-bug-pack]
+    branches: [main, fix/review-bug-pack, test/robustness-checks]
   workflow_dispatch:
 jobs:
   lint-and-jvm:
