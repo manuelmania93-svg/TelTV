@@ -43,7 +43,7 @@ class SubtitleTimingTest {
         // Subtitle line at 1h00m00s in a 23.976 fps file, shown on 25 fps video, 2 s later.
         val oneHourUs = 3_600_000_000L
         val mapped = SubtitleTiming.mapUs(oneHourUs, SubtitleTiming.SCALE_23976_TO_25, 2_000_000L)
-        assertEquals(3_452_544_000L + 2_000_000L, mapped, 5L)
+        assertEquals((3_452_544_000L + 2_000_000L).toDouble(), mapped.toDouble(), 5.0)
         assertEquals(1_234_567L, SubtitleTiming.mapUs(1_234_567L, 1.0, 0L))
     }
 
