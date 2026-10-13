@@ -244,6 +244,7 @@ data class TrackItem(
 fun TrackSelectorDialog(
     controller: MediaController?,
     videoTitle: String = "",
+    showName: String? = null,
     onSelectOnlineSubtitle: suspend (OnlineSubtitle) -> Boolean = { false },
     onSelectEmbeddedSubtitle: () -> Unit = {},
     syncOffsetMs: Long = 0L,
@@ -333,9 +334,12 @@ fun TrackSelectorDialog(
     var subtitleQuery by remember(videoTitle) { mutableStateOf(videoTitle) }
     var downloadingSubtitleId by remember { mutableStateOf<String?>(null) }
     var subtitleActionMessage by remember { mutableStateOf<String?>(null) }
-    val subtitleIdentity = remember(subtitleQuery) {
-        OnlineSubtitleProvider.identifyMedia(subtitleQuery)
+    // The channel/topic name is the series name, unless the user edited the query by hand.
+    fun showNameFor(query: String): String? = showName?.takeIf { query.trim() == videoTitle.trim() }
+    val subtitleIdentity = remember(subtitleQuery, showName) {
+        OnlineSubtitleProvider.identifyMedia(subtitleQuery, showNameFor(subtitleQuery))
     }
+    var lastSearchReason by remember { mutableStateOf<String?>(null) }
     val subtitleLanguagePreferences = listOf(activeSubtitleLanguage)
     val subtitleLanguageHint =
         "Subtitle language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)} (forced dialogue first)"
@@ -347,12 +351,20 @@ fun TrackSelectorDialog(
         isLoadingOnlineSubs = true
         subtitleActionMessage = null
         try {
+            val outcome = OnlineSubtitleProvider.searchSubtitlesDetailed(
+                query,
+                activeSubtitleLanguage,
+                showNameFor(query)
+            )
             val results = OnlineSubtitleProvider.prioritizePreferredLanguages(
-                OnlineSubtitleProvider.searchSubtitles(query, activeSubtitleLanguage),
+                outcome.subtitles,
                 subtitleLanguagePreferences
             )
             rawOnlineSubtitles = results
-            if (autoSelectPreferred) {
+            lastSearchReason = outcome.reason
+            if (results.isEmpty()) {
+                subtitleActionMessage = outcome.reason ?: "No online subtitles found for this title."
+            } else if (autoSelectPreferred) {
                 val preferred = OnlineSubtitleProvider.firstPreferredLanguageMatch(results, subtitleLanguagePreferences)
                 if (preferred != null) {
                     downloadingSubtitleId = preferred.id
@@ -369,7 +381,23 @@ fun TrackSelectorDialog(
                     downloadingSubtitleId = null
                 } else if (subtitleLanguagePreferences.isNotEmpty()) {
                     val language = SubtitleLanguages.displayName(subtitleLanguagePreferences.first())
-                    subtitleActionMessage = "No $language subtitles found. Choose an available language below."
+                    val english = if (OnlineSubtitleProvider.isPreferredLanguage("en", subtitleLanguagePreferences)) {
+                        null
+                    } else {
+                        OnlineSubtitleProvider.firstPreferredLanguageMatch(results, listOf("en"))
+                    }
+                    if (english != null) {
+                        downloadingSubtitleId = english.id
+                        subtitleActionMessage = "No $language subtitles found. Using English instead..."
+                        if (onSelectOnlineSubtitle(english)) {
+                            onDismiss()
+                        } else {
+                            subtitleActionMessage = "No $language subtitles found. Could not apply English; choose one below."
+                        }
+                        downloadingSubtitleId = null
+                    } else {
+                        subtitleActionMessage = "No $language subtitles found. Choose an available language below."
+                    }
                 }
             }
         } catch (e: CancellationException) {

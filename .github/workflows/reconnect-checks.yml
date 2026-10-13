@@ -1,7 +1,7 @@
 name: Reconnect checks
 on:
   pull_request:
-    branches: [main, fix/standby-reconnect]
+    branches: [main, fix/standby-reconnect, test/robustness-checks]
   workflow_dispatch:
 jobs:
   startup:

@@ -47,6 +47,7 @@ fun PlayerScreen(
     fileId: Int?,
     directUri: String?,
     title: String,
+    showName: String? = null,
     resumePositionMs: Long,
     nextTitle: String? = null,
     onPlayPrevious: (() -> Unit)? = null,
@@ -807,6 +808,7 @@ fun PlayerScreen(
             TrackSelectorDialog(
                 controller = controller,
                 videoTitle = title,
+                showName = showName,
                 onSelectOnlineSubtitle = ::attachOnlineSubtitle,
                 onSelectEmbeddedSubtitle = { activeSubtitleFile = null },
                 syncOffsetMs = subtitleSyncOffsetMs,

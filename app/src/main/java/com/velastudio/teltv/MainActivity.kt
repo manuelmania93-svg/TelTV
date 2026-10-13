@@ -893,6 +893,7 @@ class MainActivity : ComponentActivity() {
                             fileId = fileId,
                             directUri = null,
                             title = searchTitle,
+                            showName = finalShowName,
                             resumePositionMs = resumeMs,
                             nextTitle = nextEntity?.title,
                             autoPlayByDefault = false,

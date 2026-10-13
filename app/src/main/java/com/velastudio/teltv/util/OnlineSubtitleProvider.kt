@@ -23,6 +23,12 @@ data class OnlineSubtitle(
     val releaseName: String = ""
 )
 
+/** Search outcome. [reason] explains an empty result so the UI can say why nothing was found. */
+data class SubtitleSearchResult(
+    val subtitles: List<OnlineSubtitle>,
+    val reason: String? = null
+)
+
 data class SubtitleMediaIdentity(
     val title: String,
     val isSeries: Boolean,
@@ -46,23 +52,103 @@ object OnlineSubtitleProvider {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    private val SEASON_EPISODE_REGEX = Regex("(?i)s(\\d{1,2})e(\\d{1,2})|(\\d{1,2})x(\\d{1,2})")
+    private val SEASON_EPISODE_REGEX = Regex("(?i)s(\\d{1,2})e(\\d{1,3})|\\b(\\d{1,2})x(\\d{1,3})\\b")
     private val YEAR_REGEX = Regex("\\b(19\\d{2}|20\\d{2})\\b")
     private val EPISODE_LABEL_REGEX = Regex("(?i)\\b(?:ep|episode|folge|part|teil|chapter|kapitel)[.\\s_-]*\\d{1,4}\\b")
     private val TRAILING_EPISODE_NUMBER_REGEX = Regex("(?i)(?:\\s*[-#]\\s*|\\s+)\\d{1,4}\\s*$")
 
-    fun identifyMedia(rawTitle: String): SubtitleMediaIdentity {
+    // Release/language tags that are not part of a show name (the shared cleaner leaves these alone).
+    private val LANGUAGE_TAG_REGEX = Regex(
+        "(?i)\\b(?:ger(?:man)?[ -]?(?:sub|dub)?|deutsch|eng(?:lish)?[ -]?(?:sub|dub)|multi|dual|aniworld)\\b"
+    )
+    private val SHOW_SUFFIX_REGEX = Regex("(?i)\\s+(?:marathon|shuffle)\\s*$")
+    private val SHOW_JUNK_REGEX = Regex("[^\\p{L}\\p{N}\\s'&:!.-]")
+
+    /** Series name taken from a channel/folder/playlist name: no tags, emoji or "Marathon"/"Shuffle". */
+    fun cleanShowName(raw: String): String {
+        var t = MediaTitleCleaner.clean(raw)
+        t = t.replace(SHOW_JUNK_REGEX, " ")
+        t = t.replace(LANGUAGE_TAG_REGEX, " ")
+        t = t.replace(Regex("\\s+"), " ").trim()
+        t = t.replace(SHOW_SUFFIX_REGEX, "")
+        return t.trim().trim('-', '_', ':', '.', '|').trim()
+    }
+
+    /** Title lookups to try in order: full name, name without ": subtitle", then shorter prefixes. */
+    fun titleCandidates(title: String): List<String> {
+        val base = title.trim()
+        if (base.isBlank()) return emptyList()
+        val out = LinkedHashSet<String>()
+        out.add(base)
+        val noSubtitle = base.split(":", " - ", "|").first().trim()
+        if (noSubtitle.isNotBlank()) out.add(noSubtitle)
+        var words = noSubtitle.split(" ").filter { it.isNotBlank() }
+        while (words.size > 2) {
+            words = words.dropLast(1)
+            out.add(words.joinToString(" "))
+        }
+        return out.take(4)
+    }
+
+    private fun normalizeName(s: String): String = s.lowercase().filter { it.isLetterOrDigit() }
+
+    /** Index of the catalog hit whose name equals the query, else the first hit. */
+    fun bestMetaIndex(names: List<String>, query: String): Int {
+        val q = normalizeName(query)
+        val exact = names.indexOfFirst { normalizeName(it) == q }
+        return if (exact >= 0) exact else 0
+    }
+
+    /** Absolute episode number for a season/episode pair, counting regular seasons only. */
+    fun absoluteEpisodeNumber(seasonCounts: Map<Int, Int>, season: Int, episode: Int): Int? {
+        if (season < 1 || episode < 1) return null
+        val before = seasonCounts.filterKeys { it in 1 until season }.values.sum()
+        return before + episode
+    }
+
+    /** Inverse of [absoluteEpisodeNumber]; null when the number is beyond the known seasons. */
+    fun seasonEpisodeFromAbsolute(seasonCounts: Map<Int, Int>, absolute: Int): Pair<Int, Int>? {
+        if (absolute < 1) return null
+        var remaining = absolute
+        for (season in seasonCounts.keys.filter { it >= 1 }.sorted()) {
+            val count = seasonCounts[season] ?: 0
+            if (remaining <= count) return season to remaining
+            remaining -= count
+        }
+        return null
+    }
+
+    fun parseSeasonCounts(metaJson: String): Map<Int, Int> {
+        val videos = JSONObject(metaJson).optJSONObject("meta")?.optJSONArray("videos") ?: return emptyMap()
+        val counts = sortedMapOf<Int, Int>()
+        for (i in 0 until videos.length()) {
+            val season = videos.optJSONObject(i)?.optInt("season", 0) ?: 0
+            if (season >= 1) counts[season] = (counts[season] ?: 0) + 1
+        }
+        return counts
+    }
+
+    /**
+     * [showName] (channel/topic name) is the only source for the series title when given;
+     * the caption supplies just the season/episode numbers.
+     */
+    fun identifyMedia(rawTitle: String, showName: String? = null): SubtitleMediaIdentity {
         val cleanTitle = MediaTitleCleaner.clean(rawTitle)
         val signature = HybridEpisodeMatcher.parseSignature(rawTitle)
         val seasonMatch = SEASON_EPISODE_REGEX.find(cleanTitle)
         val year = YEAR_REGEX.find(cleanTitle)?.groupValues?.get(1)?.toIntOrNull()
         val isSeries = signature != null || seasonMatch != null
 
-        val season = signature?.season ?: seasonMatch?.let {
+        val season = seasonMatch?.let {
             it.groups[1]?.value?.toIntOrNull() ?: it.groups[3]?.value?.toIntOrNull()
-        }
-        val episode = signature?.episode ?: seasonMatch?.let {
+        } ?: signature?.season
+        val episode = seasonMatch?.let {
             it.groups[2]?.value?.toIntOrNull() ?: it.groups[4]?.value?.toIntOrNull()
+        } ?: signature?.episode
+
+        val cleanedShow = showName?.let { cleanShowName(it) }?.takeIf { it.isNotBlank() }
+        if (cleanedShow != null) {
+            return SubtitleMediaIdentity(cleanedShow, isSeries, season, episode, year)
         }
 
         val title = when {
@@ -80,7 +166,9 @@ object OnlineSubtitleProvider {
             else -> cleanTitle
         }.trim().trim('-', '_', ':', '.').ifBlank { cleanTitle }
             .replace(Regex("\\s+"), " ").trim()
-        return SubtitleMediaIdentity(title, isSeries, season, episode, year)
+        val cleanedTitle = title.replace(LANGUAGE_TAG_REGEX, " ").replace(Regex("\\s+"), " ").trim()
+            .ifBlank { title }
+        return SubtitleMediaIdentity(cleanedTitle, isSeries, season, episode, year)
     }
 
     private val LANG_MAP = mapOf(
@@ -158,97 +246,159 @@ object OnlineSubtitleProvider {
 
     suspend fun searchSubtitles(
         rawTitle: String,
-        preferredLanguage: String = SubtitleLanguages.DEFAULT_CODE
-    ): List<OnlineSubtitle> = withContext(Dispatchers.IO) {
+        preferredLanguage: String = SubtitleLanguages.DEFAULT_CODE,
+        showName: String? = null
+    ): List<OnlineSubtitle> = searchSubtitlesDetailed(rawTitle, preferredLanguage, showName).subtitles
+
+    private fun httpGet(url: String): String? {
+        val req = Request.Builder().url(url).header("User-Agent", "TelTV-AndroidTV").build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return null
+            return resp.body?.string()
+        }
+    }
+
+    private fun findImdbId(type: String, query: String): Pair<String, String>? {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val body = httpGet("https://v3-cinemeta.strem.io/catalog/$type/top/search=$encoded.json") ?: return null
+        val metas = runCatching { JSONObject(body).optJSONArray("metas") }.getOrNull() ?: return null
+        if (metas.length() == 0) return null
+        val names = (0 until metas.length()).map { metas.getJSONObject(it).optString("name", "") }
+        val meta = metas.getJSONObject(bestMetaIndex(names, query))
+        val id = meta.optString("imdb_id").takeIf { it.isNotBlank() }
+            ?: meta.optString("id").takeIf { it.isNotBlank() }
+            ?: return null
+        return id to meta.optString("name", query)
+    }
+
+    private fun fetchSubtitleList(subUrl: String): List<OnlineSubtitle> {
+        val subBody = httpGet(subUrl) ?: return emptyList()
+        val subArray = runCatching { JSONObject(subBody).optJSONArray("subtitles") }.getOrNull()
+            ?: return emptyList()
+        val results = mutableListOf<OnlineSubtitle>()
+        for (i in 0 until subArray.length()) {
+            val item = subArray.getJSONObject(i)
+            val id = item.optString("id", "")
+            val url = item.optString("url", "")
+            val lang = item.optString("lang", "").lowercase()
+            val fileName = item.optString(
+                "subtitleFileName",
+                item.optString(
+                    "fileName",
+                    item.optString("filename", item.optString("name", item.optString("title", "$lang.srt")))
+                )
+            )
+            val isForced = item.optBoolean("forced") ||
+                item.optBoolean("isForced") ||
+                item.optBoolean("foreign_parts_only") ||
+                item.optBoolean("foreignPartsOnly") ||
+                item.optString("type").equals("forced", ignoreCase = true) ||
+                Regex("""(?i)\bforced\b|\bforeign[ ._-]*parts?[ ._-]*only\b""")
+                    .containsMatchIn("$fileName $id")
+            val releaseName = item.optString("movieReleaseName", "").ifBlank { fileName }
+            if (url.isNotBlank()) {
+                results.add(
+                    OnlineSubtitle(
+                        id = id.ifBlank { i.toString() },
+                        lang = lang,
+                        langDisplay = getLanguageDisplay(lang),
+                        url = url,
+                        fileName = fileName,
+                        isForced = isForced,
+                        releaseName = releaseName
+                    )
+                )
+            }
+        }
+
+        return results
+    }
+
+    suspend fun searchSubtitlesDetailed(
+        rawTitle: String,
+        preferredLanguage: String = SubtitleLanguages.DEFAULT_CODE,
+        showName: String? = null
+    ): SubtitleSearchResult = withContext(Dispatchers.IO) {
         try {
-            val identity = identifyMedia(rawTitle)
-            val searchTitle = identity.title
+            val identity = identifyMedia(rawTitle, showName)
+            val type = if (identity.isSeries) "series" else "movie"
             val seasonNum = identity.season ?: 1
             val episodeNum = identity.episode ?: 1
 
-            // Step 1: Query Cinemeta for IMDb ID
-            val type = if (identity.isSeries) "series" else "movie"
-            val encodedQuery = URLEncoder.encode(searchTitle, "UTF-8")
-            val cinemetaUrl = "https://v3-cinemeta.strem.io/catalog/$type/top/search=$encodedQuery.json"
-
-            val cinemetaReq = Request.Builder()
-                .url(cinemetaUrl)
-                .header("User-Agent", "TelTV-AndroidTV")
-                .build()
-
-            val cinemetaResp = client.newCall(cinemetaReq).execute()
-            if (!cinemetaResp.isSuccessful) return@withContext emptyList()
-
-            val cinemetaBody = cinemetaResp.body?.string() ?: return@withContext emptyList()
-            val metas = JSONObject(cinemetaBody).optJSONArray("metas") ?: return@withContext emptyList()
-            if (metas.length() == 0) return@withContext emptyList()
-
-            val imdbId = metas.getJSONObject(0).optString("imdb_id").takeIf { it.isNotBlank() }
-                ?: metas.getJSONObject(0).optString("id").takeIf { it.isNotBlank() }
-                ?: return@withContext emptyList()
-
-            // Step 2: Query OpenSubtitles v3 for subtitles list
-            val subUrl = if (identity.isSeries) {
-                "https://opensubtitles-v3.strem.io/subtitles/series/$imdbId:$seasonNum:$episodeNum.json"
-            } else {
-                "https://opensubtitles-v3.strem.io/subtitles/movie/$imdbId.json"
+            // Step 1: IMDb id from Cinemeta, retrying with shorter titles.
+            var imdbId: String? = null
+            var foundName = identity.title
+            for (candidate in titleCandidates(identity.title)) {
+                val hit = findImdbId(type, candidate)
+                if (hit != null) {
+                    imdbId = hit.first
+                    foundName = hit.second
+                    break
+                }
+            }
+            if (imdbId == null) {
+                return@withContext SubtitleSearchResult(
+                    emptyList(),
+                    "No $type named \"${identity.title}\" found in the subtitle database."
+                )
             }
 
-            val subReq = Request.Builder()
-                .url(subUrl)
-                .header("User-Agent", "TelTV-AndroidTV")
-                .build()
+            // Step 2: subtitles from OpenSubtitles v3. The normal season/episode search stays primary.
+            var triedAbsolute: Int? = null
+            var list = if (identity.isSeries) {
+                fetchSubtitleList("https://opensubtitles-v3.strem.io/subtitles/series/$imdbId:$seasonNum:$episodeNum.json")
+            } else {
+                fetchSubtitleList("https://opensubtitles-v3.strem.io/subtitles/movie/$imdbId.json")
+            }
 
-            val subResp = client.newCall(subReq).execute()
-            if (!subResp.isSuccessful) return@withContext emptyList()
-
-            val subBody = subResp.body?.string() ?: return@withContext emptyList()
-            val subArray = JSONObject(subBody).optJSONArray("subtitles") ?: return@withContext emptyList()
-
-            val results = mutableListOf<OnlineSubtitle>()
-            for (i in 0 until subArray.length()) {
-                val item = subArray.getJSONObject(i)
-                val id = item.optString("id", "")
-                val url = item.optString("url", "")
-                val lang = item.optString("lang", "").lowercase()
-                val fileName = item.optString(
-                    "subtitleFileName",
-                    item.optString(
-                        "fileName",
-                        item.optString("filename", item.optString("name", item.optString("title", "$lang.srt")))
-                    )
-                )
-                val isForced = item.optBoolean("forced") ||
-                    item.optBoolean("isForced") ||
-                    item.optBoolean("foreign_parts_only") ||
-                    item.optBoolean("foreignPartsOnly") ||
-                    item.optString("type").equals("forced", ignoreCase = true) ||
-                    Regex("""(?i)\bforced\b|\bforeign[ ._-]*parts?[ ._-]*only\b""")
-                        .containsMatchIn("$fileName $id")
-                val releaseName = item.optString("movieReleaseName", "").ifBlank { fileName }
-                if (url.isNotBlank()) {
-                    results.add(
-                        OnlineSubtitle(
-                            id = id.ifBlank { i.toString() },
-                            lang = lang,
-                            langDisplay = getLanguageDisplay(lang),
-                            url = url,
-                            fileName = fileName,
-                            isForced = isForced,
-                            releaseName = releaseName
-                        )
-                    )
+            // Fallback: some providers index long series under absolute numbers (Shippuden S10E20 = S1E216).
+            if (list.isEmpty() && identity.isSeries && identity.episode != null) {
+                val counts = httpGet("https://v3-cinemeta.strem.io/meta/series/$imdbId.json")
+                    ?.let { runCatching { parseSeasonCounts(it) }.getOrNull() }
+                    .orEmpty()
+                if (counts.isNotEmpty()) {
+                    if (identity.season != null && identity.season > 1) {
+                        val absolute = absoluteEpisodeNumber(counts, identity.season, identity.episode)
+                        if (absolute != null) {
+                            triedAbsolute = absolute
+                            list = fetchSubtitleList("https://opensubtitles-v3.strem.io/subtitles/series/$imdbId:1:$absolute.json")
+                        }
+                    } else if (identity.season == null) {
+                        // A bare absolute number ("Naruto - 120") was searched as S1E120; try the real season/episode.
+                        val mapped = seasonEpisodeFromAbsolute(counts, identity.episode)
+                        if (mapped != null && mapped.first > 1) {
+                            list = fetchSubtitleList(
+                                "https://opensubtitles-v3.strem.io/subtitles/series/$imdbId:${mapped.first}:${mapped.second}.json"
+                            )
+                        }
+                    }
                 }
+            }
+
+            if (list.isEmpty()) {
+                val what = if (identity.isSeries) {
+                    "S%02dE%02d".format(seasonNum, episodeNum) +
+                        (triedAbsolute?.let { " (also tried absolute episode $it)" } ?: "")
+                } else "this movie"
+                return@withContext SubtitleSearchResult(
+                    emptyList(),
+                    "Found \"$foundName\" but the subtitle provider has no subtitles for $what."
+                )
             }
 
             val targetKeywords = listOf("web-dl", "webrip", "web", "bluray", "bdrip", "hdtv", "1080p", "720p", "hevc", "x265", "x264", "nf", "netflix")
             val lowerTitle = rawTitle.lowercase()
             val matchedKeywords = targetKeywords.filter { lowerTitle.contains(it) }
 
-            SubtitleLanguages.rankResults(results, preferredLanguage, matchedKeywords)
+            SubtitleSearchResult(SubtitleLanguages.rankResults(list, preferredLanguage, matchedKeywords))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            Timber.w(e, "Failed to fetch online subtitles for %s", rawTitle)
+            SubtitleSearchResult(emptyList(), "Could not reach the subtitle service. Check your connection.")
         } catch (e: Exception) {
             Timber.w(e, "Failed to fetch online subtitles for %s", rawTitle)
-            emptyList()
+            SubtitleSearchResult(emptyList(), "Subtitle search failed unexpectedly.")
         }
     }
 
