@@ -69,6 +69,7 @@ fun PlayerScreen(
     val latestOnPlayNext by rememberUpdatedState(onPlayNext)
     val latestNextTitle by rememberUpdatedState(nextTitle)
     val latestOnPlaybackEnded by rememberUpdatedState(onPlaybackEnded)
+    val latestForeground by rememberUpdatedState(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
     var foreground by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var connectionAttempt by remember { mutableStateOf(0) }
     var recoveryRequest by remember { mutableStateOf(0) }
@@ -95,7 +96,8 @@ fun PlayerScreen(
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
-    var autoPlayTriggered by remember { mutableStateOf(false) }
+    var autoPlayTriggered by remember(fileId, directUri) { mutableStateOf(false) }
+    var autoPlayCancelled by remember(fileId, directUri) { mutableStateOf(false) }
     var autoSubtitleAppliedUri by remember { mutableStateOf<String?>(null) }
     val preferredSubtitleLanguages = remember(context) {
         val configuration = context.resources.configuration
@@ -241,13 +243,13 @@ fun PlayerScreen(
             val currentMediaItem = mediaController.currentMediaItem
             if (currentMediaItem != null) {
                 val currentPos = mediaController.currentPosition
-                val isPlayingNow = mediaController.isPlaying
+                val playIntent = mediaController.playWhenReady
                 val updatedMediaItem = currentMediaItem.buildUpon()
                     .setSubtitleConfigurations(listOf(subConfig))
                     .build()
                 mediaController.setMediaItem(updatedMediaItem, currentPos)
                 mediaController.prepare()
-                mediaController.playWhenReady = isPlayingNow
+                mediaController.playWhenReady = playIntent
                 seekingText = "Subtitles: $label"
             }
         }
@@ -320,6 +322,10 @@ fun PlayerScreen(
 
     fun openInExternalPlayer() {
         val streamUri = resolvedUri() ?: return
+        if (!PlaybackPolicy.canOpenExternally(streamUri)) {
+            android.widget.Toast.makeText(context, "Telegram streams can only be played inside TelTV.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(Uri.parse(streamUri), "video/*")
@@ -412,10 +418,11 @@ fun PlayerScreen(
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_ENDED) {
                     val next = latestOnPlayNext
-                    if (autoPlayNext && next != null && latestNextTitle != null) {
+                    if (latestForeground && autoPlayNext && !autoPlayCancelled && next != null && latestNextTitle != null) {
                         showAutoPlayOverlay = false
                         next()
-                    } else {
+                    } else if (latestForeground) {
+                        showAutoPlayOverlay = false
                         latestOnPlaybackEnded()
                     }
                 }
@@ -520,7 +527,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(controller, isPlaying, autoPlayNext, onPlayNext) {
+    LaunchedEffect(controller, isPlaying, autoPlayNext, onPlayNext, foreground) {
         val mediaController = controller ?: return@LaunchedEffect
         var tickCount = 0
         while (true) {
@@ -535,8 +542,7 @@ fun PlayerScreen(
                 }
                 // Autoplay trigger
                 if (dur > 60_000L && pos > 0L) {
-                    val remaining = dur - pos
-                    if (remaining in 1..10_000L && autoPlayNext && onPlayNext != null && !showAutoPlayOverlay && !autoPlayTriggered) {
+                    if (PlaybackPolicy.shouldOfferNext(dur, pos, mediaController.isPlaying, foreground, autoPlayNext, onPlayNext != null, autoPlayTriggered || autoPlayCancelled) && !showAutoPlayOverlay) {
                         autoPlayTriggered = true
                         showAutoPlayOverlay = true
                     }
@@ -776,7 +782,7 @@ fun PlayerScreen(
             onPlayNext = onPlayNext,
             onOpenTracks = { showTrackSelector = true },
             onCycleAspectRatio = ::cycleAspectRatio,
-            onOpenExternal = ::openInExternalPlayer,
+            onOpenExternal = if (PlaybackPolicy.canOpenExternally(resolvedUri())) ::openInExternalPlayer else null,
             autoPlayNext = autoPlayNext,
             playPauseModifier = Modifier.focusRequester(playPauseFocusRequester),
             onToggleAutoPlay = {
@@ -817,13 +823,15 @@ fun PlayerScreen(
             AutoPlayCountdownOverlay(
                 nextTitle = nextTitle?.let { MediaTitleCleaner.clean(it) } ?: "Next Episode",
                 initialSeconds = remainingSec,
+                countdownRunning = foreground && isPlaying && autoPlayNext,
                 onPlayNow = {
                     showAutoPlayOverlay = false
                     onPlayNext()
                 },
                 onCancel = {
                     showAutoPlayOverlay = false
-                    onPlaybackEnded()
+                    autoPlayCancelled = true
+                    controlsVisible = true
                 }
             )
         }
@@ -833,7 +841,7 @@ fun PlayerScreen(
                 message = message,
                 onRetry = ::retryPlayback,
                 onBack = onBack,
-                onOpenExternal = ::openInExternalPlayer
+                onOpenExternal = if (PlaybackPolicy.canOpenExternally(resolvedUri())) ::openInExternalPlayer else null
             )
         }
     }
