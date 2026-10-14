@@ -30,7 +30,9 @@ data class SubtitleSearchResult(
     val subtitles: List<OnlineSubtitle>,
     val reason: String? = null,
     /** True when several shows or episode readings are mixed in [subtitles]: never auto-attach. */
-    val ambiguous: Boolean = false
+    val ambiguous: Boolean = false,
+    /** Catalog-resolved identity; caption-only detection is never presented as a verified match. */
+    val resolvedIdentity: SubtitleMediaIdentity? = null
 )
 
 data class SubtitleMediaIdentity(
@@ -59,6 +61,7 @@ object OnlineSubtitleProvider {
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(20, TimeUnit.SECONDS)
         .build()
 
     private val SEASON_EPISODE_REGEX = Regex("(?i)s(\\d{1,2})e(\\d{1,3})|\\b(\\d{1,2})x(\\d{1,3})\\b")
@@ -72,7 +75,7 @@ object OnlineSubtitleProvider {
     )
     private val SEASON_WORD_SUFFIX = Regex("(?i)[\\s:,.-]*(?:staffel|season)\\s*\\d{1,2}\\s*$")
     private val SHOW_SUFFIX_REGEX = Regex("(?i)\\s+(?:marathon|shuffle)\\s*$")
-    private val SHOW_JUNK_REGEX = Regex("[^\\p{L}\\p{N}\\s'&:!.-]")
+    private val SHOW_JUNK_REGEX = Regex("[^\\p{L}\\p{N}\\s'&:+/|,;!.-]")
 
     /** Series name taken from a channel/folder/playlist name: no tags, emoji or "Marathon"/"Shuffle". */
     fun cleanShowName(raw: String): String {
@@ -140,7 +143,7 @@ object OnlineSubtitleProvider {
 
     /**
      * [showName] (channel/topic name) is the only source for the series title when given;
-     * the caption supplies just the season/episode numbers.
+     * the caption supplies episode numbers and a title hint (resolved later against metadata).
      */
     fun identifyMedia(rawTitle: String, showName: String? = null): SubtitleMediaIdentity {
         val cleanTitle = MediaTitleCleaner.clean(rawTitle)
@@ -176,7 +179,7 @@ object OnlineSubtitleProvider {
                 }
             }
             val dated = !series && CaptionEpisodeParser.hasDate(rawTitle)
-            return SubtitleMediaIdentity(cleanedShow, series, s2, e2, year, bare, dated)
+            return SubtitleMediaIdentity(cleanedShow, series || !dated, s2, e2, year, bare, dated)
         }
 
         val title = when {
@@ -288,8 +291,36 @@ object OnlineSubtitleProvider {
         val req = Request.Builder().url(url).header("User-Agent", "TelTV-AndroidTV").build()
         client.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return null
-            return resp.body?.string()
+            val body = resp.body ?: return null
+            if (body.contentLength() > 5 * 1024 * 1024) return null
+            body.byteStream().use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    if (out.size() + n > 5 * 1024 * 1024) return null
+                    out.write(buffer, 0, n)
+                }
+                return out.toString("UTF-8")
+            }
         }
+    }
+
+    private data class CachedMetadata(val at: Long, val body: String?)
+    private val metadataCache = object : LinkedHashMap<String, CachedMetadata>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedMetadata>?): Boolean = size > 8
+    }
+    private fun safeMetadata(url: String): String? {
+        val now = android.os.SystemClock.elapsedRealtime()
+        synchronized(metadataCache) {
+            metadataCache[url]?.let { if (now - it.at < (if (it.body == null) 60_000L else 3_600_000L)) return it.body }
+        }
+        val body = try { httpGet(url) } catch (_: java.io.IOException) { null }
+        if (body == null || body.length <= 1_000_000) synchronized(metadataCache) {
+            metadataCache[url] = CachedMetadata(now, body)
+        }
+        return body
     }
 
     private data class ShowHit(val imdbId: String, val name: String)
@@ -328,7 +359,7 @@ object OnlineSubtitleProvider {
             // "Law & Order" is one show: only split when the whole name is not a real title.
             val whole = searchMetas(type, title).firstOrNull { ShowNameMatcher.isExact(it.name, title) }
             if (whole != null) return listOf(whole)
-            val hits = parts.mapNotNull { resolveSingleShow(type, it) }.distinctBy { it.imdbId }
+            val hits = parts.take(4).mapNotNull { resolveSingleShow(type, it) }.distinctBy { it.imdbId }
             if (hits.isNotEmpty()) return hits
         }
         return listOfNotNull(resolveSingleShow(type, title))
@@ -421,11 +452,12 @@ object OnlineSubtitleProvider {
         rawTitle: String,
         reading: Reading,
         preferredLanguage: String,
-        allowNeighbours: Boolean
+        allowNeighbours: Boolean,
+        titleAliases: List<String> = emptyList()
     ): Pair<List<OnlineSubtitle>, String?> {
         val seasonNum = reading.season
         val episodeNum = reading.episode
-        val expectedTitles = EpisodeMatchPolicy.expectedTitles(rawTitle, metaBody, seasonNum, episodeNum)
+        val expectedTitles = (EpisodeMatchPolicy.expectedTitles(rawTitle, metaBody, seasonNum, episodeNum) + titleAliases).distinct()
         var triedAbsolute: Int? = null
         var list = fetchSubtitleList("https://opensubtitles-v3.strem.io/subtitles/series/${hit.imdbId}:$seasonNum:$episodeNum.json")
 
@@ -503,31 +535,56 @@ object OnlineSubtitleProvider {
                 )
             }
 
-            // Step 2: subtitles from OpenSubtitles v3 for every show and episode reading.
-            val multiShow = hits.size > 1
+            // Load names for every topic show BEFORE looking up the caption numbers.
+            val hint = EpisodeTitleResolver.titleHint(rawTitle, showName)
+            val metas = hits.take(4).map { hit ->
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val english = safeMetadata("https://v3-cinemeta.strem.io/meta/series/${hit.imdbId}.json")
+                val german = if (hint.isNotBlank()) safeMetadata(
+                    "https://tmdb.elfhosted.com/de-DE/meta/series/${hit.imdbId}.json"
+                ) else null
+                Triple(hit, english, EpisodeTitleResolver.merge(
+                    EpisodeTitleResolver.parse(hit.imdbId, english) + EpisodeTitleResolver.parse(hit.imdbId, german)
+                ))
+            }
+            val titleResolution = EpisodeTitleResolver.resolve(hint, metas.flatMap { it.third })
+            val resolved = titleResolution.unique
+            val selectedMetas = if (titleResolution.matches.isNotEmpty()) metas.filter { meta ->
+                titleResolution.matches.any { it.showId == meta.first.imdbId }
+            } else metas
+            val multiShow = selectedMetas.size > 1
             data class Bucket(val hit: ShowHit, val reading: Reading, val subs: List<OnlineSubtitle>)
             val buckets = mutableListOf<Bucket>()
             val notes = mutableListOf<String>()
-            for (hit in hits) {
+            for ((hit, metaBody, episodes) in selectedMetas) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                val metaBody = httpGet("https://v3-cinemeta.strem.io/meta/series/${hit.imdbId}.json")
                 val counts = metaBody?.let { runCatching { parseSeasonCounts(it) }.getOrNull() }.orEmpty()
-                val readings = readingsFor(identity, counts)
+                val titleMatches = titleResolution.matches.filter { it.showId == hit.imdbId }
+                val readings = if (titleMatches.isNotEmpty()) titleMatches.map {
+                    Reading(it.season, it.episode, "S%02dE%02d".format(it.season, it.episode))
+                } else if (identity.episode != null) readingsFor(identity, counts) else emptyList()
                 for (reading in readings) {
+                    val aliases = episodes.firstOrNull {
+                        it.season == reading.season && it.episode == reading.episode
+                    }?.titles.orEmpty()
+                    val effectiveIdentity = if (titleMatches.isNotEmpty()) identity.copy(
+                        season = reading.season, episode = reading.episode, bareDigits = null
+                    ) else identity
                     val (subs, note) = fetchEpisodeSubtitles(
-                        hit, metaBody, identity, rawTitle, reading, preferredLanguage,
-                        allowNeighbours = !multiShow && readings.size == 1
+                        hit, metaBody, effectiveIdentity, rawTitle, reading, preferredLanguage,
+                        allowNeighbours = !multiShow && readings.size == 1 && !titleResolution.ambiguous,
+                        titleAliases = aliases
                     )
                     if (subs.isEmpty()) note?.let(notes::add) else buckets.add(Bucket(hit, reading, subs))
                 }
             }
             if (buckets.isEmpty()) {
-                return@withContext SubtitleSearchResult(emptyList(), notes.firstOrNull() ?: "No subtitles found.")
+                return@withContext SubtitleSearchResult(emptyList(), notes.firstOrNull() ?: if (identity.episode == null) "Episode title was not found in available metadata. Enter a season/episode to search." else "No subtitles found.")
             }
 
             // Several shows: if exactly one has a release-title match in the chosen language, use it.
             var kept = buckets.toList()
-            if (multiShow) {
+            if (multiShow && !titleResolution.ambiguous) {
                 val withTitle = buckets.filter { b ->
                     b.subs.any {
                         SubtitleLanguages.normalize(it.lang) == SubtitleLanguages.normalize(preferredLanguage) &&
@@ -548,22 +605,27 @@ object OnlineSubtitleProvider {
                 }
                 b.subs.map { relabel(it, prefix) }
             }
-            val ambiguous = labelShows || labelReadings
+            // An unresolved meaningful title may mean the caption numbers are wrong. Never auto-attach.
+            val unresolvedTitle = hint.isNotBlank() && resolved == null
+            val ambiguous = unresolvedTitle || titleResolution.ambiguous || labelShows || labelReadings
 
             val targetKeywords = listOf("web-dl", "webrip", "web", "bluray", "bdrip", "hdtv", "1080p", "720p", "hevc", "x265", "x264", "nf", "netflix")
             val lowerTitle = rawTitle.lowercase()
             val matchedKeywords = targetKeywords.filter { lowerTitle.contains(it) }
             val reason = when {
+                titleResolution.ambiguous -> "Episode title matches more than one episode. Results are labelled; pick the right one."
+                resolved != null -> "Matched episode title: ${selectedMetas.first().first.name} - S%02dE%02d. Caption numbers are ignored.".format(resolved.season, resolved.episode)
                 labelShows -> "This topic holds several shows (${kept.map { it.hit.name }.distinct().joinToString(", ")}). " +
                     "Subtitles from each are listed with the show name in front. Pick the right one."
                 labelReadings -> "\"${identity.bareDigits}\" can mean ${kept.mapNotNull { it.reading.label }.distinct().joinToString(" or ")}. " +
                     "Both are listed, labelled. Pick the right one."
-                list.none { it.episodeEvidence?.titleMatch == true } ->
-                    "Episode identity is not verified. You can search or choose a different subtitle."
+                hint.isNotBlank() ->
+                    "Episode title not resolved from available metadata; using caption numbers. Episode identity is not verified. You can search or choose a different subtitle."
                 else -> null
             }
             SubtitleSearchResult(SubtitleLanguages.rankResults(list, preferredLanguage, matchedKeywords)
-                .sortedByDescending { it.episodeEvidence?.rank ?: 0 }, reason, ambiguous)
+                .sortedByDescending { it.episodeEvidence?.rank ?: 0 }, reason, ambiguous,
+                resolved?.let { identity.copy(title = selectedMetas.first().first.name, season = it.season, episode = it.episode, bareDigits = null) })
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: java.io.IOException) {
