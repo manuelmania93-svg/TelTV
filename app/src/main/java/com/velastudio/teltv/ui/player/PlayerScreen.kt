@@ -330,7 +330,11 @@ fun PlayerScreen(
         val length = durationMs.takeIf { it > 0 } ?: controller?.duration?.takeIf { it > 0 } ?: 0L
         // Identity captured now; checked again before anything is applied.
         val started = currentSyncTarget()
-        val outcome = com.velastudio.teltv.sync.SubtitleAutoSync.run(factory, Uri.parse(uri), file, length, started.audio)
+        // Prefer the video's own embedded text subtitle as reference (language-agnostic, not fooled by
+        // music). Falls back to audio loudness when the file has none or the platform cannot read it.
+        val embedded = com.velastudio.teltv.sync.EmbeddedReferenceSync.run(factory, Uri.parse(uri), file, length)
+        val outcome = embedded.takeIf { it is com.velastudio.teltv.sync.AutoSyncOutcome.Synced || it is com.velastudio.teltv.sync.AutoSyncOutcome.AlreadyInSync }
+            ?: com.velastudio.teltv.sync.SubtitleAutoSync.run(factory, Uri.parse(uri), file, length, started.audio)
         val decision = com.velastudio.teltv.sync.AutoSyncPolicy.decide(
             outcome, subtitleSyncOffsetMs, started, currentSyncTarget()
         )
