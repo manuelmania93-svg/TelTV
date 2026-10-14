@@ -24,6 +24,9 @@ class SubtitleSpeedControlsTest {
 
     @Test fun presetsAndResetAreDisplayedAndRemoteOperable() {
         compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        // Let orientation recreation finish before installing this test's Compose content.
+        compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         var chosen = 0.0
         compose.setContent {
             androidx.tv.material3.MaterialTheme {
