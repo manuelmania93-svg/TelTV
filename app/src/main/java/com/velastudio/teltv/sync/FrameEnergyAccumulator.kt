@@ -11,6 +11,9 @@ class FrameEnergyAccumulator(private val startMs: Long, private val lengthMs: Lo
     private val sumSq = DoubleArray(frameCount)
     private val counts = IntArray(frameCount)
 
+    private var bandFilter: SpeechBandFilter? = null
+    private var filterRate = 0
+
     /** True once audio past the end of the window has been seen. */
     var finished = false
         private set
@@ -20,12 +23,16 @@ class FrameEnergyAccumulator(private val startMs: Long, private val lengthMs: Lo
      * @param ptsUs presentation time of mono[0]
      */
     fun add(mono: FloatArray, count: Int, sampleRate: Int, ptsUs: Long) {
+        // Measure energy in the speech band only (bass and hiss are not dialogue).
+        val filter = bandFilter?.takeIf { filterRate == sampleRate }
+            ?: SpeechBandFilter(sampleRate).also { bandFilter = it; filterRate = sampleRate }
         for (i in 0 until count) {
+            val v = filter.process(mono[i])
             val tMs = (ptsUs + i * 1_000_000L / sampleRate) / 1000 - startMs
             if (tMs < 0) continue
             val f = (tMs / SpeechDetector.FRAME_MS).toInt()
             if (f >= frameCount) { finished = true; return }
-            sumSq[f] += (mono[i] * mono[i]).toDouble()
+            sumSq[f] += (v * v).toDouble()
             counts[f]++
         }
     }
