@@ -41,14 +41,16 @@ class PlaybackSpeedUiTest {
             }
         }
         compose.onNodeWithText("Selected: 1x").assertIsFocused()
-        compose.onNodeWithText("4x").assertIsDisplayed()
+        compose.onNodeWithText("4x").assertExists()
         screenshot("playback-speed-menu")
         repeat(5) {
             compose.onNodeWithText("Playback speed").performKeyInput {
                 keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
             }
         }
-        compose.onNodeWithText("4x").assertIsFocused().performKeyInput {
+        compose.onNodeWithText("4x").assertIsFocused().assertIsDisplayed()
+        screenshot("playback-speed-menu-four-times")
+        compose.onNodeWithText("4x").performKeyInput {
             keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
         }
         compose.runOnIdle { assertEquals(4f, chosen, 0f) }
