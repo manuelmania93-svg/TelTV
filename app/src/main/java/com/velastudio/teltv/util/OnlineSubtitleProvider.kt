@@ -451,7 +451,7 @@ object OnlineSubtitleProvider {
             val safeId = subtitle.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
             val safeLanguage = subtitle.lang.replace(Regex("[^A-Za-z0-9_-]"), "_")
             val targetFile = File(subDir, "${safeLanguage}_$safeId.srt")
-            if (targetFile.exists() && targetFile.length() > 0) {
+            if (targetFile.exists() && targetFile.length() in 1..(2 * 1024 * 1024)) {
                 return@withContext targetFile
             }
             val temporaryFile = File(subDir, "${targetFile.name}.part")

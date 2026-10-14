@@ -767,6 +767,7 @@ fun TrackSelectorDialog(
                         Text(message, color = Color(0xFFFFCC80), fontSize = 13.sp)
                     }
                     uncertainSubtitle?.let { pending ->
+                        Text("Unverified: ${pending.fileName}", color = Color(0xFFFFCC80), fontSize = 12.sp)
                         Button(enabled = downloadingSubtitleId == null, onClick = {
                             coroutineScope.launch {
                                 downloadingSubtitleId = pending.id
