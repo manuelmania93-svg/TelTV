@@ -8,6 +8,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.OpenInNew
@@ -58,6 +62,9 @@ fun PlaybackControlsOverlay(
     onToggleAutoPlay: () -> Unit,
     playbackSpeed: Float = PlaybackSpeedPolicy.DEFAULT,
     onOpenPlaybackSpeed: () -> Unit = {},
+    isFavorite: Boolean = false,
+    favoriteEnabled: Boolean = true,
+    onToggleFavorite: (() -> Unit)? = null,
     playPauseModifier: Modifier = Modifier
 ) {
     val cleanTitle = remember(title) { MediaTitleCleaner.clean(title) }
@@ -100,6 +107,11 @@ fun PlaybackControlsOverlay(
                             icon = Icons.Filled.Subtitles,
                             contentDescription = "Audio & Subtitles",
                             onClick = onOpenTracks
+                        )
+                        if (onToggleFavorite != null) PlayerFavoriteButton(
+                            isFavorite = isFavorite,
+                            enabled = favoriteEnabled,
+                            onClick = onToggleFavorite
                         )
                         if (onOpenExternal != null) ControlButton(
                             icon = Icons.Filled.OpenInNew,
@@ -186,12 +198,26 @@ fun PlaybackControlsOverlay(
 }
 
 @Composable
+internal fun PlayerFavoriteButton(isFavorite: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    ControlButton(
+        icon = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+        onClick = onClick,
+        enabled = enabled,
+        iconTint = if (isFavorite) Color(0xFFFF5252) else null,
+        modifier = Modifier.semantics { stateDescription = if (isFavorite) "Favorite" else "Not favorite" }
+    )
+}
+
+@Composable
 private fun ControlButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
     large: Boolean = false,
     active: Boolean = false,
+    enabled: Boolean = true,
+    iconTint: Color? = null,
     modifier: Modifier = Modifier
 ) {
     val size = if (large) 72.dp else 52.dp
@@ -199,6 +225,7 @@ private fun ControlButton(
 
     IconButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier
             .size(size)
             .onFocusChanged { isFocused = it.isFocused }
@@ -221,7 +248,7 @@ private fun ControlButton(
         Icon(
             icon,
             contentDescription = contentDescription,
-            tint = if (isFocused || (active && !isFocused)) Color.Black else Color.White
+            tint = iconTint ?: if (isFocused || (active && !isFocused)) Color.Black else Color.White
         )
     }
 }

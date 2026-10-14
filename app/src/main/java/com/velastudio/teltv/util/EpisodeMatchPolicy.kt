@@ -28,7 +28,7 @@ object EpisodeMatchPolicy {
             if (videos != null) for (i in 0 until videos.length()) {
                 val v = videos.getJSONObject(i)
                 if (v.optInt("season") == season && v.optInt("episode", v.optInt("number")) == episode) {
-                    v.optString("name").takeIf { words(it).size >= 2 }?.let(out::add)
+                    v.optString("name").ifBlank { v.optString("title") }.takeIf { words(it).size >= 2 }?.let(out::add)
                 }
             }
         }

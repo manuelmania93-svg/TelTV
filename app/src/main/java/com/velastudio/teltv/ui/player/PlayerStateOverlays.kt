@@ -354,6 +354,9 @@ fun TrackSelectorDialog(
         val (raw, name) = searchArgsFor(subtitleQuery)
         OnlineSubtitleProvider.identifyMedia(raw, name)
     }
+    var resolvedSubtitleIdentity by remember(videoTitle, subtitleQuery, showName) {
+        mutableStateOf<com.velastudio.teltv.util.SubtitleMediaIdentity?>(null)
+    }
     var lastSearchReason by remember { mutableStateOf<String?>(null) }
     val subtitleLanguageHint =
         "Subtitle language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)} (forced dialogue first)"
@@ -375,6 +378,7 @@ fun TrackSelectorDialog(
             // Search returns all available languages. Choosing one only filters the list;
             // manual search does not replace the subtitle until a result is clicked.
             rawOnlineSubtitles = outcome.subtitles
+            resolvedSubtitleIdentity = outcome.resolvedIdentity
             lastSearchReason = outcome.reason
             subtitleActionMessage = outcome.reason
             if (outcome.subtitles.isEmpty()) {
@@ -525,32 +529,11 @@ fun TrackSelectorDialog(
                         )
                     }
                     Text(
-                        "Fixes drift that grows over the video (frame rate mismatch). Saved for this video.",
+                        "Downloaded subtitles default to 23.976>25. Reset keeps 1x for this video/subtitle.",
                         color = Color.LightGray,
                         fontSize = 12.sp
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(
-                            enabled = canAdjustSync,
-                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.stepScale(subtitleScale, -1)) }
-                        ) { Text("-0.001") }
-                        Button(
-                            enabled = canAdjustSync,
-                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.SCALE_23976_TO_25) }
-                        ) { Text("23.976>25 (x0.959)") }
-                        Button(
-                            enabled = canAdjustSync,
-                            onClick = { onAdjustSubtitleScale(1.0) }
-                        ) { Text("Reset") }
-                        Button(
-                            enabled = canAdjustSync,
-                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.SCALE_25_TO_23976) }
-                        ) { Text("25>23.976 (x1.043)") }
-                        Button(
-                            enabled = canAdjustSync,
-                            onClick = { onAdjustSubtitleScale(com.velastudio.teltv.player.SubtitleTiming.stepScale(subtitleScale, 1)) }
-                        ) { Text("+0.001") }
-                    }
+                    SubtitleSpeedControls(canAdjustSync, subtitleScale, onAdjustSubtitleScale)
                     if (selectedTab != 1) {
                         var autoSyncBusy by remember { mutableStateOf(false) }
                         var autoSyncStatus by remember { mutableStateOf("") }
@@ -655,7 +638,7 @@ fun TrackSelectorDialog(
 
             if (selectedTab == 2) {
                 Text(
-                    text = subtitleIdentity.displayLabel(),
+                    text = resolvedSubtitleIdentity?.displayLabel() ?: subtitleIdentity.displayLabel().replace("Detected", "Caption"),
                     color = Color(0xFFB3E5FC),
                     fontSize = 13.sp,
                     modifier = Modifier.fillMaxWidth()
@@ -956,6 +939,31 @@ fun TrackSelectorDialog(
             OutlinedButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
                 Text("Close")
             }
+        }
+    }
+}
+
+/** Full-width presets cannot squeeze each other into narrow, overlapping TV focus targets. */
+@Composable
+internal fun SubtitleSpeedControls(enabled: Boolean, scale: Double, onScale: (Double) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            modifier = Modifier.fillMaxWidth(), enabled = enabled,
+            onClick = { onScale(com.velastudio.teltv.player.SubtitleTiming.SCALE_23976_TO_25) }
+        ) { Text("23.976>25 (x0.959)", maxLines = 1) }
+        Button(
+            modifier = Modifier.fillMaxWidth(), enabled = enabled,
+            onClick = { onScale(com.velastudio.teltv.player.SubtitleTiming.SCALE_25_TO_23976) }
+        ) { Text("25>23.976 (x1.043)", maxLines = 1) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(modifier = Modifier.weight(1f), enabled = enabled,
+                onClick = { onScale(com.velastudio.teltv.player.SubtitleTiming.stepScale(scale, -1)) }
+            ) { Text("-0.001", maxLines = 1) }
+            Button(modifier = Modifier.weight(1f), enabled = enabled, onClick = { onScale(1.0) }
+            ) { Text("Reset", maxLines = 1) }
+            Button(modifier = Modifier.weight(1f), enabled = enabled,
+                onClick = { onScale(com.velastudio.teltv.player.SubtitleTiming.stepScale(scale, 1)) }
+            ) { Text("+0.001", maxLines = 1) }
         }
     }
 }

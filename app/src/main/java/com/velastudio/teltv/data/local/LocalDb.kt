@@ -154,6 +154,19 @@ interface WatchStateDao {
 
 @Dao
 interface WatchlistDao {
+    /** Atomic read/change so repeated callers cannot lose a toggle. No schema change. */
+    @Transaction
+    suspend fun toggle(mediaId: String): Boolean {
+        require(mediaId.isNotBlank())
+        return if (get(mediaId) != null) {
+            remove(mediaId)
+            false
+        } else {
+            add(WatchlistEntity(mediaId, System.currentTimeMillis() / 1000))
+            true
+        }
+    }
+
     @Query("SELECT * FROM watchlist ORDER BY addedEpochSec DESC")
     suspend fun getAll(): List<WatchlistEntity>
 
@@ -185,6 +198,10 @@ interface VideoIndexDao {
 
     @Query("SELECT * FROM video_index WHERE mediaId = :mediaId")
     suspend fun getByMediaId(mediaId: String): VideoIndexEntity?
+
+    /** Reverse lookup used by the playback storage guard to map a playing tdlib:// URI back to its mediaId. */
+    @Query("SELECT * FROM video_index WHERE streamUrl = :streamUrl")
+    suspend fun getByStreamUrl(streamUrl: String): VideoIndexEntity?
 
     @Query("SELECT * FROM video_index WHERE chatId = :chatId ORDER BY position ASC")
     suspend fun getAllForChat(chatId: Long): List<VideoIndexEntity>

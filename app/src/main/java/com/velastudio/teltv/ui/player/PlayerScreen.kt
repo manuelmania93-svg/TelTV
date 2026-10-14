@@ -56,6 +56,7 @@ fun PlayerScreen(
     onPlayNext: (() -> Unit)? = null,
     autoPlayByDefault: Boolean = false,
     syncKey: String? = null,
+    favoriteMediaId: String? = null,
     onPositionUpdate: (positionMs: Long, durationMs: Long) -> Unit,
     onPlaybackEnded: () -> Unit = {},
     onBack: () -> Unit
@@ -64,6 +65,24 @@ fun PlayerScreen(
     val coroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { PlaybackPrefs(context) }
+    val favoriteDao = remember(context) {
+        (context.applicationContext as com.velastudio.teltv.TelTvApp).database.watchlistDao()
+    }
+    var isFavorite by remember(favoriteMediaId) { mutableStateOf<Boolean?>(null) }
+    var favoriteBusy by remember(favoriteMediaId) { mutableStateOf(false) }
+    LaunchedEffect(favoriteMediaId) {
+        isFavorite = null
+        if (!favoriteMediaId.isNullOrBlank()) {
+            try {
+                isFavorite = favoriteDao.get(favoriteMediaId) != null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Could not load favorite state")
+            }
+        }
+    }
+
     val skipIncrementMs by prefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
 
     var controller by remember { mutableStateOf<MediaController?>(null) }
@@ -171,7 +190,9 @@ fun PlayerScreen(
     }
     val savedAspect4x3 by prefs.aspectRatio4x3.collectAsState(initial = 0)
     var isCurrentVideo4x3 by remember { mutableStateOf(false) }
-    var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
+    var aspectRatioIndex by remember { mutableStateOf(0) } // see AspectModes
+    // Displayed width/height of the current picture; wide pictures get the extra "baked-in bars" modes.
+    var videoDisplayAspect by remember { mutableStateOf(0f) }
 
     // Subtitle styling & audio enhancements
     val subSize by prefs.subtitleSize.collectAsState(initial = "LARGE")
@@ -280,7 +301,7 @@ fun PlayerScreen(
             SubtitleSelectionPolicy.fingerprint(file.readBytes())
         }
         val saved = syncKey?.let { prefs.getSubtitleSync(it, subtitleId) }
-            ?: com.velastudio.teltv.player.SubtitleSync()
+            ?: com.velastudio.teltv.player.SubtitleTiming.forDownloadedSubtitle(null)
         if (controller !== mediaController || resolvedUri() != startedVideo ||
             subtitleSelectionRevision != expectedRevision ||
             mediaController.currentMediaItem?.localConfiguration?.uri != startedUri) {
@@ -529,13 +550,9 @@ fun PlayerScreen(
                 if (videoSize.width > 0 && videoSize.height > 0) {
                     val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1.0f
                     val aspect = (videoSize.width.toFloat() / videoSize.height.toFloat()) * pixelRatio
-                    val is4x3 = aspect in 1.1f..1.55f
-                    isCurrentVideo4x3 = is4x3
-                    if (is4x3) {
-                        aspectRatioIndex = savedAspect4x3
-                    } else {
-                        aspectRatioIndex = 0
-                    }
+                    isCurrentVideo4x3 = AspectModes.is4x3(aspect)
+                    aspectRatioIndex = AspectModes.modeAfterSizeChange(videoDisplayAspect, aspect, aspectRatioIndex, savedAspect4x3)
+                    videoDisplayAspect = aspect
                 }
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -709,12 +726,8 @@ fun PlayerScreen(
     }
 
     fun cycleAspectRatio() {
-        aspectRatioIndex = (aspectRatioIndex + 1) % 3
-        seekingText = when (aspectRatioIndex) {
-            1 -> "Aspect: Zoom to Fill (Crop)"
-            2 -> "Aspect: Stretch"
-            else -> "Aspect: Fit (Original)"
-        }
+        aspectRatioIndex = AspectModes.next(aspectRatioIndex, videoDisplayAspect)
+        seekingText = AspectModes.label(aspectRatioIndex)
         seekingIsForward = true
         if (isCurrentVideo4x3) {
             coroutineScope.launch { prefs.setAspectRatio4x3(aspectRatioIndex) }
@@ -872,9 +885,14 @@ fun PlayerScreen(
                     view.player = controller
                 }
                 view.resizeMode = when (aspectRatioIndex) {
-                    1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    AspectModes.ZOOM -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    AspectModes.FILL -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
                     else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+                // Baked-in bars: scale only the video surface (subtitles stay where they are).
+                view.videoSurfaceView?.let { surface ->
+                    surface.scaleX = AspectModes.scaleX(aspectRatioIndex, videoDisplayAspect)
+                    surface.scaleY = AspectModes.scaleY(aspectRatioIndex, videoDisplayAspect)
                 }
                 view.subtitleView?.apply {
                     setFractionalTextSize(subFontSize)
@@ -905,6 +923,32 @@ fun PlayerScreen(
             onPlayPrevious = onPlayPrevious,
             onPlayNext = onPlayNext,
             onOpenTracks = { showTrackSelector = true },
+            isFavorite = isFavorite == true,
+            favoriteEnabled = isFavorite != null && !favoriteBusy,
+            onToggleFavorite = favoriteMediaId?.takeIf { it.isNotBlank() }?.let { mediaId ->
+                {
+                    if (!favoriteBusy && isFavorite != null) {
+                        favoriteBusy = true
+                        coroutineScope.launch {
+                            try {
+                                val saved = favoriteDao.toggle(mediaId)
+                                isFavorite = saved
+                                android.widget.Toast.makeText(context,
+                                    if (saved) "Added to favorites" else "Removed from favorites",
+                                    android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Timber.w(e, "Could not change favorite")
+                                android.widget.Toast.makeText(context, "Could not save favorite. Try again.",
+                                    android.widget.Toast.LENGTH_SHORT).show()
+                            } finally {
+                                favoriteBusy = false
+                            }
+                        }
+                    }
+                }
+            },
             playbackSpeed = playbackSpeed,
             onOpenPlaybackSpeed = { showPlaybackSpeed = true },
             onCycleAspectRatio = ::cycleAspectRatio,

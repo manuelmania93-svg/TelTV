@@ -50,6 +50,30 @@ class CacheManagerTest {
         assertEquals(60, optimize!!.immunityDelay)
     }
 
+    @Test
+    fun evictAllButRecentTargetsZeroSizeWithImmunity() = runBlocking {
+        var optimize: TdApi.OptimizeStorage? = null
+        val manager = CacheManager({ request ->
+            when (request) {
+                is TdApi.OptimizeStorage -> {
+                    optimize = request
+                    TdApi.Ok()
+                }
+                else -> error("Unexpected request")
+            }
+        })
+        manager.evictAllButRecent(600)
+        assertEquals(0L, optimize!!.size)
+        assertEquals(Int.MAX_VALUE, optimize!!.ttl)
+        assertEquals(Int.MAX_VALUE, optimize!!.count)
+        assertEquals(600, optimize!!.immunityDelay)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun negativeImmunityIsRejected() = runBlocking {
+        CacheManager({ error("No TDLib call expected") }).evictAllButRecent(-1)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun negativeTrimLimitIsRejected() = runBlocking {
         CacheManager({ error("No TDLib call expected") }).trimToLimit(-1L)
