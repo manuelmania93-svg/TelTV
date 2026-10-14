@@ -70,6 +70,7 @@ object OnlineSubtitleProvider {
     private val LANGUAGE_TAG_REGEX = Regex(
         "(?i)\\b(?:ger(?:man)?[ -]?(?:sub|dub)?|deutsch|eng(?:lish)?[ -]?(?:sub|dub)|multi|dual|aniworld)\\b"
     )
+    private val SEASON_WORD_SUFFIX = Regex("(?i)[\\s:,.-]*(?:staffel|season)\\s*\\d{1,2}\\s*$")
     private val SHOW_SUFFIX_REGEX = Regex("(?i)\\s+(?:marathon|shuffle)\\s*$")
     private val SHOW_JUNK_REGEX = Regex("[^\\p{L}\\p{N}\\s'&:!.-]")
 
@@ -193,8 +194,14 @@ object OnlineSubtitleProvider {
             else -> cleanTitle
         }.trim().trim('-', '_', ':', '.').ifBlank { cleanTitle }
             .replace(Regex("\\s+"), " ").trim()
+        // "Show Staffel 02 Episode 03" without a topic name: take the season from the long form.
+        val longForm = if (season == null) CaptionEpisodeParser.parse(rawTitle, null)?.takeIf { it.season != null } else null
         val cleanedTitle = title.replace(LANGUAGE_TAG_REGEX, " ").replace(Regex("\\s+"), " ").trim()
+            .let { t -> if (longForm != null) t.replace(SEASON_WORD_SUFFIX, "").trim() else t }
             .ifBlank { title }
+        if (longForm != null) {
+            return SubtitleMediaIdentity(cleanedTitle, true, longForm.season, longForm.episode, year)
+        }
         return SubtitleMediaIdentity(cleanedTitle, isSeries, season, episode, year)
     }
 
