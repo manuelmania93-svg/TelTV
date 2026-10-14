@@ -156,4 +156,17 @@ class TopicCaptionIdentityTest {
         assertNull(id.season)
         assertEquals(8, id.episode)
     }
+
+    @Test
+    fun xFactorLongFormStaffelEpisode() {
+        val caption = "X-Factor: Das Unfassbare Staffel 02 Episode 03 \uD83D\uDC49 Die blutige Hand"
+        val withTopic = OnlineSubtitleProvider.identifyMedia(caption, "X-Factor: Das Unfassbare")
+        assertEquals("X-Factor: Das Unfassbare", withTopic.title)
+        assertEquals(2, withTopic.season)
+        assertEquals(3, withTopic.episode)
+        val noTopic = OnlineSubtitleProvider.identifyMedia(caption)
+        assertEquals("X-Factor: Das Unfassbare", noTopic.title)
+        assertEquals(2, noTopic.season)
+        assertEquals(3, noTopic.episode)
+    }
 }
