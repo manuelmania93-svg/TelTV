@@ -26,6 +26,11 @@ class PlaybackSpeedUiTest {
     }
 
     private fun screenshot(name: String) {
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        // Wait for the Android render thread to present the tested Compose frame.
+        Thread.sleep(250)
         val device = InstrumentationRegistry.getInstrumentation().uiAutomation
         // Shell-owned shared directory survives Gradle uninstalling the test application.
         val output = device.executeShellCommand("screencap -p /sdcard/Download/$name.png")
