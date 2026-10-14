@@ -2,7 +2,9 @@ package com.velastudio.teltv.ui.player
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.activity.ComponentActivity
+import org.junit.Before
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.input.key.Key
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -15,7 +17,12 @@ import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class PlaybackSpeedUiTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Before fun landscape() {
+        compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        compose.waitForIdle()
+    }
 
     private fun screenshot(name: String) {
         val device = InstrumentationRegistry.getInstrumentation().uiAutomation

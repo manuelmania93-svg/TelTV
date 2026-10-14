@@ -1,5 +1,7 @@
 package com.velastudio.teltv.ui.player
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,7 +21,7 @@ internal fun PlaybackSpeedDialog(selected: Float, onSelect: (Float) -> Unit, onD
     val selectedFocus = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss) {
         Column(
-            Modifier.width(320.dp).background(Color(0xFF222222), RoundedCornerShape(16.dp)).padding(24.dp),
+            Modifier.width(320.dp).heightIn(max = 480.dp).verticalScroll(rememberScrollState()).background(Color(0xFF222222), RoundedCornerShape(16.dp)).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text("Playback speed", style = MaterialTheme.typography.titleLarge, color = Color.White)
