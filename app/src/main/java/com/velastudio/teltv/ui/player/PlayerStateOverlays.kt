@@ -245,7 +245,9 @@ fun TrackSelectorDialog(
     controller: MediaController?,
     videoTitle: String = "",
     showName: String? = null,
-    onSelectOnlineSubtitle: suspend (OnlineSubtitle) -> Boolean = { false },
+    onVerifySubtitle: suspend (OnlineSubtitle, List<OnlineSubtitle>, Boolean) -> com.velastudio.teltv.sync.SubtitlePickResult = { _, _, _ ->
+        com.velastudio.teltv.sync.SubtitlePickResult.Failed("Subtitle verification unavailable")
+    },
     onSelectEmbeddedSubtitle: () -> Unit = {},
     syncOffsetMs: Long = 0L,
     onAdjustSyncOffset: (Long) -> Unit = {},
@@ -338,6 +340,7 @@ fun TrackSelectorDialog(
     var subtitleQuery by remember(videoTitle) { mutableStateOf(videoTitle) }
     var downloadingSubtitleId by remember { mutableStateOf<String?>(null) }
     var subtitleActionMessage by remember { mutableStateOf<String?>(null) }
+    var uncertainSubtitle by remember { mutableStateOf<OnlineSubtitle?>(null) }
     // The channel/topic name is the series name, unless the user edited the query by hand.
     fun showNameFor(query: String): String? = showName?.takeIf { query.trim() == videoTitle.trim() }
     val subtitleIdentity = remember(subtitleQuery, showName) {
@@ -353,6 +356,7 @@ fun TrackSelectorDialog(
         if (query.isBlank() || isLoadingOnlineSubs) return
         isLoadingOnlineSubs = true
         subtitleActionMessage = null
+        uncertainSubtitle = null
         try {
             val outcome = OnlineSubtitleProvider.searchSubtitlesDetailed(
                 query,
@@ -363,6 +367,7 @@ fun TrackSelectorDialog(
             // applying a subtitle always requires an explicit result click.
             rawOnlineSubtitles = outcome.subtitles
             lastSearchReason = outcome.reason
+            subtitleActionMessage = outcome.reason
             if (outcome.subtitles.isEmpty()) {
                 subtitleActionMessage = outcome.reason ?: "No online subtitles found for this title."
             }
@@ -687,6 +692,7 @@ fun TrackSelectorDialog(
                                     showLanguagePicker = false
                                     languageQuery = ""
                                     subtitleActionMessage = null
+                                    uncertainSubtitle = null
                                     coroutineScope.launch { prefs?.setSubtitleLanguage(language.code) }
                                     // The clicked row is removed. Return focus to a stable TV control.
                                     languageButtonFocusRequester.requestFocus()
@@ -760,6 +766,20 @@ fun TrackSelectorDialog(
                     subtitleActionMessage?.let { message ->
                         Text(message, color = Color(0xFFFFCC80), fontSize = 13.sp)
                     }
+                    uncertainSubtitle?.let { pending ->
+                        Button(enabled = downloadingSubtitleId == null, onClick = {
+                            coroutineScope.launch {
+                                downloadingSubtitleId = pending.id
+                                try {
+                                    when (val result = onVerifySubtitle(pending, rawOnlineSubtitles, true)) {
+                                        is com.velastudio.teltv.sync.SubtitlePickResult.Applied -> onDismiss()
+                                        is com.velastudio.teltv.sync.SubtitlePickResult.Failed -> subtitleActionMessage = result.message
+                                        is com.velastudio.teltv.sync.SubtitlePickResult.Uncertain -> subtitleActionMessage = result.message
+                                    }
+                                } finally { downloadingSubtitleId = null; uncertainSubtitle = null }
+                            }
+                        }) { Text("Not sure: use this subtitle anyway") }
+                    }
                     var referenceMode by remember { mutableStateOf(false) }
                     Button(
                         enabled = onlineSubtitleSelected && downloadingSubtitleId == null,
@@ -800,11 +820,17 @@ fun TrackSelectorDialog(
                                             downloadingSubtitleId = sub.id
                                             subtitleActionMessage = "Downloading ${sub.langDisplay}..."
                                             try {
-                                                if (onSelectOnlineSubtitle(sub)) {
-                                                    onDismiss()
-                                                } else {
-                                                    subtitleActionMessage = "Download failed. Check your connection and try again."
+                                                uncertainSubtitle = null
+                                                when (val result = onVerifySubtitle(sub, rawOnlineSubtitles, false)) {
+                                                    is com.velastudio.teltv.sync.SubtitlePickResult.Applied -> onDismiss()
+                                                    is com.velastudio.teltv.sync.SubtitlePickResult.Uncertain -> {
+                                                        uncertainSubtitle = result.candidate
+                                                        subtitleActionMessage = result.message
+                                                    }
+                                                    is com.velastudio.teltv.sync.SubtitlePickResult.Failed -> subtitleActionMessage = result.message
                                                 }
+                                            } catch (e: CancellationException) {
+                                                throw e
                                             } catch (e: Exception) {
                                                 timber.log.Timber.e(e, "Failed to apply selected subtitle")
                                                 subtitleActionMessage = "Could not apply this subtitle. Try another result."
@@ -837,6 +863,9 @@ fun TrackSelectorDialog(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(sub.fileName, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
+                                        sub.episodeEvidence?.let { evidence ->
+                                            Text(evidence.explanation, color = Color(0xFFFFCC80), fontSize = 11.sp)
+                                        }
                                     }
                                     if (downloadingSubtitleId == sub.id) {
                                         androidx.compose.material3.CircularProgressIndicator(
