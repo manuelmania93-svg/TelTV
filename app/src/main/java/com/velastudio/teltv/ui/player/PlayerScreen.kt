@@ -282,7 +282,7 @@ fun PlayerScreen(
             SubtitleSelectionPolicy.fingerprint(file.readBytes())
         }
         val saved = syncKey?.let { prefs.getSubtitleSync(it, subtitleId) }
-            ?: com.velastudio.teltv.player.SubtitleSync()
+            ?: com.velastudio.teltv.player.SubtitleTiming.forDownloadedSubtitle(null)
         if (controller !== mediaController || resolvedUri() != startedVideo ||
             subtitleSelectionRevision != expectedRevision ||
             mediaController.currentMediaItem?.localConfiguration?.uri != startedUri) {

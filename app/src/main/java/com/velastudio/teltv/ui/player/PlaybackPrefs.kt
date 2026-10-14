@@ -108,14 +108,14 @@ class PlaybackPrefs(private val context: Context) {
     private fun subtitleSyncKey(videoKey: String, subtitleId: String) =
         stringPreferencesKey(SubtitleSelectionPolicy.syncStorageKey(videoKey, subtitleId))
 
-    /** Saved subtitle shift and speed for one video and exact subtitle; no correction when nothing was saved. */
+    /** Downloaded-subtitle default, overridden by the saved correction for this exact video/subtitle. */
     suspend fun getSubtitleSync(videoKey: String, subtitleId: String): SubtitleSync =
-        SubtitleTiming.decode(context.playbackDataStore.data.first()[subtitleSyncKey(videoKey, subtitleId)])
+        SubtitleTiming.forDownloadedSubtitle(context.playbackDataStore.data.first()[subtitleSyncKey(videoKey, subtitleId)])
 
     suspend fun setSubtitleSync(videoKey: String, subtitleId: String, sync: SubtitleSync) {
         context.playbackDataStore.edit {
-            if (sync.isDefault) it.remove(subtitleSyncKey(videoKey, subtitleId))
-            else it[subtitleSyncKey(videoKey, subtitleId)] = SubtitleTiming.encode(sync)
+            // Keep identity too: Reset is an explicit exception to the automatic x0.959 default.
+            it[subtitleSyncKey(videoKey, subtitleId)] = SubtitleTiming.encode(sync)
         }
     }
 }

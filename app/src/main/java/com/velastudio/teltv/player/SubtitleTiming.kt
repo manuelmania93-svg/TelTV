@@ -59,6 +59,13 @@ object SubtitleTiming {
         return if (durationMs > 0 && next > durationMs) (currentMs - 1).coerceAtLeast(0L) else next
     }
 
+    /** User-selected default for newly downloaded subtitles, not a detected frame-rate mismatch.
+     * A stored identity correction is an explicit Reset exception and must win too.
+     * Corrupt existing entries fail safe to identity rather than changing the video's timing.
+     */
+    fun forDownloadedSubtitle(saved: String?): SubtitleSync =
+        if (saved == null) SubtitleSync(scale = SCALE_23976_TO_25) else decode(saved)
+
     fun encode(sync: SubtitleSync): String = "${sync.offsetMs};${sync.scale}"
 
     /** Anything unreadable falls back to "no correction" rather than breaking playback. */
