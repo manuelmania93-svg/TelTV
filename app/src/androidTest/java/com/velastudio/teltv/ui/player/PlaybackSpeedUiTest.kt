@@ -27,11 +27,10 @@ class PlaybackSpeedUiTest {
 
     private fun screenshot(name: String) {
         val device = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val bitmap = device.takeScreenshot()
-        File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "$name.png").outputStream().use {
-            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
-        }
-        bitmap.recycle()
+        // Shell-owned shared directory survives Gradle uninstalling the test application.
+        val output = device.executeShellCommand("screencap -p /sdcard/Download/$name.png")
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(output).use { it.readBytes() }
+
     }
 
     @Test fun dpadCanChooseFourTimesAndMenuFitsScreen() {
