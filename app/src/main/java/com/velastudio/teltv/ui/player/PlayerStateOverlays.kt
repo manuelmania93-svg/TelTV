@@ -262,6 +262,7 @@ fun TrackSelectorDialog(
     val context = LocalContext.current
     val initialTabFocusRequester = remember { FocusRequester() }
     val onlineTabFocusRequester = remember { FocusRequester() }
+    val languageButtonFocusRequester = remember { FocusRequester() }
 
     var currentTracks by remember { mutableStateOf(controller.currentTracks) }
     androidx.compose.runtime.DisposableEffect(controller) {
@@ -330,7 +331,7 @@ fun TrackSelectorDialog(
     }
     val activeSubtitleLanguage = selectedSubtitleLanguage ?: SubtitleLanguages.DEFAULT_CODE
     val onlineSubtitles = remember(rawOnlineSubtitles, activeSubtitleLanguage) {
-        SubtitleLanguages.orderForSelection(rawOnlineSubtitles, activeSubtitleLanguage)
+        SubtitleLanguages.filterForSelection(rawOnlineSubtitles, activeSubtitleLanguage)
     }
     val languageCounts = remember(rawOnlineSubtitles) { SubtitleLanguages.countByLanguage(rawOnlineSubtitles) }
     var isLoadingOnlineSubs by remember { mutableStateOf(false) }
@@ -343,13 +344,12 @@ fun TrackSelectorDialog(
         OnlineSubtitleProvider.identifyMedia(subtitleQuery, showNameFor(subtitleQuery))
     }
     var lastSearchReason by remember { mutableStateOf<String?>(null) }
-    val subtitleLanguagePreferences = listOf(activeSubtitleLanguage)
     val subtitleLanguageHint =
         "Subtitle language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)} (forced dialogue first)"
     // Default to Online Subs if video has 0 embedded subtitle tracks
     var selectedTab by remember { mutableStateOf(if (subtitleTracks.size <= 1) 2 else 0) } // 0 = Audio, 1 = Embedded, 2 = Online Subs
 
-    suspend fun searchOnlineSubtitles(query: String, autoSelectPreferred: Boolean) {
+    suspend fun searchOnlineSubtitles(query: String) {
         if (query.isBlank() || isLoadingOnlineSubs) return
         isLoadingOnlineSubs = true
         subtitleActionMessage = null
@@ -359,49 +359,12 @@ fun TrackSelectorDialog(
                 activeSubtitleLanguage,
                 showNameFor(query)
             )
-            val results = OnlineSubtitleProvider.prioritizePreferredLanguages(
-                outcome.subtitles,
-                subtitleLanguagePreferences
-            )
-            rawOnlineSubtitles = results
+            // Search returns all available languages. Choosing one only filters the list;
+            // applying a subtitle always requires an explicit result click.
+            rawOnlineSubtitles = outcome.subtitles
             lastSearchReason = outcome.reason
-            if (results.isEmpty()) {
+            if (outcome.subtitles.isEmpty()) {
                 subtitleActionMessage = outcome.reason ?: "No online subtitles found for this title."
-            } else if (autoSelectPreferred) {
-                val preferred = OnlineSubtitleProvider.firstPreferredLanguageMatch(results, subtitleLanguagePreferences)
-                if (preferred != null) {
-                    downloadingSubtitleId = preferred.id
-                    subtitleActionMessage = if (preferred.isForced) {
-                        "Automatically selecting forced ${preferred.langDisplay} subtitles..."
-                    } else {
-                        "Automatically selecting ${preferred.langDisplay} subtitles..."
-                    }
-                    if (onSelectOnlineSubtitle(preferred)) {
-                        onDismiss()
-                    } else {
-                        subtitleActionMessage = "Could not apply ${preferred.langDisplay}. Select a subtitle to retry."
-                    }
-                    downloadingSubtitleId = null
-                } else if (subtitleLanguagePreferences.isNotEmpty()) {
-                    val language = SubtitleLanguages.displayName(subtitleLanguagePreferences.first())
-                    val english = if (OnlineSubtitleProvider.isPreferredLanguage("en", subtitleLanguagePreferences)) {
-                        null
-                    } else {
-                        OnlineSubtitleProvider.firstPreferredLanguageMatch(results, listOf("en"))
-                    }
-                    if (english != null) {
-                        downloadingSubtitleId = english.id
-                        subtitleActionMessage = "No $language subtitles found. Using English instead..."
-                        if (onSelectOnlineSubtitle(english)) {
-                            onDismiss()
-                        } else {
-                            subtitleActionMessage = "No $language subtitles found. Could not apply English; choose one below."
-                        }
-                        downloadingSubtitleId = null
-                    } else {
-                        subtitleActionMessage = "No $language subtitles found. Choose an available language below."
-                    }
-                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -414,10 +377,10 @@ fun TrackSelectorDialog(
         }
     }
 
-    // Waits for the saved language, then searches once; picking another language later only re-orders results.
+    // Wait for preferences, then fetch results. Merely opening a tab never changes playback.
     LaunchedEffect(videoTitle, selectedSubtitleLanguage != null, selectedTab) {
         if (videoTitle.isNotBlank() && selectedTab == 2 && selectedSubtitleLanguage != null) {
-            searchOnlineSubtitles(videoTitle, autoSelectPreferred = true)
+            searchOnlineSubtitles(videoTitle)
         }
     }
 
@@ -691,7 +654,7 @@ fun TrackSelectorDialog(
                 )
                 Button(
                     onClick = { showLanguagePicker = !showLanguagePicker; languageQuery = "" },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().focusRequester(languageButtonFocusRequester)
                 ) {
                     Text(
                         "Language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)}" +
@@ -723,10 +686,10 @@ fun TrackSelectorDialog(
                                     selectedSubtitleLanguage = language.code
                                     showLanguagePicker = false
                                     languageQuery = ""
-                                    subtitleActionMessage = if (rawOnlineSubtitles.isNotEmpty() && count == 0) {
-                                        "No ${language.english} subtitles for this title. Showing other languages."
-                                    } else null
+                                    subtitleActionMessage = null
                                     coroutineScope.launch { prefs?.setSubtitleLanguage(language.code) }
+                                    // The clicked row is removed. Return focus to a stable TV control.
+                                    languageButtonFocusRequester.requestFocus()
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -753,14 +716,14 @@ fun TrackSelectorDialog(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = {
                             coroutineScope.launch {
-                                searchOnlineSubtitles(subtitleQuery.trim(), autoSelectPreferred = true)
+                                searchOnlineSubtitles(subtitleQuery.trim())
                             }
                         })
                     )
                     Button(
                         onClick = {
                             coroutineScope.launch {
-                                searchOnlineSubtitles(subtitleQuery.trim(), autoSelectPreferred = true)
+                                searchOnlineSubtitles(subtitleQuery.trim())
                             }
                         },
                         enabled = !isLoadingOnlineSubs && subtitleQuery.isNotBlank()
@@ -784,7 +747,11 @@ fun TrackSelectorDialog(
                 } else if (onlineSubtitles.isEmpty()) {
                     Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
                         Text(
-                            subtitleActionMessage ?: "No online subtitles found for this title.",
+                            subtitleActionMessage ?: if (rawOnlineSubtitles.isNotEmpty()) {
+                                "No ${SubtitleLanguages.displayName(activeSubtitleLanguage)} subtitles for this title. Choose another language. Your current subtitle is unchanged."
+                            } else {
+                                "No online subtitles found for this title. Your current subtitle is unchanged."
+                            },
                             color = Color.Gray,
                             fontSize = 14.sp
                         )

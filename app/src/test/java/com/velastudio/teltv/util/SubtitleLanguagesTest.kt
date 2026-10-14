@@ -77,6 +77,20 @@ class SubtitleLanguagesTest {
         assertEquals(listOf("2", "1", "3"), SubtitleLanguages.orderForSelection(subs, "en").map { it.id })
     }
 
+    @Test fun filterShowsOnlyChosenLanguageWithAliasesAndForcedFirst() {
+        val subs = listOf(sub("1", "eng"), sub("2", "de-AT"), sub("3", "ger", forced = true), sub("4", "fre"))
+        assertEquals(listOf("3", "2"), SubtitleLanguages.filterForSelection(subs, "deu").map { it.id })
+        assertEquals(listOf("1"), SubtitleLanguages.filterForSelection(subs, "en").map { it.id })
+        assertEquals(listOf("4"), SubtitleLanguages.filterForSelection(subs, "fr").map { it.id })
+    }
+
+    @Test fun missingChosenLanguageDoesNotFallBackToEnglish() {
+        val subs = listOf(sub("1", "eng"), sub("2", "ger"))
+        assertTrue(SubtitleLanguages.filterForSelection(subs, "ja").isEmpty())
+        assertTrue(SubtitleLanguages.filterForSelection(emptyList(), "de").isEmpty())
+        assertEquals(listOf("2"), SubtitleLanguages.filterForSelection(subs, "").map { it.id })
+    }
+
     @Test fun countByLanguageGroupsCodeVariants() {
         val counts = SubtitleLanguages.countByLanguage(listOf(sub("1", "ger"), sub("2", "deu"), sub("3", "de"), sub("4", "eng")))
         assertEquals(3, counts["de"])
