@@ -34,6 +34,7 @@ class PlaybackService : MediaSessionService() {
 
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
+    private var storageGuard: PlaybackStorageGuard? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -145,6 +146,10 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, exoPlayer)
             .setSessionActivity(sessionActivityPendingIntent)
             .build()
+
+        // Keeps TDLib's download cache from filling the TV's storage mid-playback; pauses,
+        // saves the position, wipes and resumes from the saved position as the last resort.
+        storageGuard = PlaybackStorageGuard(this, app) { player }.also { it.start() }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -158,6 +163,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        storageGuard?.stop()
+        storageGuard = null
         mediaSession?.player?.release()
         mediaSession?.release()
         mediaSession = null

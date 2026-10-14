@@ -186,6 +186,10 @@ interface VideoIndexDao {
     @Query("SELECT * FROM video_index WHERE mediaId = :mediaId")
     suspend fun getByMediaId(mediaId: String): VideoIndexEntity?
 
+    /** Reverse lookup used by the playback storage guard to map a playing tdlib:// URI back to its mediaId. */
+    @Query("SELECT * FROM video_index WHERE streamUrl = :streamUrl")
+    suspend fun getByStreamUrl(streamUrl: String): VideoIndexEntity?
+
     @Query("SELECT * FROM video_index WHERE chatId = :chatId ORDER BY position ASC")
     suspend fun getAllForChat(chatId: Long): List<VideoIndexEntity>
 

@@ -67,6 +67,25 @@ class CacheManager(
         }
     }
 
+    /**
+     * Evicts every TDLib-cached file that has not been used in the last [immunitySeconds]
+     * seconds, regardless of how big the cache currently is. Unlike [trimToLimit], which only
+     * acts once a configured size limit is exceeded, this is the playback guard's "make room now"
+     * call: the immunity window is what protects the file currently being watched (TDLib keeps
+     * downloading it while it plays), everything older is deleted oldest-first by TDLib.
+     */
+    suspend fun evictAllButRecent(immunitySeconds: Int) {
+        require(immunitySeconds >= 0) { "Immunity window must not be negative" }
+        telegramSend(
+            TdApi.OptimizeStorage(
+                0L, Int.MAX_VALUE, Int.MAX_VALUE, immunitySeconds,
+                arrayOf(),
+                longArrayOf(), longArrayOf(),
+                false, 50
+            )
+        )
+    }
+
     suspend fun maybeAutoClear(limitBytes: Long = DEFAULT_LIMIT_BYTES) {
         if (getCurrentSizeBytes() > limitBytes) {
             trimToLimit(limitBytes)
