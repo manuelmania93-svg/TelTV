@@ -372,7 +372,7 @@ fun PlayerScreen(
         if (confirmed) {
             return if (stillCurrent() && attachOnlineSubtitle(sub, revision))
                 com.velastudio.teltv.sync.SubtitlePickResult.Applied("Selected manually")
-            else com.velastudio.teltv.sync.SubtitlePickResult.Failed("Video changed or download failed")
+            else com.velastudio.teltv.sync.SubtitlePickResult.Failed(seekingText ?: "Video changed or download failed")
         }
         val length = durationMs.takeIf { it > 0 } ?: controller?.duration?.takeIf { it > 0 } ?: 0L
         val app = context.applicationContext as com.velastudio.teltv.TelTvApp
@@ -390,9 +390,11 @@ fun PlayerScreen(
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             val result = com.velastudio.teltv.sync.SubtitleCandidateVerifier.check(context, candidate, candidates, length, speech)
             if (!stillCurrent()) return com.velastudio.teltv.sync.SubtitlePickResult.Failed("Video or audio track changed; check discarded")
+            if (result.rejected && result.message.startsWith("SubDL"))
+                return com.velastudio.teltv.sync.SubtitlePickResult.Failed(result.message)
             if (result.confident) {
                 return if (attachOnlineSubtitle(candidate, revision)) com.velastudio.teltv.sync.SubtitlePickResult.Applied(result.message)
-                    else com.velastudio.teltv.sync.SubtitlePickResult.Failed("Download failed")
+                    else com.velastudio.teltv.sync.SubtitlePickResult.Failed(seekingText ?: "Download failed")
             }
             if (!result.rejected && uncertain == null) uncertain = candidate to result.message
         }

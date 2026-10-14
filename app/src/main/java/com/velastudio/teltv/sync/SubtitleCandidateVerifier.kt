@@ -15,8 +15,9 @@ sealed interface SubtitlePickResult {
 object SubtitleCandidateVerifier {
     suspend fun check(context: Context, sub: OnlineSubtitle, all: List<OnlineSubtitle>, durationMs: Long,
                       speech: List<SpeechWindow>): SubtitleConfidence = withContext(Dispatchers.Default) {
-        val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
-            ?: return@withContext SubtitleConfidence(false, true, 0, "Could not download subtitle")
+        var downloadError: String? = null
+        val file = OnlineSubtitleProvider.downloadSubtitle(context, sub) { downloadError = it }
+            ?: return@withContext SubtitleConfidence(false, true, 0, downloadError ?: "Could not download subtitle")
         val cues = withContext(Dispatchers.IO) { SubtitleCueParser.parse(file.readText()) }
         // Reject unreasonable timing spans before the FFT aligner can allocate large arrays.
         val early = SubtitleConfidencePolicy.assess(sub.episodeEvidence, cues, durationMs, null, null)
