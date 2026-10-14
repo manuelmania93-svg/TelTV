@@ -149,7 +149,7 @@ class PlaybackService : MediaSessionService() {
 
         // Keeps TDLib's download cache from filling the TV's storage mid-playback; pauses,
         // saves the position, wipes and resumes from the saved position as the last resort.
-        storageGuard = PlaybackStorageGuard(this, app) { player }.also { it.start() }
+        storageGuard = PlaybackStorageGuard(this, app, playerProvider = { player }).also { it.start() }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
