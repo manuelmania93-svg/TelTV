@@ -658,6 +658,7 @@ fun TrackSelectorDialog(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
                 Button(
+                    enabled = downloadingSubtitleId == null,
                     onClick = { showLanguagePicker = !showLanguagePicker; languageQuery = "" },
                     modifier = Modifier.fillMaxWidth().focusRequester(languageButtonFocusRequester)
                 ) {
@@ -687,6 +688,7 @@ fun TrackSelectorDialog(
                         items(matchingLanguages) { language ->
                             val count = languageCounts[language.code] ?: 0
                             Button(
+                                enabled = downloadingSubtitleId == null,
                                 onClick = {
                                     selectedSubtitleLanguage = language.code
                                     showLanguagePicker = false
@@ -732,7 +734,7 @@ fun TrackSelectorDialog(
                                 searchOnlineSubtitles(subtitleQuery.trim())
                             }
                         },
-                        enabled = !isLoadingOnlineSubs && subtitleQuery.isNotBlank()
+                        enabled = !isLoadingOnlineSubs && downloadingSubtitleId == null && subtitleQuery.isNotBlank()
                     ) {
                         Text("Search")
                     }
