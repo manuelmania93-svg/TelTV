@@ -419,7 +419,7 @@ object OnlineSubtitleProvider {
             SubtitleSearchResult(SubtitleLanguages.rankResults(list, preferredLanguage, matchedKeywords)
                 .sortedByDescending { it.episodeEvidence?.rank ?: 0 },
                 if (identity.isSeries && list.none { it.episodeEvidence?.titleMatch == true })
-                    "Not sure which episode these subtitles belong to. Pick one to check; nothing is applied automatically."
+                    "Episode identity is not verified. You can search or choose a different subtitle."
                 else null)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

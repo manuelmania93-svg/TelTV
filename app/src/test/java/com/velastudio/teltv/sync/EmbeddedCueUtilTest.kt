@@ -45,4 +45,29 @@ class EmbeddedCueUtilTest {
         assertEquals(-2_400.0, est.offsetMs.toDouble(), 100.0)
         assertTrue(est.accepted)
     }
+    @Test fun startsIgnoreDurationAndDoNotClipEarlierCues() {
+        val a = listOf(SubtitleCue(-1, 4000), SubtitleCue(1000, 1200), SubtitleCue(3990, 9000), SubtitleCue(4000, 5000))
+        val b = a.map { it.copy(endMs = it.startMs + 7000) }
+        val signal = EmbeddedCueUtil.rasterizeStarts(a, 0, 4000)
+        org.junit.Assert.assertArrayEquals(signal, EmbeddedCueUtil.rasterizeStarts(b, 0, 4000), 0f)
+        assertEquals(0f, signal[0]); assertEquals(1f, signal[100])
+        assertEquals(1f, signal[109]); assertEquals(0f, signal[110]); assertEquals(1f, signal[399])
+    }
+
+    @Test fun startAlignmentHasNoBiasWithVeryDifferentCueEnds() {
+        val random = java.util.Random(42)
+        val reference = ArrayList<SubtitleCue>()
+        var time = 1000L
+        while (time < 140000) {
+            reference.add(SubtitleCue(time, time + 6500))
+            time += 800 + random.nextInt(6000)
+        }
+        for (shift in listOf(-2400L, 0L, 4370L)) {
+            val target = reference.map { SubtitleCue(it.startMs - shift, it.startMs - shift + 500) }
+            val signal = EmbeddedCueUtil.rasterizeStarts(reference, 0, 150000)
+            val estimate = SubtitleAligner.alignWindow(signal, 0, target, 60000, startsOnly = true)!!
+            assertEquals(shift, estimate.offsetMs)
+            assertTrue(estimate.accepted)
+        }
+    }
 }
