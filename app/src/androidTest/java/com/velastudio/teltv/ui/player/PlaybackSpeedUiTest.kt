@@ -61,6 +61,29 @@ class PlaybackSpeedUiTest {
         compose.runOnIdle { assertEquals(4f, chosen, 0f) }
     }
 
+    @Test fun dpadCanChooseQuarterSpeedAndSlowRatesAreVisible() {
+        var chosen = 1f
+        compose.setContent {
+            androidx.tv.material3.MaterialTheme {
+                PlaybackSpeedDialog(1f, { chosen = it }, {})
+            }
+        }
+        compose.onNodeWithText("Selected: 1x").assertIsFocused()
+        repeat(3) {
+            compose.onNodeWithText("Playback speed").performKeyInput {
+                keyDown(Key.DirectionUp); keyUp(Key.DirectionUp)
+            }
+        }
+        compose.onNodeWithText("0.25x").assertIsFocused().assertIsDisplayed()
+        compose.onNodeWithText("0.5x").assertIsDisplayed()
+        compose.onNodeWithText("0.75x").assertIsDisplayed()
+        screenshot("playback-speed-menu-quarter")
+        compose.onNodeWithText("0.25x").performKeyInput {
+            keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
+        }
+        compose.runOnIdle { assertEquals(0.25f, chosen, 0f) }
+    }
+
     @Test fun backDismissesWithoutChangingRate() {
         var dismissed = false
         compose.setContent {

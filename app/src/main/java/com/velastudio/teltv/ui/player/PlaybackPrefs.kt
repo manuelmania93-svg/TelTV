@@ -105,16 +105,17 @@ class PlaybackPrefs(private val context: Context) {
         context.playbackDataStore.edit { it[KEY_ASPECT_RATIO_4X3] = mode }
     }
 
-    private fun subtitleSyncKey(videoKey: String) = stringPreferencesKey("subtitle_sync_$videoKey")
+    private fun subtitleSyncKey(videoKey: String, subtitleId: String) =
+        stringPreferencesKey(SubtitleSelectionPolicy.syncStorageKey(videoKey, subtitleId))
 
-    /** Saved subtitle shift and speed for one video; no correction when nothing was saved. */
-    suspend fun getSubtitleSync(videoKey: String): SubtitleSync =
-        SubtitleTiming.decode(context.playbackDataStore.data.first()[subtitleSyncKey(videoKey)])
+    /** Saved subtitle shift and speed for one video and exact subtitle; no correction when nothing was saved. */
+    suspend fun getSubtitleSync(videoKey: String, subtitleId: String): SubtitleSync =
+        SubtitleTiming.decode(context.playbackDataStore.data.first()[subtitleSyncKey(videoKey, subtitleId)])
 
-    suspend fun setSubtitleSync(videoKey: String, sync: SubtitleSync) {
+    suspend fun setSubtitleSync(videoKey: String, subtitleId: String, sync: SubtitleSync) {
         context.playbackDataStore.edit {
-            if (sync.isDefault) it.remove(subtitleSyncKey(videoKey))
-            else it[subtitleSyncKey(videoKey)] = SubtitleTiming.encode(sync)
+            if (sync.isDefault) it.remove(subtitleSyncKey(videoKey, subtitleId))
+            else it[subtitleSyncKey(videoKey, subtitleId)] = SubtitleTiming.encode(sync)
         }
     }
 }

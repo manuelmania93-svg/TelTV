@@ -43,7 +43,8 @@ object SubtitleAligner {
         speech: FloatArray,
         windowStartMs: Long,
         cues: List<SubtitleCue>,
-        maxShiftMs: Long
+        maxShiftMs: Long,
+        startsOnly: Boolean = false
     ): WindowEstimate? {
         if (speech.size < 500 || cues.isEmpty()) return null
         val m = (maxShiftMs / FRAME).toInt()
@@ -51,10 +52,15 @@ object SubtitleAligner {
         // sub[j] covers original subtitle time subStart + j*FRAME.
         val subStart = windowStartMs - m.toLong() * FRAME
         val sub = DoubleArray(subLen)
-        for (c in cues) {
-            val a = ((c.startMs - subStart) / FRAME).toInt().coerceAtLeast(0)
-            val b = ((c.endMs - subStart) / FRAME).toInt().coerceAtMost(subLen)
-            for (i in a until b) sub[i] = 1.0
+        if (startsOnly) {
+            val pulses = EmbeddedCueUtil.rasterizeStarts(cues, subStart, subLen.toLong() * FRAME)
+            for (i in pulses.indices) sub[i] = pulses[i].toDouble()
+        } else {
+            for (c in cues) {
+                val a = ((c.startMs - subStart) / FRAME).toInt().coerceAtLeast(0)
+                val b = ((c.endMs - subStart) / FRAME).toInt().coerceAtMost(subLen)
+                for (i in a until b) sub[i] = 1.0
+            }
         }
         if (sub.all { it == 0.0 }) return null
         val a = DoubleArray(speech.size) { speech[it].toDouble() }

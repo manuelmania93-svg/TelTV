@@ -26,8 +26,8 @@ object EmbeddedCueUtil {
 
     /**
      * MediaExtractor gives the start of a subtitle sample but not how long it is shown, so the end
-     * is estimated from the text length. Only the start times are exact; this is why the result is
-     * only used when several windows agree.
+     * is estimated from the text length. Only the start times are exact. Embedded-reference sync
+     * uses rasterizeStarts on both sides, never these estimated ends.
      */
     fun estimatedDurationMs(text: String): Long = (text.length * MS_PER_CHAR).coerceIn(MIN_MS, MAX_MS)
 
@@ -39,6 +39,21 @@ object EmbeddedCueUtil {
             val a = ((c.startMs - startMs) / SpeechDetector.FRAME_MS).toInt().coerceAtLeast(0)
             val b = ((c.endMs - startMs) / SpeechDetector.FRAME_MS).toInt().coerceAtMost(n)
             for (i in a until b) out[i] = 1f
+        }
+        return out
+    }
+
+    /** Short identical pulses on BOTH sides of embedded alignment; cue ends are irrelevant.
+     * Starts outside the window are dropped (not clipped into fake starts at its boundary).
+     */
+    fun rasterizeStarts(cues: List<SubtitleCue>, startMs: Long, lengthMs: Long): FloatArray {
+        val n = (lengthMs / SpeechDetector.FRAME_MS).toInt().coerceAtLeast(0)
+        val out = FloatArray(n)
+        for (cue in cues) {
+            val relative = cue.startMs - startMs
+            if (relative < 0 || relative >= lengthMs) continue
+            val a = (relative / SpeechDetector.FRAME_MS).toInt()
+            for (i in a until minOf(a + 10, n)) out[i] = 1f // 100 ms, same for every cue
         }
         return out
     }

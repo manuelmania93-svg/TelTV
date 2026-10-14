@@ -364,7 +364,7 @@ fun TrackSelectorDialog(
                 showNameFor(query)
             )
             // Search returns all available languages. Choosing one only filters the list;
-            // applying a subtitle always requires an explicit result click.
+            // manual search does not replace the subtitle until a result is clicked.
             rawOnlineSubtitles = outcome.subtitles
             lastSearchReason = outcome.reason
             subtitleActionMessage = outcome.reason

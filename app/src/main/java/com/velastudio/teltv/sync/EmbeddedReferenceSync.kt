@@ -50,8 +50,8 @@ object EmbeddedReferenceSync {
                         EmbeddedSubtitleReader.readWindow(ds, start, SubtitleAutoSync.WINDOW_MS, cancelled)
                     }
                     if (reference.size < 5) continue
-                    val signal = EmbeddedCueUtil.rasterize(reference, start, SubtitleAutoSync.WINDOW_MS)
-                    SubtitleAligner.alignWindow(signal, start, cues, SubtitleAutoSync.MAX_SHIFT_MS)?.let { estimates.add(it) }
+                    val signal = EmbeddedCueUtil.rasterizeStarts(reference, start, SubtitleAutoSync.WINDOW_MS)
+                    SubtitleAligner.alignWindow(signal, start, cues, SubtitleAutoSync.MAX_SHIFT_MS, startsOnly = true)?.let { estimates.add(it) }
                 } catch (e: EmbeddedSubtitleReader.NoEmbeddedSubtitle) {
                     return@withContext null
                 } catch (e: CancellationException) {
