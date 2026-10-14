@@ -150,6 +150,12 @@ object SubtitleLanguages {
     fun countByLanguage(subtitles: List<OnlineSubtitle>): Map<String, Int> =
         subtitles.groupingBy { normalize(it.lang) }.eachCount()
 
+    /** Only the chosen language, normalized for aliases/regions. Never silently use English. */
+    fun filterForSelection(subtitles: List<OnlineSubtitle>, selected: String): List<OnlineSubtitle> {
+        val chosen = normalize(selected).ifEmpty { DEFAULT_CODE }
+        return orderForSelection(subtitles, chosen).filter { normalize(it.lang) == chosen }
+    }
+
     /**
      * Orders results: chosen language first (forced dialogue tracks before full ones), English next
      * when it is not the chosen language, then everything else; ties keep the provider order.
