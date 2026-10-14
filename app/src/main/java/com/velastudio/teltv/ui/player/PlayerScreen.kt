@@ -265,10 +265,15 @@ fun PlayerScreen(
     suspend fun attachOnlineSubtitle(sub: OnlineSubtitle): Boolean {
         val mediaController = controller ?: return false
         if (mediaController.currentMediaItem == null) return false
+        val startedUri = mediaController.currentMediaItem?.localConfiguration?.uri
         seekingText = "Downloading ${sub.langDisplay}..."
         val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
         if (file == null || !file.exists()) {
             seekingText = "Failed to download subtitle"
+            return false
+        }
+        if (controller !== mediaController || mediaController.currentMediaItem?.localConfiguration?.uri != startedUri) {
+            seekingText = "Video changed; subtitle discarded"
             return false
         }
         activeSubtitleFile = file
@@ -320,7 +325,8 @@ fun PlayerScreen(
     suspend fun verifyAndAttachSubtitle(sub: OnlineSubtitle, candidates: List<OnlineSubtitle>, confirmed: Boolean): com.velastudio.teltv.sync.SubtitlePickResult {
         val started = resolvedUri()
         val startedAudio = selectedAudioTrack()
-        fun stillCurrent() = started == resolvedUri() && startedAudio == selectedAudioTrack()
+        fun stillCurrent() = controller?.currentMediaItem?.localConfiguration?.uri?.toString() == started &&
+            startedAudio == selectedAudioTrack()
         if (confirmed) {
             return if (stillCurrent() && attachOnlineSubtitle(sub))
                 com.velastudio.teltv.sync.SubtitlePickResult.Applied("Selected manually")
