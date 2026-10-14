@@ -81,7 +81,10 @@ private class OffsetSubtitleOutputBuffer(
 
     init {
         val output = requireNotNull(source)
-        timeUs = SubtitleTiming.mapUs(output.timeUs, scale, offsetUs)
+        // For a sideloaded subtitle the player-clock origin is the buffer time (Media3 sets the
+        // subsample offset equal to it). Keep the buffer time as is and scale only relative to it.
+        val originUs = output.timeUs
+        timeUs = originUs
         skippedOutputBufferCount = output.skippedOutputBufferCount
         shouldBeSkipped = output.shouldBeSkipped
         if (output.isEndOfStream) {
@@ -89,7 +92,7 @@ private class OffsetSubtitleOutputBuffer(
         } else {
             setContent(
                 timeUs,
-                OffsetSubtitle(output, offsetUs, scale),
+                OffsetSubtitle(output, offsetUs, scale, originUs),
                 0L
             )
         }
@@ -106,16 +109,17 @@ private class OffsetSubtitleOutputBuffer(
 internal class OffsetSubtitle(
     private val subtitle: Subtitle,
     private val offsetUs: Long,
-    private val scale: Double = 1.0
+    private val scale: Double = 1.0,
+    private val originUs: Long = 0L
 ) : Subtitle {
     override fun getNextEventTimeIndex(timeUs: Long): Int =
-        subtitle.getNextEventTimeIndex(SubtitleTiming.unmapUs(timeUs, scale, offsetUs))
+        subtitle.getNextEventTimeIndex(SubtitleTiming.unmapUs(timeUs, scale, offsetUs, originUs))
 
     override fun getEventTimeCount(): Int = subtitle.eventTimeCount
 
     override fun getEventTime(index: Int): Long =
-        SubtitleTiming.mapUs(subtitle.getEventTime(index), scale, offsetUs)
+        SubtitleTiming.mapUs(subtitle.getEventTime(index), scale, offsetUs, originUs)
 
     override fun getCues(timeUs: Long): List<Cue> =
-        subtitle.getCues(SubtitleTiming.unmapUs(timeUs, scale, offsetUs))
+        subtitle.getCues(SubtitleTiming.unmapUs(timeUs, scale, offsetUs, originUs))
 }

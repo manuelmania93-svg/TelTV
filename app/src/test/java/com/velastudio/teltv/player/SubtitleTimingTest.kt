@@ -109,4 +109,41 @@ class SubtitleTimingTest {
         assertEquals(2_750_000L, sub.getEventTime(1))
         assertEquals(0, sub.getNextEventTimeIndex(0L))
     }
+
+    // Media3 1.5.0 renderer clock starts at 1e12 us; the old mapping scaled that origin too.
+    private val origin = 1_000_000_000_000L
+
+    @Test fun scaleOnlyAppliesToTimeSinceOrigin() {
+        val cue = origin + 60_000_000L
+        assertEquals(origin + 60_060_000L, SubtitleTiming.mapUs(cue, 1.001, 0L, origin))
+        // Without the origin the cue would land 1,000 s late.
+        assertEquals(1_000_000_000L, SubtitleTiming.mapUs(cue, 1.001, 0L) - (origin + 60_060_000L))
+    }
+
+    @Test fun originMappingKeepsOffsetAndRoundTrips() {
+        for (scale in listOf(1.0, 0.95904, 1.04271)) {
+            val t = origin + 5_400_000_000L
+            val m = SubtitleTiming.mapUs(t, scale, 750_000L, origin)
+            assertEquals(t.toDouble(), SubtitleTiming.unmapUs(m, scale, 750_000L, origin).toDouble(), 2.0)
+        }
+        assertEquals(origin + 1_500_000L, SubtitleTiming.mapUs(origin + 1_000_000L, 1.0, 500_000L, origin))
+    }
+
+    @Test fun framerateFixShiftsLateCueByAFewSecondsNotThousands() {
+        val cue = origin + 3_600_000_000L
+        val mapped = SubtitleTiming.mapUs(cue, SubtitleTiming.SCALE_23976_TO_25, 0L, origin)
+        assertEquals(3_452_544_000L.toDouble(), (mapped - origin).toDouble(), 5.0)
+    }
+
+    @Test fun offsetSubtitleScalesRelativeToOrigin() {
+        val src = FakeSubtitle(longArrayOf(origin + 60_000_000L))
+        val sub = OffsetSubtitle(src, 0L, 1.001, origin)
+        assertEquals(origin + 60_060_000L, sub.getEventTime(0))
+    }
+
+    @Test fun refreshSeekAlwaysMovesToADifferentMillisecond() {
+        assertEquals(10_001L, SubtitleTiming.refreshSeekPositionMs(10_000L, 60_000L))
+        assertEquals(59_999L, SubtitleTiming.refreshSeekPositionMs(60_000L, 60_000L))
+        assertEquals(1L, SubtitleTiming.refreshSeekPositionMs(0L, 0L))
+    }
 }

@@ -36,13 +36,28 @@ object SubtitleTiming {
     fun stepScale(current: Double, steps: Int): Double =
         clampScale(current + steps * SCALE_STEP)
 
-    /** Time in the subtitle file -> time on screen. */
-    fun mapUs(sourceUs: Long, scale: Double, offsetUs: Long): Long =
-        (sourceUs * scale).roundToLong() + offsetUs
+    /**
+     * Time in the subtitle file -> time on screen.
+     *
+     * [originUs] is where the subtitle's own zero sits on the player clock. Media3's renderer clock
+     * starts at 1,000,000,000,000 us, so scaling the raw player time would move every cue by
+     * (scale - 1) * 1e12 us. Only the time since the origin may be scaled.
+     */
+    fun mapUs(sourceUs: Long, scale: Double, offsetUs: Long, originUs: Long = 0L): Long =
+        originUs + ((sourceUs - originUs) * scale).roundToLong() + offsetUs
 
     /** Time on screen -> time in the subtitle file. */
-    fun unmapUs(playerUs: Long, scale: Double, offsetUs: Long): Long =
-        ((playerUs - offsetUs) / scale).roundToLong()
+    fun unmapUs(playerUs: Long, scale: Double, offsetUs: Long, originUs: Long = 0L): Long =
+        originUs + ((playerUs - offsetUs - originUs) / scale).roundToLong()
+
+    /**
+     * Position to seek to so the player re-decodes subtitles after a sync change. Media3 ignores a
+     * seek that lands in the same millisecond as the current position, so nudge by 1 ms.
+     */
+    fun refreshSeekPositionMs(currentMs: Long, durationMs: Long): Long {
+        val next = currentMs + 1
+        return if (durationMs > 0 && next > durationMs) (currentMs - 1).coerceAtLeast(0L) else next
+    }
 
     fun encode(sync: SubtitleSync): String = "${sync.offsetMs};${sync.scale}"
 
