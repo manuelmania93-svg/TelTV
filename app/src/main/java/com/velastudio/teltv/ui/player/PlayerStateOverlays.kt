@@ -342,9 +342,17 @@ fun TrackSelectorDialog(
     var subtitleActionMessage by remember { mutableStateOf<String?>(null) }
     var uncertainSubtitle by remember { mutableStateOf<OnlineSubtitle?>(null) }
     // The channel/topic name is the series name, unless the user edited the query by hand.
-    fun showNameFor(query: String): String? = showName?.takeIf { query.trim() == videoTitle.trim() }
-    val subtitleIdentity = remember(subtitleQuery, showName) {
-        OnlineSubtitleProvider.identifyMedia(subtitleQuery, showNameFor(subtitleQuery))
+    // A typed name is a manual show pick: it replaces the topic name, and the season/episode
+    // still come from the video's own caption. A query with its own S/E is searched as typed.
+    fun searchArgsFor(query: String): Pair<String, String?> = when {
+        query.trim() == videoTitle.trim() -> videoTitle to showName
+        com.velastudio.teltv.util.CaptionEpisodeParser.parse(query)?.season != null -> query to null
+        OnlineSubtitleProvider.identifyMedia(videoTitle, query.trim()).isSeries -> videoTitle to query.trim()
+        else -> query to null
+    }
+    val subtitleIdentity = remember(subtitleQuery, showName, videoTitle) {
+        val (raw, name) = searchArgsFor(subtitleQuery)
+        OnlineSubtitleProvider.identifyMedia(raw, name)
     }
     var lastSearchReason by remember { mutableStateOf<String?>(null) }
     val subtitleLanguageHint =
@@ -358,10 +366,11 @@ fun TrackSelectorDialog(
         subtitleActionMessage = null
         uncertainSubtitle = null
         try {
+            val (rawQuery, queryShowName) = searchArgsFor(query)
             val outcome = OnlineSubtitleProvider.searchSubtitlesDetailed(
-                query,
+                rawQuery,
                 activeSubtitleLanguage,
-                showNameFor(query)
+                queryShowName
             )
             // Search returns all available languages. Choosing one only filters the list;
             // manual search does not replace the subtitle until a result is clicked.
