@@ -543,6 +543,17 @@ fun SubDlSettingsSection() {
             Text("Enter it here, not in chat. A saved key is never shown again.", color = TelTvMuted)
             message?.let { Text(it, color = TelTvYellow) }
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(onClick = {
+                    // Explicit user action only. Never watch the clipboard or persist its contents.
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    val pasted = clipboard.primaryClip?.takeIf { it.itemCount > 0 }
+                        ?.getItemAt(0)?.coerceToText(context)?.toString()?.trim().orEmpty()
+                    if (pasted.isNotBlank() && pasted.length <= 200 && pasted.none { it.isWhitespace() }) {
+                        entered = pasted
+                        message = null
+                    } else message = "Clipboard has no valid API key."
+                }, enabled = !busy) { Text("Paste") }
                 Button(onClick = { entered = ""; editing = false }, enabled = !busy) { Text("Cancel") }
                 Button(onClick = { save(entered) }, enabled = !busy && entered.isNotBlank()) { Text("Save key") }
             }
