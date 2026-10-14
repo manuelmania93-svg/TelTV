@@ -135,11 +135,13 @@ class SubtitleAlignerTest {
         val acc = FrameEnergyAccumulator(startMs = 1_000, lengthMs = 100)
         val rate = 8_000
         // 100 ms of audio starting 20 ms before the window: first 20 ms is ignored.
-        val pcm = FloatArray(800) { 0.5f }
+        // A 1 kHz tone: DC would be removed by the speech-band filter, a tone in the band is not.
+        val pcm = FloatArray(800) { (0.5 * kotlin.math.sin(2 * Math.PI * 1_000.0 * it / rate)).toFloat() }
         acc.add(pcm, pcm.size, rate, 980_000)
         val frames = acc.frames()
         assertEquals(10, frames.size)
-        assertEquals(0.5f, frames[0], 1e-4f)
+        // RMS of a 0.5 amplitude sine is about 0.354; the band filter passes 1 kHz almost unchanged.
+        assertEquals(0.354f, frames[0], 0.06f)
         assertTrue(acc.coverage() > 0.7)
         acc.add(FloatArray(800), 800, rate, 1_100_000)
         assertTrue(acc.finished)
