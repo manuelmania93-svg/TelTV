@@ -15,6 +15,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 class PlaybackSpeedUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
