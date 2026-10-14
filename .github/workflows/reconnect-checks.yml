@@ -32,7 +32,7 @@ jobs:
             mkdir -p smoke
             ./gradlew connectedDebugAndroidTest --stacktrace
             mkdir -p smoke/player-ui
-            adb pull /sdcard/Android/data/com.velastudio.teltv/files/. smoke/player-ui/ || true
+            adb pull /sdcard/Download/. smoke/player-ui/
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb logcat -c
             adb shell am start -W -n com.velastudio.teltv/.MainActivity
