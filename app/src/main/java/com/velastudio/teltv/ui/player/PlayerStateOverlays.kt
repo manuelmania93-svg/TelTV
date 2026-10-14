@@ -262,6 +262,7 @@ fun TrackSelectorDialog(
     val context = LocalContext.current
     val initialTabFocusRequester = remember { FocusRequester() }
     val onlineTabFocusRequester = remember { FocusRequester() }
+    val languageButtonFocusRequester = remember { FocusRequester() }
 
     var currentTracks by remember { mutableStateOf(controller.currentTracks) }
     androidx.compose.runtime.DisposableEffect(controller) {
@@ -653,7 +654,7 @@ fun TrackSelectorDialog(
                 )
                 Button(
                     onClick = { showLanguagePicker = !showLanguagePicker; languageQuery = "" },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().focusRequester(languageButtonFocusRequester)
                 ) {
                     Text(
                         "Language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)}" +
@@ -687,6 +688,8 @@ fun TrackSelectorDialog(
                                     languageQuery = ""
                                     subtitleActionMessage = null
                                     coroutineScope.launch { prefs?.setSubtitleLanguage(language.code) }
+                                    // The clicked row is removed. Return focus to a stable TV control.
+                                    languageButtonFocusRequester.requestFocus()
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
