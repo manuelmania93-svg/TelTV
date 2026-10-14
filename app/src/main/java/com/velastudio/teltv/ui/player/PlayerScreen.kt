@@ -286,7 +286,11 @@ fun PlayerScreen(
         syncKey?.let { key -> coroutineScope.launch { prefs.setSubtitleSync(key, sync) } }
         controller?.let { mediaController ->
             if (mediaController.currentMediaItem != null) {
-                mediaController.seekTo(mediaController.currentPosition)
+                mediaController.seekTo(
+                    com.velastudio.teltv.player.SubtitleTiming.refreshSeekPositionMs(
+                        mediaController.currentPosition, mediaController.duration.takeIf { it > 0 } ?: 0L
+                    )
+                )
                 seekingText = "Subtitles: ${com.velastudio.teltv.player.SubtitleTiming.formatOffset(offset)}, " +
                     com.velastudio.teltv.player.SubtitleTiming.formatScale(newScale)
             }
