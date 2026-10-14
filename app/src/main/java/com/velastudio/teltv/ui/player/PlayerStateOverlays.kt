@@ -354,6 +354,9 @@ fun TrackSelectorDialog(
         val (raw, name) = searchArgsFor(subtitleQuery)
         OnlineSubtitleProvider.identifyMedia(raw, name)
     }
+    var resolvedSubtitleIdentity by remember(videoTitle, subtitleQuery, showName) {
+        mutableStateOf<com.velastudio.teltv.util.SubtitleMediaIdentity?>(null)
+    }
     var lastSearchReason by remember { mutableStateOf<String?>(null) }
     val subtitleLanguageHint =
         "Subtitle language: ${SubtitleLanguages.displayName(activeSubtitleLanguage)} (forced dialogue first)"
@@ -375,6 +378,7 @@ fun TrackSelectorDialog(
             // Search returns all available languages. Choosing one only filters the list;
             // manual search does not replace the subtitle until a result is clicked.
             rawOnlineSubtitles = outcome.subtitles
+            resolvedSubtitleIdentity = outcome.resolvedIdentity
             lastSearchReason = outcome.reason
             subtitleActionMessage = outcome.reason
             if (outcome.subtitles.isEmpty()) {
@@ -634,7 +638,7 @@ fun TrackSelectorDialog(
 
             if (selectedTab == 2) {
                 Text(
-                    text = subtitleIdentity.displayLabel(),
+                    text = resolvedSubtitleIdentity?.displayLabel() ?: subtitleIdentity.displayLabel().replace("Detected", "Caption"),
                     color = Color(0xFFB3E5FC),
                     fontSize = 13.sp,
                     modifier = Modifier.fillMaxWidth()

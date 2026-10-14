@@ -7,6 +7,16 @@ import org.junit.Test
 
 class SubtitleSearchLogicTest {
 
+    @Test fun mixedTopicSeparatorsSurviveShowCleanup() {
+        for (separator in listOf(" / ", " & ", " + ", " | ")) {
+            val clean = OnlineSubtitleProvider.cleanShowName("Breaking Bad" + separator + "Better Call Saul")
+            assertEquals(listOf("Breaking Bad", "Better Call Saul"), ShowNameMatcher.splitMixed(clean))
+        }
+    }
+    @Test fun titleOnlySeriesTopicCannotFallBackToMovie() {
+        assertTrue(OnlineSubtitleProvider.identifyMedia("... und der Sack ist im Fluss", "Breaking Bad / Better Call Saul").isSeries)
+    }
+
     // Season lengths of Naruto Shippuden S1..S10 as listed by Cinemeta (tt0988824).
     private val shippuden = mapOf(1 to 32, 2 to 21, 3 to 18, 4 to 17, 5 to 24, 6 to 31, 7 to 8, 8 to 24, 9 to 21, 10 to 26)
 

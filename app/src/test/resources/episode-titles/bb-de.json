@@ -1,0 +1,378 @@
+{
+  "meta": {
+    "videos": [
+      {
+        "season": 1,
+        "episode": 1,
+        "number": 1,
+        "name": "Der Einstieg"
+      },
+      {
+        "season": 1,
+        "episode": 2,
+        "number": 2,
+        "name": "Die Katze ist im Sack ..."
+      },
+      {
+        "season": 1,
+        "episode": 3,
+        "number": 3,
+        "name": "... und der Sack ist im Fluss"
+      },
+      {
+        "season": 1,
+        "episode": 4,
+        "number": 4,
+        "name": "Die Diagnose"
+      },
+      {
+        "season": 1,
+        "episode": 5,
+        "number": 5,
+        "name": "Grauzonen"
+      },
+      {
+        "season": 1,
+        "episode": 6,
+        "number": 6,
+        "name": "In der Höhle des Löwen"
+      },
+      {
+        "season": 1,
+        "episode": 7,
+        "number": 7,
+        "name": "Lehrgeld"
+      },
+      {
+        "season": 2,
+        "episode": 1,
+        "number": 1,
+        "name": "Vorsichtsmaßnahmen"
+      },
+      {
+        "season": 2,
+        "episode": 2,
+        "number": 2,
+        "name": "In der Falle"
+      },
+      {
+        "season": 2,
+        "episode": 3,
+        "number": 3,
+        "name": "Gedächtnisschwund"
+      },
+      {
+        "season": 2,
+        "episode": 4,
+        "number": 4,
+        "name": "Ganz unten"
+      },
+      {
+        "season": 2,
+        "episode": 5,
+        "number": 5,
+        "name": "Bruchschäden"
+      },
+      {
+        "season": 2,
+        "episode": 6,
+        "number": 6,
+        "name": "Kuckuck"
+      },
+      {
+        "season": 2,
+        "episode": 7,
+        "number": 7,
+        "name": "Negro Y Azul"
+      },
+      {
+        "season": 2,
+        "episode": 8,
+        "number": 8,
+        "name": "Beauftragen Sie Saul"
+      },
+      {
+        "season": 2,
+        "episode": 9,
+        "number": 9,
+        "name": "4 Tage Auszeit"
+      },
+      {
+        "season": 2,
+        "episode": 10,
+        "number": 10,
+        "name": "Schluss"
+      },
+      {
+        "season": 2,
+        "episode": 11,
+        "number": 11,
+        "name": "Mandala"
+      },
+      {
+        "season": 2,
+        "episode": 12,
+        "number": 12,
+        "name": "Phönix"
+      },
+      {
+        "season": 2,
+        "episode": 13,
+        "number": 13,
+        "name": "Krisen"
+      },
+      {
+        "season": 3,
+        "episode": 1,
+        "number": 1,
+        "name": "No Mas"
+      },
+      {
+        "season": 3,
+        "episode": 2,
+        "number": 2,
+        "name": "Caballo Sin Nombre"
+      },
+      {
+        "season": 3,
+        "episode": 3,
+        "number": 3,
+        "name": "Kopflosigkeit"
+      },
+      {
+        "season": 3,
+        "episode": 4,
+        "number": 4,
+        "name": "Grünes Licht"
+      },
+      {
+        "season": 3,
+        "episode": 5,
+        "number": 5,
+        "name": "Mas"
+      },
+      {
+        "season": 3,
+        "episode": 6,
+        "number": 6,
+        "name": "Sonnenuntergang"
+      },
+      {
+        "season": 3,
+        "episode": 7,
+        "number": 7,
+        "name": "Eine Minute"
+      },
+      {
+        "season": 3,
+        "episode": 8,
+        "number": 8,
+        "name": "Familienbande"
+      },
+      {
+        "season": 3,
+        "episode": 9,
+        "number": 9,
+        "name": "Kafkaesk"
+      },
+      {
+        "season": 3,
+        "episode": 10,
+        "number": 10,
+        "name": "Die Fliege"
+      },
+      {
+        "season": 3,
+        "episode": 11,
+        "number": 11,
+        "name": "Offene Worte"
+      },
+      {
+        "season": 3,
+        "episode": 12,
+        "number": 12,
+        "name": "Halbe Sachen"
+      },
+      {
+        "season": 3,
+        "episode": 13,
+        "number": 13,
+        "name": "Nägel mit Köpfen"
+      },
+      {
+        "season": 4,
+        "episode": 1,
+        "number": 1,
+        "name": "Das Teppichmesser"
+      },
+      {
+        "season": 4,
+        "episode": 2,
+        "number": 2,
+        "name": "Kaliber 38"
+      },
+      {
+        "season": 4,
+        "episode": 3,
+        "number": 3,
+        "name": "Offenes Haus"
+      },
+      {
+        "season": 4,
+        "episode": 4,
+        "number": 4,
+        "name": "Gedankenstriche"
+      },
+      {
+        "season": 4,
+        "episode": 5,
+        "number": 5,
+        "name": "Schrotflinte"
+      },
+      {
+        "season": 4,
+        "episode": 6,
+        "number": 6,
+        "name": "In die Ecke getrieben"
+      },
+      {
+        "season": 4,
+        "episode": 7,
+        "number": 7,
+        "name": "Problemkind"
+      },
+      {
+        "season": 4,
+        "episode": 8,
+        "number": 8,
+        "name": "Brüder"
+      },
+      {
+        "season": 4,
+        "episode": 9,
+        "number": 9,
+        "name": "Verwanzt"
+      },
+      {
+        "season": 4,
+        "episode": 10,
+        "number": 10,
+        "name": "Prost!"
+      },
+      {
+        "season": 4,
+        "episode": 11,
+        "number": 11,
+        "name": "Geheimversteck"
+      },
+      {
+        "season": 4,
+        "episode": 12,
+        "number": 12,
+        "name": "Endzeit"
+      },
+      {
+        "season": 4,
+        "episode": 13,
+        "number": 13,
+        "name": "Von Angesicht zu Angesicht"
+      },
+      {
+        "season": 5,
+        "episode": 1,
+        "number": 1,
+        "name": "Lebe frei oder stirb"
+      },
+      {
+        "season": 5,
+        "episode": 2,
+        "number": 2,
+        "name": "Madrigal"
+      },
+      {
+        "season": 5,
+        "episode": 3,
+        "number": 3,
+        "name": "Gefahrenzulage"
+      },
+      {
+        "season": 5,
+        "episode": 4,
+        "number": 4,
+        "name": "51"
+      },
+      {
+        "season": 5,
+        "episode": 5,
+        "number": 5,
+        "name": "Tödliche Fracht"
+      },
+      {
+        "season": 5,
+        "episode": 6,
+        "number": 6,
+        "name": "Ausverkauf"
+      },
+      {
+        "season": 5,
+        "episode": 7,
+        "number": 7,
+        "name": "Sagen Sie meinen Namen"
+      },
+      {
+        "season": 5,
+        "episode": 8,
+        "number": 8,
+        "name": "Im Gleitflug"
+      },
+      {
+        "season": 5,
+        "episode": 9,
+        "number": 9,
+        "name": "Blutgeld"
+      },
+      {
+        "season": 5,
+        "episode": 10,
+        "number": 10,
+        "name": "Vergraben"
+      },
+      {
+        "season": 5,
+        "episode": 11,
+        "number": 11,
+        "name": "Geständnisse"
+      },
+      {
+        "season": 5,
+        "episode": 12,
+        "number": 12,
+        "name": "Tollwütiger Hund"
+      },
+      {
+        "season": 5,
+        "episode": 13,
+        "number": 13,
+        "name": "To’hajiilee"
+      },
+      {
+        "season": 5,
+        "episode": 14,
+        "number": 14,
+        "name": "Ozymandias"
+      },
+      {
+        "season": 5,
+        "episode": 15,
+        "number": 15,
+        "name": "Granit"
+      },
+      {
+        "season": 5,
+        "episode": 16,
+        "number": 16,
+        "name": "Felina"
+      }
+    ]
+  }
+}
