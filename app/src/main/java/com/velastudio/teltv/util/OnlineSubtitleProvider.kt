@@ -1,6 +1,7 @@
 package com.velastudio.teltv.util
 
 import android.content.Context
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -20,7 +21,8 @@ data class OnlineSubtitle(
     val url: String,
     val fileName: String,
     val isForced: Boolean = false,
-    val releaseName: String = ""
+    val releaseName: String = "",
+    val episodeEvidence: EpisodeEvidence? = null
 )
 
 /** Search outcome. [reason] explains an empty result so the UI can say why nothing was found. */
@@ -343,6 +345,11 @@ object OnlineSubtitleProvider {
                 )
             }
 
+            val metaBody = if (identity.isSeries) httpGet("https://v3-cinemeta.strem.io/meta/series/$imdbId.json") else null
+            val expectedTitles = if (identity.isSeries) EpisodeMatchPolicy.expectedTitles(
+                rawTitle, metaBody, seasonNum, episodeNum
+            ) else emptyList()
+
             // Step 2: subtitles from OpenSubtitles v3. The normal season/episode search stays primary.
             var triedAbsolute: Int? = null
             var list = if (identity.isSeries) {
@@ -386,11 +393,34 @@ object OnlineSubtitleProvider {
                 )
             }
 
+            if (identity.isSeries) {
+                // Provider numbering is evidence, not identity. Search a bounded neighbourhood only
+                // when the requested bucket has no strong release-title match in the chosen language.
+                fun decorate(sub: OnlineSubtitle) = sub.copy(episodeEvidence = EpisodeMatchPolicy.assess(
+                    sub, expectedTitles, seasonNum, episodeNum
+                ))
+                list = list.map(::decorate)
+                val preferred = list.filter { SubtitleLanguages.normalize(it.lang) == SubtitleLanguages.normalize(preferredLanguage) }
+                if (preferred.none { it.episodeEvidence?.titleMatch == true } && expectedTitles.isNotEmpty()) {
+                    for (neighbour in EpisodeMatchPolicy.neighbours(episodeNum)) {
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                        list = (list + fetchSubtitleList(
+                            "https://opensubtitles-v3.strem.io/subtitles/series/$imdbId:$seasonNum:$neighbour.json"
+                        ).map(::decorate)).distinctBy { it.lang + ":" + it.id }.take(160)
+                    }
+                }
+                list = list.sortedByDescending { it.episodeEvidence?.rank ?: 0 }
+            }
+
             val targetKeywords = listOf("web-dl", "webrip", "web", "bluray", "bdrip", "hdtv", "1080p", "720p", "hevc", "x265", "x264", "nf", "netflix")
             val lowerTitle = rawTitle.lowercase()
             val matchedKeywords = targetKeywords.filter { lowerTitle.contains(it) }
 
-            SubtitleSearchResult(SubtitleLanguages.rankResults(list, preferredLanguage, matchedKeywords))
+            SubtitleSearchResult(SubtitleLanguages.rankResults(list, preferredLanguage, matchedKeywords)
+                .sortedByDescending { it.episodeEvidence?.rank ?: 0 },
+                if (identity.isSeries && list.none { it.episodeEvidence?.titleMatch == true })
+                    "Not sure which episode these subtitles belong to. Pick one to check; nothing is applied automatically."
+                else null)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: java.io.IOException) {
@@ -421,7 +451,7 @@ object OnlineSubtitleProvider {
             val safeId = subtitle.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
             val safeLanguage = subtitle.lang.replace(Regex("[^A-Za-z0-9_-]"), "_")
             val targetFile = File(subDir, "${safeLanguage}_$safeId.srt")
-            if (targetFile.exists() && targetFile.length() > 0) {
+            if (targetFile.exists() && targetFile.length() in 1L..(2L * 1024 * 1024)) {
                 return@withContext targetFile
             }
             val temporaryFile = File(subDir, "${targetFile.name}.part")
@@ -438,7 +468,16 @@ object OnlineSubtitleProvider {
                     val body = resp.body ?: return@withContext null
                     body.byteStream().use { input ->
                         FileOutputStream(temporaryFile).use { output ->
-                            input.copyTo(output)
+                            val buffer = ByteArray(8192)
+                            var total = 0
+                            while (true) {
+                                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                total += count
+                                if (total > 2 * 1024 * 1024) throw java.io.IOException("Subtitle exceeds 2 MB limit")
+                                output.write(buffer, 0, count)
+                            }
                         }
                     }
                 }
@@ -446,6 +485,8 @@ object OnlineSubtitleProvider {
             } finally {
                 temporaryFile.delete()
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Failed to download subtitle file: %s", subtitle.url)
             null

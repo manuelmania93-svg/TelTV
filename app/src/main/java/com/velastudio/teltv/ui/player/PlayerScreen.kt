@@ -32,6 +32,7 @@ import com.velastudio.teltv.player.SubtitleSyncOffset
 import com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory
 import com.velastudio.teltv.util.MediaTitleCleaner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import com.velastudio.teltv.util.OnlineSubtitle
@@ -268,10 +269,15 @@ fun PlayerScreen(
     suspend fun attachOnlineSubtitle(sub: OnlineSubtitle): Boolean {
         val mediaController = controller ?: return false
         if (mediaController.currentMediaItem == null) return false
+        val startedUri = mediaController.currentMediaItem?.localConfiguration?.uri
         seekingText = "Downloading ${sub.langDisplay}..."
         val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
         if (file == null || !file.exists()) {
             seekingText = "Failed to download subtitle"
+            return false
+        }
+        if (controller !== mediaController || mediaController.currentMediaItem?.localConfiguration?.uri != startedUri) {
+            seekingText = "Video changed; subtitle discarded"
             return false
         }
         activeSubtitleFile = file
@@ -318,6 +324,42 @@ fun PlayerScreen(
             ordinal++
         }
         return firstSeen
+    }
+
+    suspend fun verifyAndAttachSubtitle(sub: OnlineSubtitle, candidates: List<OnlineSubtitle>, confirmed: Boolean): com.velastudio.teltv.sync.SubtitlePickResult {
+        val started = resolvedUri()
+        val startedAudio = selectedAudioTrack()
+        fun stillCurrent() = controller?.currentMediaItem?.localConfiguration?.uri?.toString() == started &&
+            startedAudio == selectedAudioTrack()
+        if (confirmed) {
+            return if (stillCurrent() && attachOnlineSubtitle(sub))
+                com.velastudio.teltv.sync.SubtitlePickResult.Applied("Selected manually")
+            else com.velastudio.teltv.sync.SubtitlePickResult.Failed("Video changed or download failed")
+        }
+        val length = durationMs.takeIf { it > 0 } ?: controller?.duration?.takeIf { it > 0 } ?: 0L
+        val app = context.applicationContext as com.velastudio.teltv.TelTvApp
+        val factory = com.velastudio.teltv.telegram.TdLibAwareDataSourceFactory(app.telegramClient, context)
+        seekingText = "Checking subtitle identity and timing..."
+        val speech = if (started != null) kotlinx.coroutines.withTimeoutOrNull(45_000) {
+            com.velastudio.teltv.sync.SubtitleSpeechProbe.sample(factory, Uri.parse(started), length, startedAudio)
+        }.orEmpty() else emptyList()
+        val choices = (listOf(sub) + candidates.filter {
+            com.velastudio.teltv.util.SubtitleLanguages.normalize(it.lang) ==
+                com.velastudio.teltv.util.SubtitleLanguages.normalize(sub.lang) && it.episodeEvidence?.titleMatch == true
+        }).distinctBy { it.id }.take(3)
+        var uncertain: Pair<OnlineSubtitle, String>? = null
+        for (candidate in choices) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            val result = com.velastudio.teltv.sync.SubtitleCandidateVerifier.check(context, candidate, candidates, length, speech)
+            if (!stillCurrent()) return com.velastudio.teltv.sync.SubtitlePickResult.Failed("Video or audio track changed; check discarded")
+            if (result.confident) {
+                return if (attachOnlineSubtitle(candidate)) com.velastudio.teltv.sync.SubtitlePickResult.Applied(result.message)
+                    else com.velastudio.teltv.sync.SubtitlePickResult.Failed("Download failed")
+            }
+            if (!result.rejected && uncertain == null) uncertain = candidate to result.message
+        }
+        return uncertain?.let { com.velastudio.teltv.sync.SubtitlePickResult.Uncertain(it.first, it.second) }
+            ?: com.velastudio.teltv.sync.SubtitlePickResult.Failed("No candidate passed the checks. Pick another result or search another episode title. Nothing changed.")
     }
 
     fun currentSyncTarget() = com.velastudio.teltv.sync.AutoSyncTarget(
@@ -871,7 +913,7 @@ fun PlayerScreen(
                 controller = controller,
                 videoTitle = title,
                 showName = showName,
-                onSelectOnlineSubtitle = ::attachOnlineSubtitle,
+                onVerifySubtitle = ::verifyAndAttachSubtitle,
                 onSelectEmbeddedSubtitle = { activeSubtitleFile = null },
                 syncOffsetMs = subtitleSyncOffsetMs,
                 onAdjustSyncOffset = ::adjustSubtitleSync,
