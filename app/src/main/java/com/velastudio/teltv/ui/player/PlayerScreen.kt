@@ -96,7 +96,7 @@ fun PlayerScreen(
     var controlsVisible by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(false) }
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
-    var showTrackSelector by remember { mutableStateOf(false) }
+    var showTrackSelector by remember(fileId, directUri) { mutableStateOf(false) }
     var showPlaybackSpeed by remember(fileId, directUri) { mutableStateOf(false) }
     // Playback rate is not the subtitle timing scale. Reset only for a different video.
     var playbackSpeed by remember(fileId, directUri) { mutableStateOf(PlaybackSpeedPolicy.DEFAULT) }
