@@ -154,6 +154,19 @@ interface WatchStateDao {
 
 @Dao
 interface WatchlistDao {
+    /** Atomic read/change so repeated callers cannot lose a toggle. No schema change. */
+    @Transaction
+    suspend fun toggle(mediaId: String): Boolean {
+        require(mediaId.isNotBlank())
+        return if (get(mediaId) != null) {
+            remove(mediaId)
+            false
+        } else {
+            add(WatchlistEntity(mediaId, System.currentTimeMillis() / 1000))
+            true
+        }
+    }
+
     @Query("SELECT * FROM watchlist ORDER BY addedEpochSec DESC")
     suspend fun getAll(): List<WatchlistEntity>
 
