@@ -171,7 +171,9 @@ fun PlayerScreen(
     }
     val savedAspect4x3 by prefs.aspectRatio4x3.collectAsState(initial = 0)
     var isCurrentVideo4x3 by remember { mutableStateOf(false) }
-    var aspectRatioIndex by remember { mutableStateOf(0) } // 0=FIT, 1=ZOOM, 2=FILL
+    var aspectRatioIndex by remember { mutableStateOf(0) } // see AspectModes
+    // Displayed width/height of the current picture; wide pictures get the extra "baked-in bars" modes.
+    var videoDisplayAspect by remember { mutableStateOf(0f) }
 
     // Subtitle styling & audio enhancements
     val subSize by prefs.subtitleSize.collectAsState(initial = "LARGE")
@@ -529,13 +531,9 @@ fun PlayerScreen(
                 if (videoSize.width > 0 && videoSize.height > 0) {
                     val pixelRatio = if (videoSize.pixelWidthHeightRatio > 0f) videoSize.pixelWidthHeightRatio else 1.0f
                     val aspect = (videoSize.width.toFloat() / videoSize.height.toFloat()) * pixelRatio
-                    val is4x3 = aspect in 1.1f..1.55f
-                    isCurrentVideo4x3 = is4x3
-                    if (is4x3) {
-                        aspectRatioIndex = savedAspect4x3
-                    } else {
-                        aspectRatioIndex = 0
-                    }
+                    isCurrentVideo4x3 = AspectModes.is4x3(aspect)
+                    aspectRatioIndex = AspectModes.modeAfterSizeChange(videoDisplayAspect, aspect, aspectRatioIndex, savedAspect4x3)
+                    videoDisplayAspect = aspect
                 }
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -709,12 +707,8 @@ fun PlayerScreen(
     }
 
     fun cycleAspectRatio() {
-        aspectRatioIndex = (aspectRatioIndex + 1) % 3
-        seekingText = when (aspectRatioIndex) {
-            1 -> "Aspect: Zoom to Fill (Crop)"
-            2 -> "Aspect: Stretch"
-            else -> "Aspect: Fit (Original)"
-        }
+        aspectRatioIndex = AspectModes.next(aspectRatioIndex, videoDisplayAspect)
+        seekingText = AspectModes.label(aspectRatioIndex)
         seekingIsForward = true
         if (isCurrentVideo4x3) {
             coroutineScope.launch { prefs.setAspectRatio4x3(aspectRatioIndex) }
@@ -872,9 +866,14 @@ fun PlayerScreen(
                     view.player = controller
                 }
                 view.resizeMode = when (aspectRatioIndex) {
-                    1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    AspectModes.ZOOM -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    AspectModes.FILL -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
                     else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+                // Baked-in bars: scale only the video surface (subtitles stay where they are).
+                view.videoSurfaceView?.let { surface ->
+                    surface.scaleX = AspectModes.scaleX(aspectRatioIndex, videoDisplayAspect)
+                    surface.scaleY = AspectModes.scaleY(aspectRatioIndex, videoDisplayAspect)
                 }
                 view.subtitleView?.apply {
                     setFractionalTextSize(subFontSize)
