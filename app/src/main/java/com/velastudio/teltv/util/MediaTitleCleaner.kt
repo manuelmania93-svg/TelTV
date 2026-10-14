@@ -2,6 +2,8 @@ package com.velastudio.teltv.util
 
 object MediaTitleCleaner {
     private val EXT_REGEX = Regex("(?i)\\.(mkv|mp4|avi|mov|wmv|flv|webm|ts)$")
+    // Also catches ".mp4" glued to a stray digit or separated by a space ("... Diagnose mp41").
+    private val EXT_LENIENT = Regex("(?i)[ ._](?:mkv|mp4|m4v|avi|mov|wmv|flv|webm)\\d{0,2}$")
     private val CHANNEL_HANDLE = Regex("@[a-zA-Z0-9_]+|https?://\\S+|t\\.me/\\S+")
     private val BRACKETS_REGEX = Regex("\\[[^\\]]*\\]|\\([^\\)]*\\)")
     // Match each quality/codec tag on its own. The previous trailing `.*` swallowed the rest of
@@ -12,7 +14,7 @@ object MediaTitleCleaner {
     )
 
     fun clean(rawTitle: String): String {
-        var t = rawTitle.replace(EXT_REGEX, "")
+        var t = rawTitle.trim().replace(EXT_REGEX, "").replace(EXT_LENIENT, "")
         t = t.replace(CHANNEL_HANDLE, "")
         t = t.replace(BRACKETS_REGEX, "")
         t = t.replace(".", " ").replace("_", " ")

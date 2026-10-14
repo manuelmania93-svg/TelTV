@@ -390,7 +390,8 @@ fun PlayerScreen(
         try {
             val result = OnlineSubtitleProvider.searchSubtitlesDetailed(title, language, showName)
             if (resolvedUri() != started || subtitleSelectionRevision != revision) return@LaunchedEffect
-            val best = SubtitleSelectionPolicy.best(result.subtitles, language)
+            // Several shows or episode readings are mixed in the list: the user picks, never auto-attach.
+            val best = if (result.ambiguous) null else SubtitleSelectionPolicy.best(result.subtitles, language)
             if (best != null) attachOnlineSubtitle(best, revision)
             else seekingText = result.reason ?: "No ${com.velastudio.teltv.util.SubtitleLanguages.displayName(language)} subtitle found. Search in Subtitles."
         } catch (e: kotlinx.coroutines.CancellationException) {

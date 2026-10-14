@@ -100,3 +100,73 @@ class SubtitleSearchLogicTest {
         assertEquals(0, OnlineSubtitleProvider.bestMetaIndex(names, "something else"))
     }
 }
+
+class TopicCaptionIdentityTest {
+    @Test
+    fun mixedTopicWithSeasonEpisodeSpaceCaptionIsSeries() {
+        val id = OnlineSubtitleProvider.identifyMedia(
+            "Breaking Bad & Better Call Saul \uD83D\uDCC1 4 4 Die Diagnose mp41",
+            "Breaking Bad & Better Call Saul"
+        )
+        assertEquals("Breaking Bad & Better Call Saul", id.title)
+        assertEquals(true, id.isSeries)
+        assertEquals(4, id.season)
+        assertEquals(4, id.episode)
+        assertEquals(false, id.dated)
+    }
+
+    @Test
+    fun threeDigitCaptionKeepsBothReadings() {
+        val id = OnlineSubtitleProvider.identifyMedia("Malcolm Mittendrin 101", "Malcom Mittendrin")
+        assertEquals(true, id.isSeries)
+        assertNull(id.season)
+        assertEquals(101, id.episode)
+        assertEquals(101, id.bareDigits)
+    }
+
+    @Test
+    fun animeDashNumberStaysAbsolute() {
+        val id = OnlineSubtitleProvider.identifyMedia("Naruto - 120", "Naruto")
+        assertEquals(true, id.isSeries)
+        assertEquals(120, id.episode)
+        assertNull(id.bareDigits)
+    }
+
+    @Test
+    fun datedWrestlingCaptionIsNotAMovieGuess() {
+        val id = OnlineSubtitleProvider.identifyMedia(
+            "480p smackdown \uD83D\uDCC1 WWF SMACKDOWN 03/08/2000 \uD83C\uDFA5 SHD",
+            "480p smackdown"
+        )
+        assertEquals(false, id.isSeries)
+        assertEquals(true, id.dated)
+    }
+
+    @Test
+    fun explicitSeasonEpisodeBeatsDate() {
+        val id = OnlineSubtitleProvider.identifyMedia("Show S02E03 recorded 03/08/2000", "Show")
+        assertEquals(true, id.isSeries)
+        assertEquals(false, id.dated)
+    }
+
+    @Test
+    fun onePieceEpisodeDashTitleIsSeries() {
+        val id = OnlineSubtitleProvider.identifyMedia("One Piece \uD83D\uDCC1 08 - Die Teufelsfrucht", "One Piece")
+        assertEquals(true, id.isSeries)
+        assertNull(id.season)
+        assertEquals(8, id.episode)
+    }
+
+    @Test
+    fun xFactorLongFormStaffelEpisode() {
+        val caption = "X-Factor: Das Unfassbare Staffel 02 Episode 03 \uD83D\uDC49 Die blutige Hand"
+        val withTopic = OnlineSubtitleProvider.identifyMedia(caption, "X-Factor: Das Unfassbare")
+        assertEquals("X-Factor: Das Unfassbare", withTopic.title)
+        assertEquals(2, withTopic.season)
+        assertEquals(3, withTopic.episode)
+        val noTopic = OnlineSubtitleProvider.identifyMedia(caption)
+        assertEquals("X-Factor: Das Unfassbare", noTopic.title)
+        assertEquals(2, noTopic.season)
+        assertEquals(3, noTopic.episode)
+    }
+}
