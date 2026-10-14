@@ -56,6 +56,7 @@ fun PlayerScreen(
     onPlayNext: (() -> Unit)? = null,
     autoPlayByDefault: Boolean = false,
     syncKey: String? = null,
+    favoriteMediaId: String? = null,
     onPositionUpdate: (positionMs: Long, durationMs: Long) -> Unit,
     onPlaybackEnded: () -> Unit = {},
     onBack: () -> Unit
@@ -64,6 +65,24 @@ fun PlayerScreen(
     val coroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { PlaybackPrefs(context) }
+    val favoriteDao = remember(context) {
+        (context.applicationContext as com.velastudio.teltv.TelTvApp).database.watchlistDao()
+    }
+    var isFavorite by remember(favoriteMediaId) { mutableStateOf<Boolean?>(null) }
+    var favoriteBusy by remember(favoriteMediaId) { mutableStateOf(false) }
+    LaunchedEffect(favoriteMediaId) {
+        isFavorite = null
+        if (!favoriteMediaId.isNullOrBlank()) {
+            try {
+                isFavorite = favoriteDao.get(favoriteMediaId) != null
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Could not load favorite state")
+            }
+        }
+    }
+
     val skipIncrementMs by prefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
 
     var controller by remember { mutableStateOf<MediaController?>(null) }
@@ -904,6 +923,32 @@ fun PlayerScreen(
             onPlayPrevious = onPlayPrevious,
             onPlayNext = onPlayNext,
             onOpenTracks = { showTrackSelector = true },
+            isFavorite = isFavorite == true,
+            favoriteEnabled = isFavorite != null && !favoriteBusy,
+            onToggleFavorite = favoriteMediaId?.takeIf { it.isNotBlank() }?.let { mediaId ->
+                {
+                    if (!favoriteBusy && isFavorite != null) {
+                        favoriteBusy = true
+                        coroutineScope.launch {
+                            try {
+                                val saved = favoriteDao.toggle(mediaId)
+                                isFavorite = saved
+                                android.widget.Toast.makeText(context,
+                                    if (saved) "Added to favorites" else "Removed from favorites",
+                                    android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Timber.w(e, "Could not change favorite")
+                                android.widget.Toast.makeText(context, "Could not save favorite. Try again.",
+                                    android.widget.Toast.LENGTH_SHORT).show()
+                            } finally {
+                                favoriteBusy = false
+                            }
+                        }
+                    }
+                }
+            },
             playbackSpeed = playbackSpeed,
             onOpenPlaybackSpeed = { showPlaybackSpeed = true },
             onCycleAspectRatio = ::cycleAspectRatio,

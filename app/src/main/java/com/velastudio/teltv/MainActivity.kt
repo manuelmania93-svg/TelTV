@@ -898,6 +898,7 @@ class MainActivity : ComponentActivity() {
                             nextTitle = nextEntity?.title,
                             autoPlayByDefault = false,
                             syncKey = playbackMediaId,
+                            favoriteMediaId = playbackMediaId,
                             onPlayPrevious = prevEntity?.let { prev ->
                                 {
                                     resumeMs = 0L
