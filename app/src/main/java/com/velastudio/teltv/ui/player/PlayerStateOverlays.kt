@@ -253,6 +253,7 @@ fun TrackSelectorDialog(
     onAdjustSubtitleScale: (Double) -> Unit = {},
     onlineSubtitleSelected: Boolean = false,
     onAutoSync: suspend () -> String = { "" },
+    onSyncToReference: suspend (OnlineSubtitle) -> String = { "" },
     prefs: PlaybackPrefs? = null,
     onDismiss: () -> Unit
 ) {
@@ -792,6 +793,16 @@ fun TrackSelectorDialog(
                     subtitleActionMessage?.let { message ->
                         Text(message, color = Color(0xFFFFCC80), fontSize = 13.sp)
                     }
+                    var referenceMode by remember { mutableStateOf(false) }
+                    Button(
+                        enabled = onlineSubtitleSelected && downloadingSubtitleId == null,
+                        onClick = { referenceMode = !referenceMode }
+                    ) {
+                        Text(
+                            if (referenceMode) "● Tap a subtitle that is already in sync (reference)"
+                            else "Sync the active subtitle to another one..."
+                        )
+                    }
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 240.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -799,7 +810,25 @@ fun TrackSelectorDialog(
                         items(onlineSubtitles) { sub ->
                             androidx.tv.material3.Card(
                                 onClick = {
-                                    if (downloadingSubtitleId == null) {
+                                    if (referenceMode) {
+                                        if (downloadingSubtitleId == null) {
+                                            coroutineScope.launch {
+                                                downloadingSubtitleId = sub.id
+                                                subtitleActionMessage = "Comparing with ${sub.langDisplay}..."
+                                                subtitleActionMessage = try {
+                                                    onSyncToReference(sub)
+                                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                                    throw e
+                                                } catch (e: Exception) {
+                                                    timber.log.Timber.w(e, "Reference sync failed")
+                                                    "Reference sync failed: ${e.message ?: e.javaClass.simpleName}"
+                                                } finally {
+                                                    downloadingSubtitleId = null
+                                                    referenceMode = false
+                                                }
+                                            }
+                                        }
+                                    } else if (downloadingSubtitleId == null) {
                                         coroutineScope.launch {
                                             downloadingSubtitleId = sub.id
                                             subtitleActionMessage = "Downloading ${sub.langDisplay}..."

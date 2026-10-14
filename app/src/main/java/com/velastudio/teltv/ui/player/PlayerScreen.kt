@@ -338,6 +338,21 @@ fun PlayerScreen(
         return decision.message
     }
 
+    /** Aligns the active subtitle to another downloaded subtitle that the user says is in sync. */
+    suspend fun syncToReferenceSubtitle(reference: OnlineSubtitle): String {
+        val target = activeSubtitleFile ?: return "Select an online subtitle first"
+        val started = currentSyncTarget()
+        val refFile = OnlineSubtitleProvider.downloadSubtitle(context, reference)
+            ?: return "Could not download the reference subtitle"
+        if (refFile.absolutePath == target.absolutePath) return "Pick a different subtitle as the reference"
+        val decision = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            com.velastudio.teltv.sync.ReferenceSyncPolicy.decide(refFile.readText(), target.readText())
+        }
+        if (started != currentSyncTarget()) return "Sync discarded: the video or subtitle changed"
+        decision.sync?.let { applySubtitleSync(it.offsetMs, it.scale) }
+        return decision.message
+    }
+
     fun openInExternalPlayer() {
         val streamUri = resolvedUri() ?: return
         if (!PlaybackPolicy.canOpenExternally(streamUri)) {
@@ -834,6 +849,7 @@ fun PlayerScreen(
                 onAdjustSubtitleScale = ::adjustSubtitleScale,
                 onlineSubtitleSelected = activeSubtitleFile != null,
                 onAutoSync = ::autoSyncSubtitle,
+                onSyncToReference = ::syncToReferenceSubtitle,
                 prefs = prefs,
                 onDismiss = { showTrackSelector = false }
             )
