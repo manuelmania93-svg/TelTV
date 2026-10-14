@@ -22,7 +22,7 @@ class PlaybackSpeedUiTest {
     private fun screenshot(name: String) {
         val device = InstrumentationRegistry.getInstrumentation().uiAutomation
         val bitmap = device.takeScreenshot()
-        File("/sdcard/Download/$name.png").outputStream().use {
+        File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "$name.png").outputStream().use {
             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
         bitmap.recycle()
