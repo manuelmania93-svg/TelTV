@@ -80,7 +80,8 @@ class PlaybackService : MediaSessionService() {
                 return DefaultAudioSink.Builder(context)
                     .setAudioCapabilities(audioCapabilities)
                     .setEnableFloatOutput(false) // Safe PCM output for legacy audio streams
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    // Use Media3's PCM time-stretching (Sonic), not vendor AudioTrack speed limits.
+                    .setEnableAudioTrackPlaybackParams(false)
                     .build()
             }
         }.apply {

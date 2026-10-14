@@ -56,6 +56,8 @@ fun PlaybackControlsOverlay(
     onOpenExternal: (() -> Unit)?,
     autoPlayNext: Boolean,
     onToggleAutoPlay: () -> Unit,
+    playbackSpeed: Float = PlaybackSpeedPolicy.DEFAULT,
+    onOpenPlaybackSpeed: () -> Unit = {},
     playPauseModifier: Modifier = Modifier
 ) {
     val cleanTitle = remember(title) { MediaTitleCleaner.clean(title) }
@@ -82,8 +84,13 @@ fun PlaybackControlsOverlay(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(cleanTitle, style = MaterialTheme.typography.titleMedium, color = Color.White)
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(cleanTitle, modifier = Modifier.weight(1f).padding(end = 16.dp),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium, color = Color.White)
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = onOpenPlaybackSpeed) {
+                            Text("Playback: ${PlaybackSpeedPolicy.label(playbackSpeed)}")
+                        }
                         ControlButton(
                             icon = Icons.Filled.AspectRatio,
                             contentDescription = "Aspect Ratio",
