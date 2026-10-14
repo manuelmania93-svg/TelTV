@@ -97,7 +97,7 @@ fun PlayerScreen(
     var controlsVisible by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(false) }
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
-    var showTrackSelector by remember(fileId, directUri) { mutableStateOf(false) }
+    var showTrackSelector by remember { mutableStateOf(false) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
     var autoPlayTriggered by remember(fileId, directUri) { mutableStateOf(false) }
     var autoPlayCancelled by remember(fileId, directUri) { mutableStateOf(false) }
