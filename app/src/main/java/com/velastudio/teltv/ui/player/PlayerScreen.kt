@@ -292,9 +292,10 @@ fun PlayerScreen(
         val startedUri = mediaController.currentMediaItem?.localConfiguration?.uri
         val startedVideo = resolvedUri()
         seekingText = "Downloading ${sub.langDisplay}..."
-        val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
+        var downloadError: String? = null
+        val file = OnlineSubtitleProvider.downloadSubtitle(context, sub) { downloadError = it }
         if (file == null || !file.exists()) {
-            seekingText = "Failed to download subtitle"
+            seekingText = downloadError ?: "Failed to download subtitle"
             return false
         }
         val subtitleId = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -409,7 +410,10 @@ fun PlayerScreen(
             controller?.playbackState != Player.STATE_READY) delay(100)
         if (subtitleSelectionRevision != revision) return@LaunchedEffect
         try {
-            val result = OnlineSubtitleProvider.searchSubtitlesDetailed(title, language, showName)
+            val result = OnlineSubtitleProvider.searchSubtitlesDetailed(title, language, showName,
+                subDlKey = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { com.velastudio.teltv.util.SubDlKeyStore.read(context) }.getOrDefault("")
+                })
             if (resolvedUri() != started || subtitleSelectionRevision != revision) return@LaunchedEffect
             // Several shows or episode readings are mixed in the list: the user picks, never auto-attach.
             val best = if (result.ambiguous) null else SubtitleSelectionPolicy.best(result.subtitles, language)

@@ -478,3 +478,74 @@ fun PerformanceSettingsSection(
         }
     }
 }
+
+/** The real key is never loaded into a text field or Compose saved state. */
+@Composable
+fun SubDlSettingsSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var configured by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var entered by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        configured = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { com.velastudio.teltv.util.SubDlKeyStore.read(context).isNotBlank() }.getOrDefault(false)
+        }
+    }
+    fun save(value: String) {
+        busy = true
+        scope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { com.velastudio.teltv.util.SubDlKeyStore.save(context, value) }.isSuccess
+            }
+            busy = false
+            if (ok) {
+                configured = value.isNotBlank(); entered = ""; editing = false
+                message = if (configured) "Key saved on this device." else "SubDL disabled. Key removed."
+            } else message = "Could not save the key. Use a key of at most 200 bytes, without spaces."
+        }
+    }
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(TelTvPanel).padding(24.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("SubDL subtitles (optional)", style = MaterialTheme.typography.titleLarge, color = Color.White)
+            Text(if (configured) "German source active. Key stored encrypted on this device."
+                else "Inactive. Add your SubDL API key to include German subtitles.", color = TelTvMuted)
+            Text("Other sources and automatic subtitle download stay on. SubDL limits may apply.", color = TelTvMuted)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = { entered = ""; editing = true; message = null }, enabled = !busy) {
+                    Text(if (configured) "Replace API key" else "Add API key")
+                }
+                if (configured) Button(onClick = { save("") }, enabled = !busy) { Text("Remove key") }
+            }
+            message?.let { Text(it, color = TelTvYellow) }
+        }
+    }
+    if (editing) Dialog(onDismissRequest = { if (!busy) { entered = ""; editing = false } }) {
+        // Prevent screenshots/screen recording while typing a persistent secret.
+        val view = androidx.compose.ui.platform.LocalView.current
+        DisposableEffect(view) {
+            val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            onDispose { window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+        }
+        Column(Modifier.width(480.dp).clip(RoundedCornerShape(16.dp)).background(TelTvPanelFocused).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("SubDL API key", style = MaterialTheme.typography.titleLarge, color = Color.White)
+            OutlinedTextField(value = entered, onValueChange = { if (it.length <= 200) entered = it },
+                modifier = Modifier.fillMaxWidth(), singleLine = true, enabled = !busy,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Password, autoCorrect = false),
+                label = { androidx.compose.material3.Text("API key") },
+                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
+            Text("Enter it here, not in chat. A saved key is never shown again.", color = TelTvMuted)
+            message?.let { Text(it, color = TelTvYellow) }
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(onClick = { entered = ""; editing = false }, enabled = !busy) { Text("Cancel") }
+                Button(onClick = { save(entered) }, enabled = !busy && entered.isNotBlank()) { Text("Save key") }
+            }
+        }
+    }
+}

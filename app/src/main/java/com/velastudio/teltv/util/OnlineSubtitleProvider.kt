@@ -1,6 +1,8 @@
 package com.velastudio.teltv.util
 
 import android.content.Context
+import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -380,8 +382,9 @@ object OnlineSubtitleProvider {
     private val addonClient = client.newBuilder().callTimeout(12, TimeUnit.SECONDS).build()
 
     private suspend fun fetchSubtitleList(
-        type: String, videoId: String, addons: List<SubtitleAddon>
-    ): List<OnlineSubtitle> = SubtitleAddons.fetch(addons, type, videoId) { url ->
+        type: String, videoId: String, addons: List<SubtitleAddon>, subDl: SubDlSource
+    ): List<OnlineSubtitle> = supervisorScope {
+        val keyless = async { SubtitleAddons.fetch(addons, type, videoId) { url ->
         withContext(Dispatchers.IO) {
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             val request = Request.Builder().url(url).header("User-Agent", "TelTV-AndroidTV").build()
@@ -403,6 +406,35 @@ object OnlineSubtitleProvider {
                     bytes.toString("UTF-8")
                 }
             }
+        } }
+        }
+        val optional = async { subDl.fetch(type, videoId) { url ->
+            // Dedicated client: no HTTP logging interceptor and no cross-host redirects with a key.
+            subDlClient.newCall(Request.Builder().url(url).header("User-Agent", "TelTV-AndroidTV").build())
+                .execute().use { response ->
+                    response.code to readBoundedBody(response.body)
+                }
+        } }
+        SubtitleAddons.merge(keyless.await() + optional.await())
+    }
+
+    private val subDlClient = client.newBuilder().callTimeout(12, TimeUnit.SECONDS)
+        .followRedirects(false).followSslRedirects(false).build()
+
+    private suspend fun readBoundedBody(body: okhttp3.ResponseBody?): String? {
+        body ?: return null
+        if (body.contentLength() > SubtitleAddons.MAX_RESPONSE_BYTES) return null
+        return body.byteStream().use { input ->
+            val bytes = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (bytes.size() + count > SubtitleAddons.MAX_RESPONSE_BYTES) return null
+                bytes.write(buffer, 0, count)
+            }
+            bytes.toString("UTF-8")
         }
     }
 
@@ -440,13 +472,14 @@ object OnlineSubtitleProvider {
         preferredLanguage: String,
         allowNeighbours: Boolean,
         addons: List<SubtitleAddon>,
+        subDl: SubDlSource,
         titleAliases: List<String> = emptyList()
     ): Pair<List<OnlineSubtitle>, String?> {
         val seasonNum = reading.season
         val episodeNum = reading.episode
         val expectedTitles = (EpisodeMatchPolicy.expectedTitles(rawTitle, metaBody, seasonNum, episodeNum) + titleAliases).distinct()
         var triedAbsolute: Int? = null
-        var list = fetchSubtitleList("series", "${hit.imdbId}:$seasonNum:$episodeNum", addons)
+        var list = fetchSubtitleList("series", "${hit.imdbId}:$seasonNum:$episodeNum", addons, subDl)
 
         // Fallback: some providers index long series under absolute numbers (Shippuden S10E20 = S1E216).
         if (list.isEmpty() && identity.episode != null && reading.label == null) {
@@ -456,14 +489,14 @@ object OnlineSubtitleProvider {
                     val absolute = absoluteEpisodeNumber(counts, identity.season, identity.episode)
                     if (absolute != null) {
                         triedAbsolute = absolute
-                        list = fetchSubtitleList("series", "${hit.imdbId}:1:$absolute", addons)
+                        list = fetchSubtitleList("series", "${hit.imdbId}:1:$absolute", addons, subDl)
                     }
                 } else if (identity.season == null) {
                     // A bare absolute number ("Naruto - 120") was searched as S1E120; try the real season/episode.
                     val mapped = seasonEpisodeFromAbsolute(counts, identity.episode)
                     if (mapped != null && mapped.first > 1) {
                         list = fetchSubtitleList(
-                            "series", "${hit.imdbId}:${mapped.first}:${mapped.second}", addons
+                            "series", "${hit.imdbId}:${mapped.first}:${mapped.second}", addons, subDl
                         )
                     }
                 }
@@ -486,7 +519,7 @@ object OnlineSubtitleProvider {
             for (neighbour in EpisodeMatchPolicy.neighbours(episodeNum)) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 list = SubtitleAddons.merge(list + fetchSubtitleList(
-                    "series", "${hit.imdbId}:$seasonNum:$neighbour", addons
+                    "series", "${hit.imdbId}:$seasonNum:$neighbour", addons, subDl
                 ).map(::decorate))
             }
         }
@@ -497,7 +530,17 @@ object OnlineSubtitleProvider {
         rawTitle: String,
         preferredLanguage: String = SubtitleLanguages.DEFAULT_CODE,
         showName: String? = null,
-        addons: List<SubtitleAddon> = SubtitleAddons.defaults(preferredLanguage)
+        addons: List<SubtitleAddon> = SubtitleAddons.defaults(preferredLanguage),
+        subDlKey: String = ""
+    ): SubtitleSearchResult = withContext(Dispatchers.IO) {
+        val source = SubDlSource(subDlKey)
+        val result = searchDetailedInternal(rawTitle, preferredLanguage, showName, addons, source)
+        result.copy(reason = listOfNotNull(result.reason, source.notice).joinToString(" ").ifBlank { null })
+    }
+
+    private suspend fun searchDetailedInternal(
+        rawTitle: String, preferredLanguage: String, showName: String?,
+        addons: List<SubtitleAddon>, subDl: SubDlSource
     ): SubtitleSearchResult = withContext(Dispatchers.IO) {
         try {
             val identity = identifyMedia(rawTitle, showName)
@@ -510,7 +553,7 @@ object OnlineSubtitleProvider {
                         "so no automatic subtitle search. Type a show name in the search box to try one."
                 )
             }
-            if (!identity.isSeries) return@withContext searchMovie(rawTitle, identity, preferredLanguage, addons)
+            if (!identity.isSeries) return@withContext searchMovie(rawTitle, identity, preferredLanguage, addons, subDl)
 
             // Step 1: IMDb ids from Cinemeta. A topic with several shows gives several hits.
             val hits = resolveShows("series", identity.title)
@@ -561,7 +604,7 @@ object OnlineSubtitleProvider {
                     val (subs, note) = fetchEpisodeSubtitles(
                         hit, metaBody, effectiveIdentity, rawTitle, reading, preferredLanguage,
                         allowNeighbours = !multiShow && readings.size == 1 && !titleResolution.ambiguous,
-                        addons = addons, titleAliases = aliases
+                        addons = addons, subDl = subDl, titleAliases = aliases
                     )
                     if (subs.isEmpty()) note?.let(notes::add) else buckets.add(Bucket(hit, reading, subs))
                 }
@@ -629,7 +672,8 @@ object OnlineSubtitleProvider {
         rawTitle: String,
         identity: SubtitleMediaIdentity,
         preferredLanguage: String,
-        addons: List<SubtitleAddon>
+        addons: List<SubtitleAddon>,
+        subDl: SubDlSource
     ): SubtitleSearchResult {
         var imdbId: String? = null
         for (candidate in titleCandidates(identity.title)) {
@@ -642,7 +686,7 @@ object OnlineSubtitleProvider {
         if (imdbId == null) {
             return SubtitleSearchResult(emptyList(), "No movie named \"${identity.title}\" found in the subtitle database.")
         }
-        val list = fetchSubtitleList("movie", imdbId, addons)
+        val list = fetchSubtitleList("movie", imdbId, addons, subDl)
         if (list.isEmpty()) {
             return SubtitleSearchResult(emptyList(), "Found \"${identity.title}\" but the subtitle provider has no subtitles for this movie.")
         }
@@ -666,7 +710,7 @@ object OnlineSubtitleProvider {
         }
     }
 
-    suspend fun downloadSubtitle(context: Context, subtitle: OnlineSubtitle): File? = withContext(Dispatchers.IO) {
+    suspend fun downloadSubtitle(context: Context, subtitle: OnlineSubtitle, onFailure: (String) -> Unit = {}): File? = withContext(Dispatchers.IO) {
         try {
             val subDir = File(context.cacheDir, "subtitles").apply { mkdirs() }
             val safeId = subtitle.id.replace(Regex("[^A-Za-z0-9._-]"), "_")
@@ -684,8 +728,13 @@ object OnlineSubtitleProvider {
                     .header("User-Agent", "TelTV-AndroidTV")
                     .build()
 
-                client.newCall(req).execute().use { resp ->
-                    if (!resp.isSuccessful) return@withContext null
+                val isSubDl = subtitle.id.startsWith("subdl-")
+                (if (isSubDl) subDlClient else client).newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) {
+                        if (isSubDl) onFailure(SubDlSource.errorNotice(resp.code, null)
+                            ?: "SubDL download failed. Try another subtitle source.")
+                        return@withContext null
+                    }
                     val body = resp.body ?: return@withContext null
                     body.byteStream().use { input ->
                         FileOutputStream(temporaryFile).use { output ->
@@ -696,11 +745,20 @@ object OnlineSubtitleProvider {
                                 val count = input.read(buffer)
                                 if (count < 0) break
                                 total += count
-                                if (total > 2 * 1024 * 1024) throw java.io.IOException("Subtitle exceeds 2 MB limit")
+                                if (total > (if (isSubDl) SubDlArchive.MAX_DOWNLOAD else SubDlArchive.MAX_FILE))
+                                    throw java.io.IOException("Subtitle exceeds size limit")
                                 output.write(buffer, 0, count)
                             }
                         }
                     }
+                }
+                if (isSubDl) {
+                    val extracted = SubDlArchive.extract(temporaryFile.readBytes(), subtitle.fileName)
+                    if (extracted == null) {
+                        onFailure("SubDL did not return one safe SRT file. Pick another result or source.")
+                        return@withContext null
+                    }
+                    temporaryFile.writeBytes(extracted)
                 }
                 if (temporaryFile.length() > 0 && temporaryFile.renameTo(targetFile)) targetFile else null
             } finally {
@@ -709,7 +767,8 @@ object OnlineSubtitleProvider {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Timber.e(e, "Failed to download subtitle file: %s", subtitle.url)
+            // Request exceptions may contain sensitive URL query parameters. Never log them.
+            Timber.w("Failed to download subtitle file")
             null
         }
     }

@@ -373,7 +373,10 @@ fun TrackSelectorDialog(
             val outcome = OnlineSubtitleProvider.searchSubtitlesDetailed(
                 rawQuery,
                 activeSubtitleLanguage,
-                queryShowName
+                queryShowName,
+                subDlKey = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { com.velastudio.teltv.util.SubDlKeyStore.read(context) }.getOrDefault("")
+                }
             )
             // Search returns all available languages. Choosing one only filters the list;
             // manual search does not replace the subtitle until a result is clicked.
