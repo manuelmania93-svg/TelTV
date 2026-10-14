@@ -89,7 +89,9 @@ class PlayerFavoriteTest {
         }
         compose.onNodeWithContentDescription("Remove from favorites").assertIsFocused().assertIsDisplayed()
         screenshot("favorite-controls-on")
-        compose.onNodeWithContentDescription("Remove from favorites").performClick()
+        compose.onNodeWithContentDescription("Remove from favorites").performKeyInput {
+            keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
+        }
         compose.onNodeWithContentDescription("Add to favorites").assertExists()
     }
 
