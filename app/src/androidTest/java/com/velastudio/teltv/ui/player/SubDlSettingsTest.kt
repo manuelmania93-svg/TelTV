@@ -1,6 +1,7 @@
 package com.velastudio.teltv.ui.player
 
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -14,7 +15,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class SubDlSettingsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     @Test fun encryptedKeyPersistsAndRemovalDisablesSource() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         try {
@@ -31,17 +32,18 @@ class SubDlSettingsTest {
     @Test fun settingsLayoutAndKeyDialog() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         SubDlKeyStore.save(context, "")
-        compose.setContent { SubDlSettingsSection() }
+        compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        compose.setContent { androidx.tv.material3.MaterialTheme { SubDlSettingsSection() } }
         compose.waitForIdle()
         compose.onNodeWithText("Add API key").performClick()
         compose.onNodeWithText("Cancel").assertExists()
         compose.onNodeWithText("Cancel").performClick()
         compose.waitForIdle()
         // Capture the non-secret settings card, not the protected key entry dialog.
-        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
-            .takeScreenshot().also { bitmap ->
-                val file = java.io.File("/sdcard/Download/subdl-settings.png")
-                java.io.FileOutputStream(file).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-            }
+        val output = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
+            "screencap -p /sdcard/Download/subdl-settings.png")
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(output).use { it.readBytes() }
     }
 }
