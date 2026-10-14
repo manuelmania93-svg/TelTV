@@ -97,6 +97,9 @@ fun PlayerScreen(
     var isBuffering by remember { mutableStateOf(false) }
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember { mutableStateOf(false) }
+    var showPlaybackSpeed by remember(fileId, directUri) { mutableStateOf(false) }
+    // Playback rate is not the subtitle timing scale. Reset only for a different video.
+    var playbackSpeed by remember(fileId, directUri) { mutableStateOf(PlaybackSpeedPolicy.DEFAULT) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
     var autoPlayTriggered by remember(fileId, directUri) { mutableStateOf(false) }
     var autoPlayCancelled by remember(fileId, directUri) { mutableStateOf(false) }
@@ -141,6 +144,7 @@ fun PlayerScreen(
         savedTracks?.let { mc.trackSelectionParameters = it }
         mc.setMediaItem(item, savedPosition)
         mc.prepare()
+        mc.playbackParameters = PlaybackSpeedPolicy.parameters(playbackSpeed)
         mc.playWhenReady = savedPlayIntent
         if (recovering) {
             val ready = withTimeoutOrNull(20_000L) {
@@ -588,8 +592,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(controlsVisible, isPlaying, showTrackSelector) {
-        if (controlsVisible && isPlaying && !showTrackSelector && !showAutoPlayOverlay) {
+    LaunchedEffect(controlsVisible, isPlaying, showTrackSelector, showPlaybackSpeed) {
+        if (controlsVisible && isPlaying && !showTrackSelector && !showPlaybackSpeed && !showAutoPlayOverlay) {
             delay(CONTROLS_AUTO_HIDE_MS)
             controlsVisible = false
         }
@@ -811,13 +815,15 @@ fun PlayerScreen(
             currentPositionMs = currentPositionMs,
             durationMs = durationMs,
             skipIncrementMs = skipIncrementMs,
-            visible = controlsVisible && !showTrackSelector && !showAutoPlayOverlay,
+            visible = controlsVisible && !showTrackSelector && !showPlaybackSpeed && !showAutoPlayOverlay,
             onPlayPause = ::togglePlayPause,
             onSkipBack = { seekRelative(forward = false) },
             onSkipForward = { seekRelative(forward = true) },
             onPlayPrevious = onPlayPrevious,
             onPlayNext = onPlayNext,
             onOpenTracks = { showTrackSelector = true },
+            playbackSpeed = playbackSpeed,
+            onOpenPlaybackSpeed = { showPlaybackSpeed = true },
             onCycleAspectRatio = ::cycleAspectRatio,
             onOpenExternal = if (PlaybackPolicy.canOpenExternally(resolvedUri())) ::openInExternalPlayer else null,
             autoPlayNext = autoPlayNext,
@@ -838,6 +844,26 @@ fun PlayerScreen(
 
         if (isBuffering && playerErrorMessage == null) {
             BufferingIndicator()
+        }
+
+        if (showPlaybackSpeed) {
+            PlaybackSpeedDialog(
+                selected = playbackSpeed,
+                onSelect = { speed ->
+                    controller?.takeIf { it.isConnected }?.let { mc ->
+                        mc.playbackParameters = PlaybackSpeedPolicy.parameters(speed)
+                        playbackSpeed = mc.playbackParameters.speed
+                    }
+                    showPlaybackSpeed = false
+                    controlsVisible = true
+                    runCatching { playPauseFocusRequester.requestFocus() }
+                },
+                onDismiss = {
+                    showPlaybackSpeed = false
+                    controlsVisible = true
+                    runCatching { playPauseFocusRequester.requestFocus() }
+                }
+            )
         }
 
         if (showTrackSelector) {
