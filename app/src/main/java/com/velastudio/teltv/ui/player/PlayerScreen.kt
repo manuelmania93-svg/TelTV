@@ -292,9 +292,10 @@ fun PlayerScreen(
         val startedUri = mediaController.currentMediaItem?.localConfiguration?.uri
         val startedVideo = resolvedUri()
         seekingText = "Downloading ${sub.langDisplay}..."
-        val file = OnlineSubtitleProvider.downloadSubtitle(context, sub)
+        var downloadError: String? = null
+        val file = OnlineSubtitleProvider.downloadSubtitle(context, sub) { downloadError = it }
         if (file == null || !file.exists()) {
-            seekingText = "Failed to download subtitle"
+            seekingText = downloadError ?: "Failed to download subtitle"
             return false
         }
         val subtitleId = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -371,7 +372,7 @@ fun PlayerScreen(
         if (confirmed) {
             return if (stillCurrent() && attachOnlineSubtitle(sub, revision))
                 com.velastudio.teltv.sync.SubtitlePickResult.Applied("Selected manually")
-            else com.velastudio.teltv.sync.SubtitlePickResult.Failed("Video changed or download failed")
+            else com.velastudio.teltv.sync.SubtitlePickResult.Failed(seekingText ?: "Video changed or download failed")
         }
         val length = durationMs.takeIf { it > 0 } ?: controller?.duration?.takeIf { it > 0 } ?: 0L
         val app = context.applicationContext as com.velastudio.teltv.TelTvApp
@@ -389,9 +390,11 @@ fun PlayerScreen(
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             val result = com.velastudio.teltv.sync.SubtitleCandidateVerifier.check(context, candidate, candidates, length, speech)
             if (!stillCurrent()) return com.velastudio.teltv.sync.SubtitlePickResult.Failed("Video or audio track changed; check discarded")
+            if (result.rejected && result.message.startsWith("SubDL"))
+                return com.velastudio.teltv.sync.SubtitlePickResult.Failed(result.message)
             if (result.confident) {
                 return if (attachOnlineSubtitle(candidate, revision)) com.velastudio.teltv.sync.SubtitlePickResult.Applied(result.message)
-                    else com.velastudio.teltv.sync.SubtitlePickResult.Failed("Download failed")
+                    else com.velastudio.teltv.sync.SubtitlePickResult.Failed(seekingText ?: "Download failed")
             }
             if (!result.rejected && uncertain == null) uncertain = candidate to result.message
         }
@@ -409,7 +412,10 @@ fun PlayerScreen(
             controller?.playbackState != Player.STATE_READY) delay(100)
         if (subtitleSelectionRevision != revision) return@LaunchedEffect
         try {
-            val result = OnlineSubtitleProvider.searchSubtitlesDetailed(title, language, showName)
+            val result = OnlineSubtitleProvider.searchSubtitlesDetailed(title, language, showName,
+                subDlKey = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching { com.velastudio.teltv.util.SubDlKeyStore.read(context) }.getOrDefault("")
+                })
             if (resolvedUri() != started || subtitleSelectionRevision != revision) return@LaunchedEffect
             // Several shows or episode readings are mixed in the list: the user picks, never auto-attach.
             val best = if (result.ambiguous) null else SubtitleSelectionPolicy.best(result.subtitles, language)

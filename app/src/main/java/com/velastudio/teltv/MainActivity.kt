@@ -1040,6 +1040,9 @@ class MainActivity : ComponentActivity() {
                             )
                             }
                             item {
+                                com.velastudio.teltv.ui.settings.SubDlSettingsSection()
+                            }
+                            item {
                             PerformanceSettingsSection(
                                 fastModeEnabled = fastModeEnabled,
                                 onToggleFastMode = { enabled -> scope.launch { playbackPrefs.setFastModeEnabled(enabled) } }
