@@ -48,7 +48,7 @@ class PlaybackSpeedUiTest {
         compose.onNodeWithText("Selected: 1x").assertIsFocused()
         compose.onNodeWithText("4x").assertExists()
         screenshot("playback-speed-menu")
-        repeat(5) {
+        repeat(6) {
             compose.onNodeWithText("Playback speed").performKeyInput {
                 keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
             }

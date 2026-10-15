@@ -15,7 +15,7 @@ internal object PlaybackPolicy {
 /** Media3 advances audio, video and subtitle cues on the same media clock. */
 internal object PlaybackSpeedPolicy {
     const val DEFAULT = 1f
-    val options = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f)
+    val options = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f, 4f)
 
     fun parameters(speed: Float) = androidx.media3.common.PlaybackParameters(
         speed.takeIf { it in options } ?: DEFAULT,
