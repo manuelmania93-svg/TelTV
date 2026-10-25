@@ -21,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -454,27 +456,51 @@ private fun ContinueWatchingRow(
     }
 
     selectedEntry?.let { entry ->
-        androidx.compose.ui.window.Dialog(onDismissRequest = { selectedEntry = null }) {
-            Card(onClick = {}) {
-                Column(Modifier.width(440.dp).padding(24.dp)) {
-                    Text("Remove video?", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(8.dp))
-                    Text(entry.title, maxLines = 2, color = TelTvMuted)
-                    Spacer(Modifier.height(20.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(onClick = {
-                            onRemove?.invoke(entry.mediaId)
-                            selectedEntry = null
-                        }) {
-                            Text(removeActionLabel)
-                        }
-                        OutlinedButton(onClick = { selectedEntry = null }) {
-                            Text("Cancel")
-                        }
+        RemoveEntryDialog(
+            title = entry.title,
+            actionLabel = removeActionLabel,
+            onRemove = {
+                onRemove?.invoke(entry.mediaId)
+                selectedEntry = null
+            },
+            onDismiss = { selectedEntry = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+internal fun RemoveEntryDialog(
+    title: String,
+    actionLabel: String,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val removeFocus = remember { FocusRequester() }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        // The container must not be clickable/focusable: the old Card(onClick = {}) was
+        // itself a D-pad focus target, so focus landed on the dialog background and
+        // directional search could never reach the buttons inside it (only Back worked).
+        Surface(shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.width(440.dp).padding(24.dp)) {
+                Text("Remove video?", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                Text(title, maxLines = 2, color = TelTvMuted)
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = onRemove,
+                        modifier = Modifier.focusRequester(removeFocus)
+                    ) {
+                        Text(actionLabel)
+                    }
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("Cancel")
                     }
                 }
             }
         }
+        LaunchedEffect(Unit) { removeFocus.requestFocus() }
     }
 }
 
