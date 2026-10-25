@@ -10,6 +10,7 @@ import kotlinx.coroutines.ensureActive
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -789,7 +790,13 @@ class MainActivity : ComponentActivity() {
                         )
                     ) { backStackEntry ->
                         val initialMediaId = URLDecoder.decode(backStackEntry.arguments?.getString("mediaId") ?: "", "UTF-8")
-                        var currentMediaId by remember(initialMediaId) { mutableStateOf(initialMediaId) }
+                        // Saveable so a process-death back-stack restore comes back with the episode
+                        // the chain actually reached, not the route's original argument.
+                        var currentMediaId by rememberSaveable(initialMediaId) { mutableStateOf(initialMediaId) }
+                        // True only after prev/next inside a live session (plain remember on purpose:
+                        // a process-death restore must NOT count as a transition, so the restored
+                        // episode resumes at its stored position).
+                        var arrivedViaTransition by remember { mutableStateOf(false) }
                         val playlistId = backStackEntry.arguments
                             ?.takeIf { it.containsKey("playlistId") }
                             ?.getString("playlistId")?.toLongOrNull()
@@ -809,7 +816,7 @@ class MainActivity : ComponentActivity() {
                             isResolving = true
                             fileId = null // Clear stale fileId so previous episode is not passed downstream
                             val existingState = app.database.watchStateDao().get(currentMediaId)
-                            resumeMs = if (currentMediaId != initialMediaId) 0L else (existingState?.positionMs ?: 0L)
+                            resumeMs = if (arrivedViaTransition) 0L else (existingState?.positionMs ?: 0L)
                             val cachedEntity = app.database.videoIndexDao().getByMediaId(currentMediaId)
                             title = cachedEntity?.title ?: existingState?.title?.ifBlank { null } ?: currentMediaId
 
@@ -901,13 +908,13 @@ class MainActivity : ComponentActivity() {
                             favoriteMediaId = playbackMediaId,
                             onPlayPrevious = prevEntity?.let { prev ->
                                 {
-                                    resumeMs = 0L
+                                    arrivedViaTransition = true
                                     currentMediaId = prev.mediaId
                                 }
                             },
                             onPlayNext = nextEntity?.let { next ->
                                 {
-                                    resumeMs = 0L
+                                    arrivedViaTransition = true
                                     currentMediaId = next.mediaId
                                 }
                             },
