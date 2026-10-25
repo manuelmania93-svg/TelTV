@@ -476,7 +476,10 @@ internal fun RemoveEntryDialog(
     onRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val removeFocus = remember { FocusRequester() }
+    // Initial focus goes to Cancel: the dialog's action removes the entry and its saved
+    // progress, so the destructive button should be one deliberate D-pad-left away,
+    // not the thing a quick OK press activates.
+    val cancelFocus = remember { FocusRequester() }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         // The container must not be clickable/focusable: the old Card(onClick = {}) was
         // itself a D-pad focus target, so focus landed on the dialog background and
@@ -488,19 +491,19 @@ internal fun RemoveEntryDialog(
                 Text(title, maxLines = 2, color = TelTvMuted)
                 Spacer(Modifier.height(20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = onRemove,
-                        modifier = Modifier.focusRequester(removeFocus)
-                    ) {
+                    Button(onClick = onRemove) {
                         Text(actionLabel)
                     }
-                    OutlinedButton(onClick = onDismiss) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.focusRequester(cancelFocus)
+                    ) {
                         Text("Cancel")
                     }
                 }
             }
         }
-        LaunchedEffect(Unit) { removeFocus.requestFocus() }
+        LaunchedEffect(Unit) { cancelFocus.requestFocus() }
     }
 }
 
