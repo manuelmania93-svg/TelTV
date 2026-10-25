@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.input.key.Key
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import android.os.ParcelFileDescriptor.AutoCloseInputStream
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -21,6 +22,16 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class RemoveEntryDialogTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    private fun screenshot(name: String) {
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(250)
+        val device = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val output = device.executeShellCommand("screencap -p /sdcard/Download/$name.png")
+        AutoCloseInputStream(output).use { it.readBytes() }
+    }
 
     private fun showDialog(onRemove: () -> Unit = {}, onDismiss: () -> Unit = {}) {
         compose.setContent {
@@ -43,23 +54,30 @@ class RemoveEntryDialogTest {
         compose.waitForIdle()
     }
 
-    @Test fun removeButtonHasInitialFocus() {
+    @Test fun cancelButtonHasInitialFocusAndDialogRenders() {
         showDialog()
-        compose.onNodeWithText("Remove from history").assertIsFocused()
+        // Non-destructive default: Cancel is focused first; Remove is one D-pad-left away.
+        compose.onNodeWithText("Cancel").assertIsFocused()
+        compose.onNodeWithText("Remove video?").assertIsDisplayed()
+        compose.onNodeWithText("Remove from history").assertIsDisplayed()
+        screenshot("remove-entry-dialog")
     }
 
-    @Test fun dpadMovesBetweenRemoveAndCancel() {
+    @Test fun dpadMovesBetweenCancelAndRemove() {
         showDialog()
-        compose.onNodeWithText("Remove from history").assertIsFocused()
-        dpad(Key.DirectionRight)
         compose.onNodeWithText("Cancel").assertIsFocused()
         dpad(Key.DirectionLeft)
         compose.onNodeWithText("Remove from history").assertIsFocused()
+        dpad(Key.DirectionRight)
+        compose.onNodeWithText("Cancel").assertIsFocused()
+        screenshot("remove-entry-dialog-remove-focused")
     }
 
     @Test fun dpadCenterOnRemoveInvokesRemove() {
         var removed = false
         showDialog(onRemove = { removed = true })
+        dpad(Key.DirectionLeft)
+        compose.onNodeWithText("Remove from history").assertIsFocused()
         compose.onNodeWithText("Remove from history").performKeyInput {
             keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
         }
@@ -71,7 +89,6 @@ class RemoveEntryDialogTest {
         var removed = false
         var dismissed = false
         showDialog(onRemove = { removed = true }, onDismiss = { dismissed = true })
-        dpad(Key.DirectionRight)
         compose.onNodeWithText("Cancel").assertIsFocused()
         compose.onNodeWithText("Cancel").performKeyInput {
             keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
