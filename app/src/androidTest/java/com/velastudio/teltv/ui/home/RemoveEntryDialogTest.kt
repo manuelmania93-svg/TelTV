@@ -102,8 +102,10 @@ class RemoveEntryDialogTest {
         var removed = false
         var dismissed = false
         showDialog(onRemove = { removed = true }, onDismiss = { dismissed = true })
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            compose.activity.onBackPressedDispatcher.onBackPressed()
+        // Inject the real BACK key event the way a TV remote sends it; calling the
+        // activity's OnBackPressedDispatcher directly does not reach the dialog.
+        compose.onNodeWithText("Remove video?").performKeyInput {
+            keyDown(Key.Back); keyUp(Key.Back)
         }
         compose.waitForIdle()
         assertTrue(dismissed)
