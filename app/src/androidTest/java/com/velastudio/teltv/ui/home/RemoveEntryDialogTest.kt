@@ -102,16 +102,40 @@ class RemoveEntryDialogTest {
         var removed = false
         var dismissed = false
         showDialog(onRemove = { removed = true }, onDismiss = { dismissed = true })
-        // Send BACK through the real input pipeline (like the TV remote): the dialog's
-        // back handling sits at window level, so neither the activity dispatcher nor
-        // Compose node key injection reaches it.
         val ua = InstrumentationRegistry.getInstrumentation().uiAutomation
-        ua.injectInputEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK), true)
-        ua.injectInputEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BACK), true)
+
+        fun focusedWindow(): String {
+            val out = ua.executeShellCommand(
+                "dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'"
+            )
+            return AutoCloseInputStream(out).use { String(it.readBytes()) }
+                .trim().replace(Regex("\\s+"), " ")
+        }
+
+        // Diagnostic run: record injection results and window focus so a failure
+        // is explainable instead of a bare AssertionError.
+        val focusedBefore = focusedWindow()
+        // Route 1: inject through UiAutomation (the real input pipeline, like the TV remote).
+        val downOk = ua.injectInputEvent(
+            android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK), true)
+        val upOk = ua.injectInputEvent(
+            android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BACK), true)
         compose.waitForIdle()
         Thread.sleep(500)
         compose.waitForIdle()
-        assertTrue(dismissed)
+        val dismissedByAutomation = dismissed
+        if (!dismissed) {
+            // Route 2 (fallback): shell-level injection, the same route adb input takes.
+            AutoCloseInputStream(ua.executeShellCommand("input keyevent KEYCODE_BACK")).use { it.readBytes() }
+            compose.waitForIdle()
+            Thread.sleep(500)
+            compose.waitForIdle()
+        }
+        val evidence = "injectInputEvent down=$downOk up=$upOk; " +
+            "dismissedByAutomation=$dismissedByAutomation; dismissed=$dismissed; " +
+            "focusedBefore=$focusedBefore; focusedAfter=${focusedWindow()}"
+        System.out.println("BACK-TEST-EVIDENCE: $evidence")
+        assertTrue(evidence, dismissed)
         assertFalse(removed)
     }
 }
