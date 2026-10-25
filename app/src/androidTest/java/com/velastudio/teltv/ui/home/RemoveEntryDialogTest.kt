@@ -102,11 +102,14 @@ class RemoveEntryDialogTest {
         var removed = false
         var dismissed = false
         showDialog(onRemove = { removed = true }, onDismiss = { dismissed = true })
-        // Inject the real BACK key event the way a TV remote sends it; calling the
-        // activity's OnBackPressedDispatcher directly does not reach the dialog.
-        compose.onNodeWithText("Remove video?").performKeyInput {
-            keyDown(Key.Back); keyUp(Key.Back)
-        }
+        // Send BACK through the real input pipeline (like the TV remote): the dialog's
+        // back handling sits at window level, so neither the activity dispatcher nor
+        // Compose node key injection reaches it.
+        val ua = InstrumentationRegistry.getInstrumentation().uiAutomation
+        ua.injectInputEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK), true)
+        ua.injectInputEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BACK), true)
+        compose.waitForIdle()
+        Thread.sleep(500)
         compose.waitForIdle()
         assertTrue(dismissed)
         assertFalse(removed)
