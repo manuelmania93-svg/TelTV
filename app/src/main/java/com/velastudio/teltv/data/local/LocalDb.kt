@@ -36,6 +36,9 @@ data class WatchStateEntity(
     val chatId: Long? = null,
     val thumbnailFileId: Int? = null,
     val streamUrl: String = "",
+    // Channel/topic name captured at playback time: the user's rule is that the channel/topic
+    // name is the only reliable show identity, so poster lookups for history cards use it first.
+    val showName: String? = null,
     // true once positionMs is within FINISHED_THRESHOLD of durationMs -- excluded from
     // "Continue Watching" (nothing left to continue) but still counts for "recently watched".
     val finished: Boolean = false
@@ -324,7 +327,7 @@ interface PlaylistDao {
         PlaylistEntity::class,
         PlaylistItemEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class TelTvDatabase : RoomDatabase() {
@@ -354,6 +357,11 @@ abstract class TelTvDatabase : RoomDatabase() {
                             db.execSQL("ALTER TABLE channel_sync_state ADD COLUMN refreshCursor INTEGER NOT NULL DEFAULT 0")
                             db.execSQL("ALTER TABLE channel_sync_state ADD COLUMN refreshBoundary INTEGER NOT NULL DEFAULT 0")
                             db.execSQL("ALTER TABLE channel_sync_state ADD COLUMN refreshInserted INTEGER NOT NULL DEFAULT 0")
+                        }
+                    })
+                    .addMigrations(object : androidx.room.migration.Migration(5, 6) {
+                        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            db.execSQL("ALTER TABLE watch_state ADD COLUMN showName TEXT")
                         }
                     })
                     .fallbackToDestructiveMigration()

@@ -151,7 +151,8 @@ class MainActivity : ComponentActivity() {
                                         mediaId = it.mediaId,
                                         title = it.title,
                                         progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                        thumbnailFileId = it.thumbnailFileId
+                                        thumbnailFileId = it.thumbnailFileId,
+                                        showName = it.showName
                                     )
                                 }
                                 recentlyWatched = watchDao.recentlyWatched(limit = 20).map {
@@ -159,7 +160,8 @@ class MainActivity : ComponentActivity() {
                                         mediaId = it.mediaId,
                                         title = it.title,
                                         progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                        thumbnailFileId = it.thumbnailFileId
+                                        thumbnailFileId = it.thumbnailFileId,
+                                        showName = it.showName
                                     )
                                 }
                                 favorites = app.database.watchlistDao().getAll().mapNotNull { saved ->
@@ -616,6 +618,7 @@ class MainActivity : ComponentActivity() {
                                                 title = media.title,
                                                 subtitle = media.subtitle,
                                                 thumbnailFileId = com.velastudio.teltv.ui.common.parseThumbnailFileId(media.thumbnailUrl),
+                                                showName = title,
                                                 finished = true
                                             )
                                         )
@@ -929,6 +932,7 @@ class MainActivity : ComponentActivity() {
                                             durationMs = durationMs,
                                             lastWatchedEpochSec = System.currentTimeMillis() / 1000,
                                             title = savedTitle,
+                                            showName = finalShowName,
                                             finished = durationMs > 0 && positionMs >= durationMs * 0.95
                                         )
                                     )
