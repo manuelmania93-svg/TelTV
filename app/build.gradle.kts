@@ -17,8 +17,8 @@ android {
         targetSdk = 34
         // CI stamps a unique, increasing versionCode/versionName per build via
         // -PciVersionCode/-PciVersionName (see build.yml); local builds use these fallbacks.
-        versionCode = (project.findProperty("ciVersionCode") as String?)?.toIntOrNull() ?: 88
-        versionName = (project.findProperty("ciVersionName") as String?) ?: "0.3.59"
+        versionCode = (project.findProperty("ciVersionCode") as String?)?.toIntOrNull() ?: 89
+        versionName = (project.findProperty("ciVersionName") as String?) ?: "0.3.60"
 
         // TMDB v3 API key comes from local.properties (TMDB_API_KEY=...) or the
         // TMDB_API_KEY environment variable. It is never committed.

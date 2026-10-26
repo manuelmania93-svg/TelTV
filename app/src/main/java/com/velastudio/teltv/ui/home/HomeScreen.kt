@@ -86,6 +86,7 @@ fun HomeScreen(
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
     var filterMode by remember { mutableStateOf(HomeFilterMode.ALL) }
+    var removeRequest by remember { mutableStateOf<RemoveRequest?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -234,8 +235,7 @@ fun HomeScreen(
                     entries = continueWatching,
                     thumbnailLoader = thumbnailLoader,
                     onResumeWatching = onResumeWatching,
-                    onRemove = onRemoveFromHistory,
-                    removeActionLabel = "Remove from Continue Watching"
+                    onRemove = { entry -> removeRequest = RemoveRequest(entry, "Remove from Continue Watching", onRemoveFromHistory) }
                 )
             }
         }
@@ -247,8 +247,7 @@ fun HomeScreen(
                     thumbnailLoader = thumbnailLoader,
                     onResumeWatching = onResumeWatching,
                     title = "Watch History",
-                    onRemove = onRemoveFromHistory,
-                    removeActionLabel = "Remove from history"
+                    onRemove = { entry -> removeRequest = RemoveRequest(entry, "Remove from history", onRemoveFromHistory) }
                 )
             }
         }
@@ -260,8 +259,7 @@ fun HomeScreen(
                     thumbnailLoader = thumbnailLoader,
                     onResumeWatching = onResumeWatching,
                     title = "Favorites",
-                    onRemove = onRemoveFavorite,
-                    removeActionLabel = "Remove favorite"
+                    onRemove = { entry -> removeRequest = RemoveRequest(entry, "Remove favorite", onRemoveFavorite) }
                 )
             }
         }
@@ -401,6 +399,15 @@ fun HomeScreen(
             onConfirm = onQuickClearCache
         )
     }
+
+    removeRequest?.let { req ->
+        RemoveEntryDialog(
+            title = req.entry.title,
+            actionLabel = req.actionLabel,
+            onRemove = { req.onRemove(req.entry.mediaId) },
+            onDismiss = { removeRequest = null }
+        )
+    }
 }
 
 @Composable
@@ -434,10 +441,8 @@ private fun ContinueWatchingRow(
     thumbnailLoader: ThumbnailLoader,
     onResumeWatching: (mediaId: String) -> Unit,
     title: String = "Continue Watching",
-    onRemove: ((mediaId: String) -> Unit)? = null,
-    removeActionLabel: String = "Remove"
+    onRemove: ((ContinueWatchingEntry) -> Unit)? = null
 ) {
-    var selectedEntry by remember { mutableStateOf<ContinueWatchingEntry?>(null) }
 
     Column {
         Text(
@@ -457,24 +462,19 @@ private fun ContinueWatchingRow(
                     enableTmdb = true,
                     fallbackTitle = entry.showName,
                     onClick = { onResumeWatching(entry.mediaId) },
-                    onLongClick = if (onRemove != null) ({ selectedEntry = entry }) else null
+                    onLongClick = if (onRemove != null) ({ onRemove(entry) }) else null
                 )
             }
         }
     }
 
-    selectedEntry?.let { entry ->
-        RemoveEntryDialog(
-            title = entry.title,
-            actionLabel = removeActionLabel,
-            onRemove = {
-                onRemove?.invoke(entry.mediaId)
-                selectedEntry = null
-            },
-            onDismiss = { selectedEntry = null }
-        )
-    }
 }
+
+private data class RemoveRequest(
+    val entry: ContinueWatchingEntry,
+    val actionLabel: String,
+    val onRemove: (mediaId: String) -> Unit
+)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -484,80 +484,39 @@ internal fun RemoveEntryDialog(
     onRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Selection is tracked explicitly instead of relying on Compose focus alone: on the
-    // real TV the focus request raced the dialog window, no button ever showed a focused
-    // state, and D-pad presses could not activate anything (only Back worked). Handling
-    // the D-pad ourselves makes Cancel/Remove reachable no matter where the window puts
-    // the initial focus, and the yellow highlight shows the selection from the couch.
-    // Cancel is the default: the destructive action stays one deliberate D-pad-Left away.
-    val removeSelected = remember { mutableStateOf(false) }
-    val cancelFocus = remember { FocusRequester() }
-    val removeFocus = remember { FocusRequester() }
-
-    fun select(remove: Boolean) {
-        removeSelected.value = remove
-        runCatching { (if (remove) removeFocus else cancelFocus).requestFocus() }
-    }
+    val initialFocus = remember { FocusRequester() }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        // The container must not be clickable/focusable: the old Card(onClick = {}) was
-        // itself a D-pad focus target, so focus landed on the dialog background and
-        // directional search could never reach the buttons inside it (only Back worked).
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                when (event.key) {
-                    Key.DirectionLeft, Key.DirectionRight -> {
-                        select(!removeSelected.value)
-                        true
-                    }
-                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                        if (removeSelected.value) onRemove() else onDismiss()
-                        true
-                    }
-                    else -> false
-                }
-            }
+        Box(
+            modifier = Modifier
+                .width(440.dp)
+                .background(Color(0xFF222222), RoundedCornerShape(16.dp))
+                .padding(24.dp)
         ) {
-            Column(Modifier.width(440.dp).padding(24.dp)) {
-                Text("Remove video?", style = MaterialTheme.typography.titleLarge)
+            Column {
+                Text("Remove video?", style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Spacer(Modifier.height(8.dp))
                 Text(title, maxLines = 2, color = TelTvMuted)
                 Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Button(
-                        onClick = onRemove,
-                        modifier = Modifier
-                            .focusRequester(removeFocus)
-                            .then(
-                                if (removeSelected.value) {
-                                    Modifier.border(3.dp, TelTvYellow, RoundedCornerShape(50))
-                                } else {
-                                    Modifier
-                                }
-                            )
+                        onClick = { onRemove(); onDismiss() }
                     ) {
                         Text(actionLabel)
                     }
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .focusRequester(cancelFocus)
-                            .then(
-                                if (!removeSelected.value) {
-                                    Modifier.border(3.dp, TelTvYellow, RoundedCornerShape(50))
-                                } else {
-                                    Modifier
-                                }
-                            )
+                        modifier = Modifier.focusRequester(initialFocus)
                     ) {
                         Text("Cancel")
                     }
                 }
             }
         }
-        LaunchedEffect(Unit) { select(false) }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(50) // Window attach barrier
+            runCatching { initialFocus.requestFocus() }
+        }
     }
 }
 
