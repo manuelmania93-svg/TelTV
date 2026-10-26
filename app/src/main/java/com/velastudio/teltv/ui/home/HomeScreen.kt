@@ -48,7 +48,8 @@ data class ContinueWatchingEntry(
     val mediaId: String,
     val title: String,
     val progressFraction: Float,
-    val thumbnailFileId: Int? = null
+    val thumbnailFileId: Int? = null,
+    val showName: String? = null
 )
 
 enum class HomeFilterMode { ALL, PINNED_ONLY, FOLDERS_ONLY }
@@ -448,6 +449,7 @@ private fun ContinueWatchingRow(
                     thumbnailLoader = thumbnailLoader,
                     resumeFraction = entry.progressFraction,
                     enableTmdb = true,
+                    fallbackTitle = entry.showName,
                     onClick = { onResumeWatching(entry.mediaId) },
                     onLongClick = if (onRemove != null) ({ selectedEntry = entry }) else null
                 )
