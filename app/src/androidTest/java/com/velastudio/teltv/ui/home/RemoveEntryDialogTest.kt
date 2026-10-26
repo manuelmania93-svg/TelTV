@@ -138,4 +138,64 @@ class RemoveEntryDialogTest {
         assertTrue(evidence, dismissed)
         assertFalse(removed)
     }
+
+    @Test fun singleOkPressActivatesExactlyOnce() {
+        var dismissCount = 0
+        showDialog(onDismiss = { dismissCount++ })
+        compose.onNodeWithText("Cancel").assertIsFocused()
+        // One full press (down + up) must activate the selection exactly once; a stray
+        // key-up must not re-trigger the action.
+        compose.onNodeWithText("Cancel").performKeyInput {
+            keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
+        }
+        compose.waitForIdle()
+        assertEquals(1, dismissCount)
+    }
+
+    @Test fun dpadRightAlsoMovesSelectionToRemove() {
+        showDialog()
+        compose.onNodeWithText("Cancel").assertIsFocused()
+        dpad(Key.DirectionRight)
+        compose.onNodeWithText("Remove from history").assertIsFocused()
+        screenshot("remove-entry-dialog-remove-selected-right")
+    }
+
+    @Test fun upDownKeysNeitherActivateNorDismiss() {
+        var removed = false
+        var dismissed = false
+        showDialog(onRemove = { removed = true }, onDismiss = { dismissed = true })
+        dpad(Key.DirectionUp)
+        dpad(Key.DirectionDown)
+        compose.waitForIdle()
+        assertFalse(removed)
+        assertFalse(dismissed)
+        compose.onNodeWithText("Remove video?").assertIsDisplayed()
+    }
+
+    @Test fun dpadKeysDoNotReachContentBehindDialog() {
+        var backgroundClicks = 0
+        var dismissed = false
+        compose.setContent {
+            androidx.tv.material3.MaterialTheme {
+                androidx.compose.material3.Button(onClick = { backgroundClicks++ }) {
+                    androidx.compose.material3.Text("background-action")
+                }
+                RemoveEntryDialog(
+                    title = "Some Episode - S01E01",
+                    actionLabel = "Remove from history",
+                    onRemove = {},
+                    onDismiss = { dismissed = true }
+                )
+            }
+        }
+        compose.waitForIdle()
+        dpad(Key.DirectionLeft)
+        dpad(Key.DirectionRight)
+        compose.onNodeWithText("Cancel").performKeyInput {
+            keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
+        }
+        compose.waitForIdle()
+        assertTrue(dismissed)
+        assertEquals(0, backgroundClicks)
+    }
 }
