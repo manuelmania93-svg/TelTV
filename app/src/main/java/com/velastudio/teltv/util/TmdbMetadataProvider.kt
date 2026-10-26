@@ -92,11 +92,30 @@ object TmdbMetadataProvider {
             score = maxOf(score, 0.6 + 0.3 * coverage)
         }
         when (yearAgreement(query, candidate.year)) {
-            true -> score += 0.15
+            // The bonus requires the candidate name to explain every query token apart from
+            // the year: otherwise a range-formatted series year ("2015-2019") rescues a
+            // wrong-type hit whose distinguishing tokens are missing - Cinemeta's year-less
+            // "Guardians of the Galaxy: Vol. 2" movie lost to the 2015-2019 animated series
+            // for the query "Guardians of the Galaxy Vol 2 - 2017" purely because 2017 lies
+            // inside the series' run range. A conflicting year stays damning even then, so
+            // same-name different-era hits keep falling back to the Telegram thumbnail.
+            true -> if (coversQueryTokensApartFromYear(query, candidate)) score += 0.15
             false -> score -= 0.3
             null -> Unit
         }
         return score
+    }
+
+    /**
+     * True when every query token apart from a 4-digit year appears (fuzzy) in the candidate
+     * name - i.e. the name explains the whole query, so a matching year is evidence FOR this
+     * candidate instead of a coincidence (a movie year inside an unrelated series' run range).
+     */
+    internal fun coversQueryTokensApartFromYear(query: String, candidate: MetaCandidate): Boolean {
+        val withoutYear = QUERY_YEAR_REGEX.replace(query, " ")
+        val tokens = withoutYear.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return true
+        return tokens.all { ShowNameMatcher.bestWordSimilarity(it, candidate.name) >= 0.8 }
     }
 
     /** Best-scoring candidate at or above [minScore], or null when nothing is a trustworthy match. */

@@ -146,24 +146,32 @@ class MainActivity : ComponentActivity() {
                         val refreshWatchShelves: suspend () -> Unit = {
                             runCatching {
                                 val watchDao = app.database.watchStateDao()
-                                continueWatching = watchDao.continueWatching().map {
-                                    ContinueWatchingEntry(
-                                        mediaId = it.mediaId,
-                                        title = it.title,
-                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                        thumbnailFileId = it.thumbnailFileId,
-                                        showName = it.showName
-                                    )
+                                val continueRows = watchDao.continueWatching()
+                                val recentRows = watchDao.recentlyWatched(limit = 20)
+                                // watch_state rows predate thumbnail persistence (and the playback
+                                // save path does not rewrite it), so without this backfill a
+                                // rejected poster match left history cards with no image at all.
+                                val missingThumbIds = (continueRows + recentRows)
+                                    .filter { it.thumbnailFileId == null }
+                                    .map { it.mediaId }
+                                    .distinct()
+                                val backfilledThumbs = if (missingThumbIds.isEmpty()) {
+                                    emptyMap()
+                                } else {
+                                    app.database.videoIndexDao().thumbnailsFor(missingThumbIds)
+                                        .mapNotNull { row -> row.thumbnailFileId?.let { row.mediaId to it } }
+                                        .toMap()
                                 }
-                                recentlyWatched = watchDao.recentlyWatched(limit = 20).map {
+                                fun com.velastudio.teltv.data.local.WatchStateEntity.toShelfEntry() =
                                     ContinueWatchingEntry(
-                                        mediaId = it.mediaId,
-                                        title = it.title,
-                                        progressFraction = if (it.durationMs > 0) it.positionMs.toFloat() / it.durationMs else 0f,
-                                        thumbnailFileId = it.thumbnailFileId,
-                                        showName = it.showName
+                                        mediaId = mediaId,
+                                        title = title,
+                                        progressFraction = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f,
+                                        thumbnailFileId = thumbnailFileId ?: backfilledThumbs[mediaId],
+                                        showName = showName
                                     )
-                                }
+                                continueWatching = continueRows.map { it.toShelfEntry() }
+                                recentlyWatched = recentRows.map { it.toShelfEntry() }
                                 favorites = app.database.watchlistDao().getAll().mapNotNull { saved ->
                                     app.database.videoIndexDao().getByMediaId(saved.mediaId)?.let { video ->
                                         ContinueWatchingEntry(

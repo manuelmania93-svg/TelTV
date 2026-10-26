@@ -44,6 +44,9 @@ data class WatchStateEntity(
     val finished: Boolean = false
 )
 
+/** mediaId -> thumbnail projection for history-shelf backfill. */
+data class MediaThumbnail(val mediaId: String, val thumbnailFileId: Int?)
+
 /** Locally persisted favorite/watchlist item. */
 @Entity(tableName = "watchlist")
 data class WatchlistEntity(
@@ -201,6 +204,14 @@ interface VideoIndexDao {
 
     @Query("SELECT * FROM video_index WHERE mediaId = :mediaId")
     suspend fun getByMediaId(mediaId: String): VideoIndexEntity?
+
+    /**
+     * Thumbnails for a batch of videos, used to backfill history shelves: watch_state rows
+     * predate thumbnail persistence and the playback save path does not rewrite it, so the
+     * Telegram-thumbnail fallback for rejected poster matches reads from the video index.
+     */
+    @Query("SELECT mediaId, thumbnailFileId FROM video_index WHERE mediaId IN (:mediaIds)")
+    suspend fun thumbnailsFor(mediaIds: List<String>): List<MediaThumbnail>
 
     /** Reverse lookup used by the playback storage guard to map a playing tdlib:// URI back to its mediaId. */
     @Query("SELECT * FROM video_index WHERE streamUrl = :streamUrl")
