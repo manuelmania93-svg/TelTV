@@ -1,6 +1,12 @@
 package com.velastudio.teltv.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -478,34 +484,80 @@ internal fun RemoveEntryDialog(
     onRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Initial focus goes to Cancel: the dialog's action removes the entry and its saved
-    // progress, so the destructive button should be one deliberate D-pad-left away,
-    // not the thing a quick OK press activates.
+    // Selection is tracked explicitly instead of relying on Compose focus alone: on the
+    // real TV the focus request raced the dialog window, no button ever showed a focused
+    // state, and D-pad presses could not activate anything (only Back worked). Handling
+    // the D-pad ourselves makes Cancel/Remove reachable no matter where the window puts
+    // the initial focus, and the yellow highlight shows the selection from the couch.
+    // Cancel is the default: the destructive action stays one deliberate D-pad-Left away.
+    val removeSelected = remember { mutableStateOf(false) }
     val cancelFocus = remember { FocusRequester() }
+    val removeFocus = remember { FocusRequester() }
+
+    fun select(remove: Boolean) {
+        removeSelected.value = remove
+        runCatching { (if (remove) removeFocus else cancelFocus).requestFocus() }
+    }
+
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         // The container must not be clickable/focusable: the old Card(onClick = {}) was
         // itself a D-pad focus target, so focus landed on the dialog background and
         // directional search could never reach the buttons inside it (only Back worked).
-        Surface(shape = RoundedCornerShape(16.dp)) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                when (event.key) {
+                    Key.DirectionLeft, Key.DirectionRight -> {
+                        select(!removeSelected.value)
+                        true
+                    }
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                        if (removeSelected.value) onRemove() else onDismiss()
+                        true
+                    }
+                    else -> false
+                }
+            }
+        ) {
             Column(Modifier.width(440.dp).padding(24.dp)) {
                 Text("Remove video?", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(title, maxLines = 2, color = TelTvMuted)
                 Spacer(Modifier.height(20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onRemove) {
+                    Button(
+                        onClick = onRemove,
+                        modifier = Modifier
+                            .focusRequester(removeFocus)
+                            .then(
+                                if (removeSelected.value) {
+                                    Modifier.border(3.dp, TelTvYellow, RoundedCornerShape(50))
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
                         Text(actionLabel)
                     }
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier.focusRequester(cancelFocus)
+                        modifier = Modifier
+                            .focusRequester(cancelFocus)
+                            .then(
+                                if (!removeSelected.value) {
+                                    Modifier.border(3.dp, TelTvYellow, RoundedCornerShape(50))
+                                } else {
+                                    Modifier
+                                }
+                            )
                     ) {
                         Text("Cancel")
                     }
                 }
             }
         }
-        LaunchedEffect(Unit) { cancelFocus.requestFocus() }
+        LaunchedEffect(Unit) { select(false) }
     }
 }
 
