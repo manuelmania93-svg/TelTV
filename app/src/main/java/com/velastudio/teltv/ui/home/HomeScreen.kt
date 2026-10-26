@@ -1,6 +1,8 @@
 package com.velastudio.teltv.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -29,7 +31,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.focused
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,6 +71,39 @@ data class ContinueWatchingEntry(
 
 enum class HomeFilterMode { ALL, PINNED_ONLY, FOLDERS_ONLY }
 
+/** A pending remove confirmation: which entry, which button label, which delete action. */
+private data class RemoveRequest(
+    val entry: ContinueWatchingEntry,
+    val actionLabel: String,
+    val onRemove: (mediaId: String) -> Unit,
+    val restoreFocus: (removed: Boolean) -> Unit
+)
+
+/**
+ * Returns TV-remote focus to the row after the remove overlay closes: tries each requester
+ * (Cancel/Back: the long-pressed card; Remove: its neighbors, since the deleted card's
+ * requester detaches and fails) with retries, because the deletion recomposition and the
+ * window's focus readiness are both asynchronous. Without this the overlay dismissal dropped
+ * focus to the screen default and the user lost their place in the row.
+ */
+internal fun restoreFocusWithRetry(scope: CoroutineScope, targets: List<FocusRequester>) {
+    scope.launch {
+        var attempts = 0
+        while (attempts < 40) {
+            for (target in targets) {
+                // requestFocus() returns Unit in this Compose version and a non-throwing call
+                // does NOT prove the grant landed - the window may not be focus-ready yet and
+                // the request silently no-ops. So keep re-requesting the first attached
+                // target for the whole window; re-requesting one target is idempotent. A
+                // detached requester (removed card) throws and the walk moves on.
+                if (runCatching { target.requestFocus() }.isSuccess) break
+            }
+            attempts++
+            delay(50)
+        }
+    }
+}
+
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -86,6 +130,7 @@ fun HomeScreen(
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
     var filterMode by remember { mutableStateOf(HomeFilterMode.ALL) }
+    var removeRequest by remember { mutableStateOf<RemoveRequest?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -100,9 +145,14 @@ fun HomeScreen(
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            // While the remove confirmation overlay is open, the shelf content cannot hold
+            // or gain focus: remote keys pressed in the focus-handoff window (before the
+            // overlay root is granted focus) hit nothing instead of the card behind.
+            .focusProperties { canFocus = removeRequest == null }
             .padding(horizontal = 40.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -234,8 +284,11 @@ fun HomeScreen(
                     entries = continueWatching,
                     thumbnailLoader = thumbnailLoader,
                     onResumeWatching = onResumeWatching,
-                    onRemove = onRemoveFromHistory,
-                    removeActionLabel = "Remove from Continue Watching"
+                    onRequestRemove = { entry, label, restore ->
+                        removeRequest = RemoveRequest(entry, label, onRemoveFromHistory, restore)
+                    },
+                    removeActionLabel = "Remove from Continue Watching",
+                    contentFocusEnabled = removeRequest == null
                 )
             }
         }
@@ -247,8 +300,11 @@ fun HomeScreen(
                     thumbnailLoader = thumbnailLoader,
                     onResumeWatching = onResumeWatching,
                     title = "Watch History",
-                    onRemove = onRemoveFromHistory,
-                    removeActionLabel = "Remove from history"
+                    onRequestRemove = { entry, label, restore ->
+                        removeRequest = RemoveRequest(entry, label, onRemoveFromHistory, restore)
+                    },
+                    removeActionLabel = "Remove from history",
+                    contentFocusEnabled = removeRequest == null
                 )
             }
         }
@@ -260,8 +316,11 @@ fun HomeScreen(
                     thumbnailLoader = thumbnailLoader,
                     onResumeWatching = onResumeWatching,
                     title = "Favorites",
-                    onRemove = onRemoveFavorite,
-                    removeActionLabel = "Remove favorite"
+                    onRequestRemove = { entry, label, restore ->
+                        removeRequest = RemoveRequest(entry, label, onRemoveFavorite, restore)
+                    },
+                    removeActionLabel = "Remove favorite",
+                    contentFocusEnabled = removeRequest == null
                 )
             }
         }
@@ -368,6 +427,26 @@ fun HomeScreen(
         }
     }
 
+        // Remove confirmation, rendered INSIDE the home window's own composition (last = on
+        // top): a separate Dialog window never received D-pad/OK keys on the real TCL TV -
+        // focus visibly stayed on the card behind it and only Back (window-level) worked.
+        removeRequest?.let { request ->
+            RemoveEntryDialog(
+                title = request.entry.title,
+                actionLabel = request.actionLabel,
+                onRemove = {
+                    request.onRemove(request.entry.mediaId)
+                    removeRequest = null
+                    request.restoreFocus(true)
+                },
+                onDismiss = {
+                    removeRequest = null
+                    request.restoreFocus(false)
+                }
+            )
+        }
+    }
+
     if (updateInfo != null) {
         UpdateAvailableDialog(
             updateInfo = updateInfo!!,
@@ -434,10 +513,14 @@ private fun ContinueWatchingRow(
     thumbnailLoader: ThumbnailLoader,
     onResumeWatching: (mediaId: String) -> Unit,
     title: String = "Continue Watching",
-    onRemove: ((mediaId: String) -> Unit)? = null,
-    removeActionLabel: String = "Remove"
+    onRequestRemove: ((entry: ContinueWatchingEntry, actionLabel: String, restoreFocus: (removed: Boolean) -> Unit) -> Unit)? = null,
+    removeActionLabel: String = "Remove",
+    contentFocusEnabled: Boolean = true
 ) {
-    var selectedEntry by remember { mutableStateOf<ContinueWatchingEntry?>(null) }
+    // One FocusRequester per card so the remove overlay can hand remote focus back to the
+    // exact card on Cancel/Back, or to the nearest remaining card after a removal.
+    val cardFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    val rowScope = rememberCoroutineScope()
 
     Column {
         Text(
@@ -457,22 +540,33 @@ private fun ContinueWatchingRow(
                     enableTmdb = true,
                     fallbackTitle = entry.showName,
                     onClick = { onResumeWatching(entry.mediaId) },
-                    onLongClick = if (onRemove != null) ({ selectedEntry = entry }) else null
+                    onLongClick = if (onRequestRemove != null) ({
+                        val index = entries.indexOfFirst { it.mediaId == entry.mediaId }
+                        // Cancel/Back -> the same card; after a removal its requester detaches
+                        // and the retry loop walks on to the next/previous remaining card.
+                        val focusChain = listOfNotNull(
+                            cardFocusRequesters[entry.mediaId],
+                            entries.getOrNull(index + 1)?.let { cardFocusRequesters[it.mediaId] },
+                            entries.getOrNull(index - 1)?.let { cardFocusRequesters[it.mediaId] }
+                        )
+                        onRequestRemove(entry, removeActionLabel) { removed ->
+                            // After a removal the card's own requester only detaches once the
+                            // deletion recomposes - skip it, or focus could land on a card
+                            // that is about to vanish and be lost again.
+                            restoreFocusWithRetry(rowScope, if (removed) focusChain.drop(1) else focusChain)
+                        }
+                    }) else null,
+                    // Gate on the card's own modifier chain too (single-target pattern): the
+                    // long-pressed card is always the currently focused node when the overlay
+                    // opens, so its own focus target must be the thing that deactivates.
+                    modifier = Modifier
+                        .focusProperties { canFocus = contentFocusEnabled }
+                        .focusRequester(
+                            cardFocusRequesters.getOrPut(entry.mediaId) { FocusRequester() }
+                        )
                 )
             }
         }
-    }
-
-    selectedEntry?.let { entry ->
-        RemoveEntryDialog(
-            title = entry.title,
-            actionLabel = removeActionLabel,
-            onRemove = {
-                onRemove?.invoke(entry.mediaId)
-                selectedEntry = null
-            },
-            onDismiss = { selectedEntry = null }
-        )
     }
 }
 
@@ -484,52 +578,72 @@ internal fun RemoveEntryDialog(
     onRemove: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Selection is tracked explicitly instead of relying on Compose focus alone: on the
-    // real TV the focus request raced the dialog window, no button ever showed a focused
-    // state, and D-pad presses could not activate anything (only Back worked). Handling
-    // the D-pad ourselves makes Cancel/Remove reachable no matter where the window puts
-    // the initial focus, and the yellow highlight shows the selection from the couch.
-    // Cancel is the default: the destructive action stays one deliberate D-pad-Left away.
+    // In-composition overlay, NOT a Dialog window: on the real TCL TV the separate dialog
+    // window never received D-pad/OK keys (focus visibly stayed on the card behind it, only
+    // Back worked). Rendered inside the home screen's own window, input takes the exact path
+    // the working shelf rows use. Selection is a visible yellow border on the option itself;
+    // the overlay root is the single focus target, so every remote key lands in onKeyEvent
+    // below regardless of where the window first puts focus. Cancel is the default: the
+    // destructive action stays one deliberate D-pad press away.
     val removeSelected = remember { mutableStateOf(false) }
-    val cancelFocus = remember { FocusRequester() }
-    val removeFocus = remember { FocusRequester() }
+    val rootFocus = remember { FocusRequester() }
+    var rootHasFocus by remember { mutableStateOf(false) }
 
-    fun select(remove: Boolean) {
-        removeSelected.value = remove
-        runCatching { (if (remove) removeFocus else cancelFocus).requestFocus() }
-    }
+    // Back must dismiss even before the root is granted focus: while nothing in the window
+    // holds focus, a Back key would otherwise reach the activity and could finish it with
+    // the overlay still on screen.
+    androidx.activity.compose.BackHandler { onDismiss() }
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        // The container must not be clickable/focusable: the old Card(onClick = {}) was
-        // itself a D-pad focus target, so focus landed on the dialog background and
-        // directional search could never reach the buttons inside it (only Back worked).
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xB3000000))
+            .onFocusChanged { rootHasFocus = it.isFocused }
+            .testTag("remove-entry-overlay-root")
+            // Expose the real focus state so integration tests can wait until the overlay
+            // observably holds window focus before injecting remote keys.
+            .semantics { focused = rootHasFocus }
+            // Swallow touches so nothing behind the scrim reacts on touch-capable devices.
+            .pointerInput(Unit) { detectTapGestures { } }
+            .focusRequester(rootFocus)
+            .onKeyEvent { event ->
                 when (event.key) {
                     Key.DirectionLeft, Key.DirectionRight -> {
-                        select(!removeSelected.value)
+                        if (event.type == KeyEventType.KeyDown) removeSelected.value = !removeSelected.value
                         true
                     }
+                    // Trap focus: no vertical targets inside the overlay, and the rows behind
+                    // must not receive navigation while the confirmation is open.
+                    Key.DirectionUp, Key.DirectionDown -> true
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                        if (removeSelected.value) onRemove() else onDismiss()
+                        if (event.type == KeyEventType.KeyDown) {
+                            if (removeSelected.value) onRemove() else onDismiss()
+                        }
+                        true
+                    }
+                    Key.Back, Key.Escape -> {
+                        if (event.type == KeyEventType.KeyDown) onDismiss()
                         true
                     }
                     else -> false
                 }
             }
-        ) {
+            .focusable(),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.width(440.dp).padding(24.dp)) {
                 Text("Remove video?", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(title, maxLines = 2, color = TelTvMuted)
                 Spacer(Modifier.height(20.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // The buttons are deliberately NOT focus targets: the overlay root owns
+                    // focus and key handling, the border + selected semantics show the state.
                     Button(
                         onClick = onRemove,
                         modifier = Modifier
-                            .focusRequester(removeFocus)
+                            .focusProperties { canFocus = false }
                             .then(
                                 if (removeSelected.value) {
                                     Modifier.border(3.dp, TelTvYellow, RoundedCornerShape(50))
@@ -538,12 +652,14 @@ internal fun RemoveEntryDialog(
                                 }
                             )
                     ) {
-                        Text(actionLabel)
+                        // Selection marker sits on the text so it merges into the button's
+                        // semantics node (tests assert selected state there).
+                        Text(actionLabel, modifier = Modifier.semantics { selected = removeSelected.value })
                     }
                     OutlinedButton(
                         onClick = onDismiss,
                         modifier = Modifier
-                            .focusRequester(cancelFocus)
+                            .focusProperties { canFocus = false }
                             .then(
                                 if (!removeSelected.value) {
                                     Modifier.border(3.dp, TelTvYellow, RoundedCornerShape(50))
@@ -552,12 +668,28 @@ internal fun RemoveEntryDialog(
                                 }
                             )
                     ) {
-                        Text("Cancel")
+                        Text("Cancel", modifier = Modifier.semantics { selected = !removeSelected.value })
                     }
                 }
             }
         }
-        LaunchedEffect(Unit) { select(false) }
+    }
+
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(Unit) {
+        // Deterministic handoff: drop whatever the shelf held (the gate stops it from coming
+        // back), then request the root until onFocusChanged observably grants it. The first
+        // requests can land before the window is ready, so retry fast at first, then back
+        // off - never capped, because giving up would soft-lock the TV on a keyless overlay,
+        // and never hot: the loop always sleeps between attempts and is cancelled with the
+        // overlay. Back stays safe throughout via the BackHandler above.
+        focusManager.clearFocus()
+        var attempts = 0
+        while (!rootHasFocus) {
+            runCatching { rootFocus.requestFocus() }
+            delay(if (attempts < 40) 50 else 250)
+            attempts++
+        }
     }
 }
 
