@@ -40,7 +40,7 @@ object AppUpdater {
             .trim()
     }
 
-    private fun isNewer(remoteVer: String, currentVer: String): Boolean {
+    internal fun isNewer(remoteVer: String, currentVer: String): Boolean {
         val rParts = remoteVer.split(".").mapNotNull { it.toIntOrNull() }
         val cParts = currentVer.split(".").mapNotNull { it.toIntOrNull() }
         val maxLen = maxOf(rParts.size, cParts.size)

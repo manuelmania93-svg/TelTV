@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      # Serializes main-branch publishes; PR runs get their own group per ref.
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repository
@@ -24,11 +28,22 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
+      - name: Compute and validate version stamping
+        run: |
+          # Unique, increasing build identity per workflow run, including re-runs
+          # (run_attempt increments on each re-run). Enforced bounds, not assumptions.
+          VERSION_CODE=$(( ${{ github.run_number }} * 1000 + ${{ github.run_attempt }} ))
+          test "${{ github.run_attempt }}" -lt 1000 || { echo "run_attempt ${{ github.run_attempt }} exceeds the 1000-attempt bound"; exit 1; }
+          test "$VERSION_CODE" -le 2100000000 || { echo "VERSION_CODE $VERSION_CODE exceeds the Android versionCode cap"; exit 1; }
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=0.3.59.$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Stamped version: 0.3.59.$VERSION_CODE (versionCode $VERSION_CODE)"
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build APKs with Gradle
-        run: ./gradlew assembleDebug assembleRelease --stacktrace
+        run: ./gradlew assembleDebug assembleRelease --stacktrace -PciVersionCode=$VERSION_CODE -PciVersionName=$VERSION_NAME
 
       - name: Sign Release APK with apksigner
         run: |
@@ -69,11 +84,29 @@ jobs:
       - name: Extract Version
         id: get_version
         run: |
-          VERSION=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -n 1)
-          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=v$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      - name: Guard rolling release against stale overwrite
+        id: publish_guard
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT=$(curl -sf -H "Authorization: Bearer $GITHUB_TOKEN"             "https://api.github.com/repos/${{ github.repository }}/releases/tags/rolling-release" | jq -r '.name // ""') || CURRENT=""
+          echo "currently published release name: $CURRENT"
+          # Stamped releases end in the numeric version code; legacy unstamped names fall back to 0.
+          REMOTE_CODE=$(echo "$CURRENT" | grep -oE '[0-9]+$' || true)
+          REMOTE_CODE=${REMOTE_CODE:-0}
+          echo "remote_code=$REMOTE_CODE" >> $GITHUB_OUTPUT
+          if [ "$VERSION_CODE" -le "$REMOTE_CODE" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skip publish: stamped $VERSION_CODE is not newer than published $REMOTE_CODE"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Publish GitHub Rolling Release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.publish_guard.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: rolling-release

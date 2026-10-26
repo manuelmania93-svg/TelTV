@@ -15,8 +15,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 21          // covers most Android TV boxes / sticks
         targetSdk = 34
-        versionCode = 88
-        versionName = "0.3.59"
+        // CI stamps a unique, increasing versionCode/versionName per build via
+        // -PciVersionCode/-PciVersionName (see build.yml); local builds use these fallbacks.
+        versionCode = (project.findProperty("ciVersionCode") as String?)?.toIntOrNull() ?: 88
+        versionName = (project.findProperty("ciVersionName") as String?) ?: "0.3.59"
 
         // TMDB v3 API key comes from local.properties (TMDB_API_KEY=...) or the
         // TMDB_API_KEY environment variable. It is never committed.
