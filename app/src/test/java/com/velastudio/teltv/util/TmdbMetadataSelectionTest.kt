@@ -72,6 +72,18 @@ class TmdbMetadataSelectionTest {
     }
 
     @Test
+    fun yearlessMovieBeatsSeriesWhoseRangeContainsQueryYear() {
+        // Live Cinemeta data for "Guardians of the Galaxy Vol 2 - 2017": the movie hit has no
+        // year and the animated series' 2015-2019 range contains 2017. The range bonus must not
+        // rescue the series when the query's "vol 2" tokens are absent from its name.
+        val query = "Guardians of the Galaxy Vol 2 - 2017"
+        val series = candidate("Guardians of the Galaxy", "2015–2019", isSeries = true)
+        val movie = candidate("Guardians of the Galaxy: Vol. 2", year = null, isSeries = false)
+        assertEquals(movie, TmdbMetadataProvider.pickBestCandidate(query, listOf(series, movie)))
+        assertEquals(movie, TmdbMetadataProvider.pickBestCandidate(query, listOf(movie, series)))
+    }
+
+    @Test
     fun emptyCandidateListYieldsNull() {
         assertNull(TmdbMetadataProvider.pickBestCandidate("Anything", emptyList()))
     }
