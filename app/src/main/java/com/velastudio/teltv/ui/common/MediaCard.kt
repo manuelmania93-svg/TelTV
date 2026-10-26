@@ -49,7 +49,8 @@ fun PosterCard(
     fallbackTitle: String? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
-    contentDescription: String = title
+    contentDescription: String = title,
+    modifier: Modifier = Modifier
 ) {
     var localThumbPath by remember(thumbnailFileId, title) { mutableStateOf<String?>(null) }
     var tmdbMeta by remember(title) { mutableStateOf<TmdbMetadata?>(null) }
@@ -88,7 +89,7 @@ fun PosterCard(
             containerColor = TelTvPanel,
             focusedContainerColor = TelTvPanelFocused
         ),
-        modifier = Modifier
+        modifier = modifier
             .width(POSTER_CARD_WIDTH)
             .height(POSTER_CARD_HEIGHT)
             .semantics { this.contentDescription = contentDescription }
