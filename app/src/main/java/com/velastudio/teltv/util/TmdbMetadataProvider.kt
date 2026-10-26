@@ -50,10 +50,14 @@ object TmdbMetadataProvider {
     private val QUERY_YEAR_REGEX = Regex("\\b(?:19|20)\\d{2}\\b")
     private val YEAR_NUMBER_REGEX = Regex("\\d{4}")
 
+    private val TRAILING_SEPARATORS = Regex("[\\s\\-:|/]+$")
+
     fun extractQuery(rawTitle: String): String {
         val clean = MediaTitleCleaner.clean(rawTitle)
         val noLeading = clean.replace(LEADING_EPISODE_REGEX, "")
-        val stripped = noLeading.replace(EPISODE_REGEX, "").trim()
+        // Trailing separator trim: captions that already contain " - SxxEyy" get a doubled dash
+        // from the cleaner, and stripping the episode part would otherwise leave "Show -" behind.
+        val stripped = noLeading.replace(EPISODE_REGEX, "").replace(TRAILING_SEPARATORS, "").trim()
         return if (stripped.isNotBlank()) stripped else noLeading.trim().ifBlank { clean }
     }
 
