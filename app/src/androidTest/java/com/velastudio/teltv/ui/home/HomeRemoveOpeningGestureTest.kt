@@ -105,6 +105,11 @@ class HomeRemoveOpeningGestureTest {
                     it.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Focused) { false }
                 }
             }
+            // A physical hold continues producing repeat DOWN events after focus moves.
+            // The new dialog root must not turn their eventual UP into a Cancel click.
+            key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 2)
+            Thread.sleep(80)
+            key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 3)
             screenshot("opening-gesture-before-release")
             key(KeyEvent.ACTION_UP, down, KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitForIdle()
