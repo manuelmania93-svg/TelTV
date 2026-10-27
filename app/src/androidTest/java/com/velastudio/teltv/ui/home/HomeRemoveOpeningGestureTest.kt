@@ -129,10 +129,10 @@ class HomeRemoveOpeningGestureTest {
                 key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 3)
             }
             compose.onNodeWithText("Remove video?").assertIsDisplayed()
-            screenshot("opening-gesture-before-release")
+            screenshot("opening-$continuedRepeats-$action-before-release")
             key(KeyEvent.ACTION_UP, down, KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitForIdle()
-            screenshot("opening-gesture-after-release")
+            screenshot("opening-$continuedRepeats-$action-after-release")
             compose.onNodeWithText("Remove video?").assertIsDisplayed()
             assertEquals("Opening gesture must not remove the item", 0, removed)
             assertEquals("Long press must not resume playback", 0, resumed)
