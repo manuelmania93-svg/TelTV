@@ -88,6 +88,9 @@ class HomeRemoveOpeningGestureTest {
             compose.onAllNodesWithText("Later").fetchSemanticsNodes().firstOrNull()?.let {
                 compose.onNodeWithText("Later").performClick()
             }
+            compose.onNode(SemanticsMatcher.keyIsDefined(
+                androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange))
+                .performScrollToNode(hasContentDescription(title))
             compose.onNodeWithContentDescription(title).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             compose.onNodeWithContentDescription(title).assertIsFocused()
             val down = SystemClock.uptimeMillis()
