@@ -89,7 +89,7 @@ class HomeRemoveOpeningGestureTest {
             compose.onAllNodesWithText("Later").fetchSemanticsNodes().firstOrNull()?.let {
                 compose.onNodeWithText("Later").performClick()
             }
-            compose.onNodeWithContentDescription(title).performSemanticsAction(SemanticsActions.RequestFocus)
+            compose.onNodeWithContentDescription(title).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             compose.onNodeWithContentDescription(title).assertIsFocused()
             val down = SystemClock.uptimeMillis()
             key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER)
