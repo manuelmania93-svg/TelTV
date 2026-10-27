@@ -31,7 +31,7 @@ jobs:
           script: |
             mkdir -p smoke
             set +e
-            ./gradlew connectedDebugAndroidTest --stacktrace
+            ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.velastudio.teltv.ui.home.HomeRemoveOpeningGestureTest --stacktrace
             test_exit=$?
             set -e
             mkdir -p smoke/player-ui
