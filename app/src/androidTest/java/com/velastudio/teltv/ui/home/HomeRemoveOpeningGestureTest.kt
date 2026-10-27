@@ -8,7 +8,6 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.getOrElse
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
