@@ -62,7 +62,17 @@ class HomeRemoveOpeningGestureTest {
     @Test fun openingReleaseWithoutLaterRepeatsThenFreshCancel() = exercise(false, "cancel")
 
     private fun exercise(continuedRepeats: Boolean, action: String) {
-        compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        compose.activityRule.scenario.onActivity {
+            it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+        // Orientation can recreate ComponentActivity. Set content only after that completes,
+        // otherwise setContent targets the old instance and tests lose the Compose root.
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        Thread.sleep(400)
+        compose.activityRule.scenario.onActivity {
+            check(it.resources.configuration.orientation ==
+                android.content.res.Configuration.ORIENTATION_LANDSCAPE)
+        }
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         // Seed only this synthetic title so the real card never needs an artwork network call.
         val field = TmdbMetadataProvider::class.java.getDeclaredField("cache").apply { isAccessible = true }
