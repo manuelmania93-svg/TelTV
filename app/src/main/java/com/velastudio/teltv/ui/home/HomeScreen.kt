@@ -6,6 +6,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -485,11 +486,32 @@ internal fun RemoveEntryDialog(
     onDismiss: () -> Unit
 ) {
     val initialFocus = remember { FocusRequester() }
+    val activationGesture = remember { DialogActivationGesture() }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Box(
             modifier = Modifier
                 .width(440.dp)
+                .onPreviewKeyEvent { event ->
+                    val native = event.nativeKeyEvent
+                    when (native.keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                        android.view.KeyEvent.KEYCODE_ENTER,
+                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            when (native.action) {
+                                android.view.KeyEvent.ACTION_DOWN,
+                                android.view.KeyEvent.ACTION_UP -> activationGesture.consume(
+                                    native.keyCode,
+                                    native.action == android.view.KeyEvent.ACTION_DOWN,
+                                    native.repeatCount,
+                                    native.isCanceled
+                                )
+                                else -> false
+                            }
+                        }
+                        else -> false
+                    }
+                }
                 .background(Color(0xFF222222), RoundedCornerShape(16.dp))
                 .padding(24.dp)
         ) {

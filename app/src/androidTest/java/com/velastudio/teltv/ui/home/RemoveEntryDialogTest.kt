@@ -152,12 +152,12 @@ class RemoveEntryDialogTest {
         assertEquals(1, dismissCount)
     }
 
-    @Test fun dpadRightAlsoMovesSelectionToRemove() {
+    @Test fun dpadRightAtCancelDoesNotWrapToRemove() {
         showDialog()
         compose.onNodeWithText("Cancel").assertIsFocused()
         dpad(Key.DirectionRight)
-        compose.onNodeWithText("Remove from history").assertIsFocused()
-        screenshot("remove-entry-dialog-remove-selected-right")
+        compose.onNodeWithText("Cancel").assertIsFocused()
+        screenshot("remove-entry-dialog-cancel-right-edge")
     }
 
     @Test fun upDownKeysNeitherActivateNorDismiss() {

@@ -56,7 +56,12 @@ class HomeRemoveOpeningGestureTest {
             "screencap -p /sdcard/Download/$name.png")).use { it.readBytes() }
     }
 
-    @Test fun openingHoldReleaseDoesNotCancelAndFreshPressStillWorks() {
+    @Test fun continuedOpeningHoldThenFreshCancel() = exercise(true, "cancel")
+    @Test fun continuedOpeningHoldThenFreshRemove() = exercise(true, "remove")
+    @Test fun continuedOpeningHoldThenBack() = exercise(true, "back")
+    @Test fun openingReleaseWithoutLaterRepeatsThenFreshCancel() = exercise(false, "cancel")
+
+    private fun exercise(continuedRepeats: Boolean, action: String) {
         compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         // Seed only this synthetic title so the real card never needs an artwork network call.
@@ -108,9 +113,11 @@ class HomeRemoveOpeningGestureTest {
             }
             // A physical hold continues producing repeat DOWN events after focus moves.
             // The new dialog root must not turn their eventual UP into a Cancel click.
-            key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 2)
-            Thread.sleep(80)
-            key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 3)
+            if (continuedRepeats) {
+                key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 2)
+                Thread.sleep(80)
+                key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 3)
+            }
             compose.onNodeWithText("Remove video?").assertIsDisplayed()
             screenshot("opening-gesture-before-release")
             key(KeyEvent.ACTION_UP, down, KeyEvent.KEYCODE_DPAD_CENTER)
@@ -119,10 +126,18 @@ class HomeRemoveOpeningGestureTest {
             compose.onNodeWithText("Remove video?").assertIsDisplayed()
             assertEquals("Opening gesture must not remove the item", 0, removed)
             assertEquals("Long press must not resume playback", 0, resumed)
-            // A new complete gesture on focused Cancel must still work exactly once.
-            press(KeyEvent.KEYCODE_DPAD_CENTER)
+            // Fresh ordinary gestures and Back retain native button behavior.
+            when (action) {
+                "remove" -> {
+                    press(KeyEvent.KEYCODE_DPAD_LEFT)
+                    compose.onNodeWithText("Remove from history").assertIsFocused()
+                    press(KeyEvent.KEYCODE_DPAD_CENTER)
+                }
+                "back" -> press(KeyEvent.KEYCODE_BACK)
+                else -> press(KeyEvent.KEYCODE_DPAD_CENTER)
+            }
             compose.onNodeWithText("Remove video?").assertDoesNotExist()
-            assertEquals(0, removed)
+            assertEquals(if (action == "remove") 1 else 0, removed)
             assertEquals(0, resumed)
         } finally {
             scope.cancel()
