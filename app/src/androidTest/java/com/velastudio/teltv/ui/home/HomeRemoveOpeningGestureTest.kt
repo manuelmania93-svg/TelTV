@@ -35,6 +35,7 @@ class HomeRemoveOpeningGestureTest {
     private val title = "Opening gesture test episode"
 
     private fun key(action: Int, downTime: Long, code: Int, repeat: Int = 0) {
+        println("OPENING-KEY action=$action code=$code repeat=$repeat downTime=$downTime eventTime=${SystemClock.uptimeMillis()}")
         assertTrue("System key injection failed: action=$action code=$code repeat=$repeat",
             automation.injectInputEvent(KeyEvent(downTime, SystemClock.uptimeMillis(), action,
                 code, repeat, 0, KeyEvent.KEYCODE_UNKNOWN, 0,
@@ -110,6 +111,7 @@ class HomeRemoveOpeningGestureTest {
             key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 2)
             Thread.sleep(80)
             key(KeyEvent.ACTION_DOWN, down, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 3)
+            compose.onNodeWithText("Remove video?").assertIsDisplayed()
             screenshot("opening-gesture-before-release")
             key(KeyEvent.ACTION_UP, down, KeyEvent.KEYCODE_DPAD_CENTER)
             compose.waitForIdle()

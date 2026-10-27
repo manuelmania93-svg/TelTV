@@ -30,10 +30,8 @@ jobs:
           disable-animations: true
           script: |
             mkdir -p smoke
-            set +e
-            ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.velastudio.teltv.ui.home.HomeRemoveOpeningGestureTest --stacktrace
-            test_exit=$?
-            set -e
+            test_exit=0
+            ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.velastudio.teltv.ui.home.HomeRemoveOpeningGestureTest --stacktrace || test_exit=$?
             mkdir -p smoke/player-ui
             adb pull /sdcard/Download/. smoke/player-ui/ || true
             adb logcat -d > smoke/logcat.txt || true
