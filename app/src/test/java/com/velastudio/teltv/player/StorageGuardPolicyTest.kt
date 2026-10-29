@@ -123,8 +123,7 @@ class StorageGuardPolicyTest {
         assertEquals(
             true,
             StorageGuardPolicy.shouldEmergencyOnPlaybackError(
-                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 0L,
-                StorageGuardPolicy.MIN_EMERGENCY_INTERVAL_MS + 1
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 0
             )
         )
     }
@@ -136,18 +135,31 @@ class StorageGuardPolicyTest {
         assertEquals(
             false,
             StorageGuardPolicy.shouldEmergencyOnPlaybackError(
-                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES, 0L, 1_000_000L
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES, 0
             )
         )
     }
 
     @Test
-    fun playbackErrorEmergencySharesTheRateLimit() {
+    fun recentEmergencyDoesNotParkThePlayerOnAFullDiskError() {
+        // One recovery already happened for this video and the disk filled again anyway:
+        // blocking now would leave the player stuck on the error, so a second attempt is made.
+        assertEquals(
+            true,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 1
+            )
+        )
+    }
+
+    @Test
+    fun recoveryAttemptsAreCappedPerVideo() {
+        // After the cap the error surfaces instead of looping wipes that cannot help.
         assertEquals(
             false,
             StorageGuardPolicy.shouldEmergencyOnPlaybackError(
-                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 0L,
-                StorageGuardPolicy.MIN_EMERGENCY_INTERVAL_MS - 1
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1,
+                StorageGuardPolicy.MAX_ERROR_RECOVERIES
             )
         )
     }

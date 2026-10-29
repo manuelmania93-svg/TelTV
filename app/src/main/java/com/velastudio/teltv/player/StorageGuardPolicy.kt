@@ -63,15 +63,21 @@ object StorageGuardPolicy {
     /** Below this much free space, a playback failure is treated as storage-full. */
     const val ERROR_TRIGGER_FREE_BYTES = 512L * 1024 * 1024
 
+    /** Consecutive storage-full recoveries attempted for the same video before giving up. */
+    const val MAX_ERROR_RECOVERIES = 2
+
     /**
      * Immediate reaction when playback actually fails: the error alone does not prove a full
      * disk (network stalls look identical from the player), so only free space below
-     * [ERROR_TRIGGER_FREE_BYTES] turns it into the emergency clear-and-resume. Shares the
-     * emergency rate limit so a genuinely unrecoverable file cannot loop.
+     * [ERROR_TRIGGER_FREE_BYTES] turns it into the emergency clear-and-resume. A just-finished
+     * emergency does NOT block this: if the disk filled again anyway the player is already
+     * sitting on an error, and suppressing recovery would park it there for minutes. Instead
+     * the consecutive recoveries per video are capped at [MAX_ERROR_RECOVERIES]; after that
+     * the error is allowed to surface instead of looping wipes that cannot help.
      */
-    fun shouldEmergencyOnPlaybackError(freeBytes: Long, lastEmergencyAtMs: Long, nowMs: Long): Boolean {
+    fun shouldEmergencyOnPlaybackError(freeBytes: Long, errorRecoveries: Int): Boolean {
         if (freeBytes >= ERROR_TRIGGER_FREE_BYTES) return false
-        return nowMs - lastEmergencyAtMs >= MIN_EMERGENCY_INTERVAL_MS
+        return errorRecoveries < MAX_ERROR_RECOVERIES
     }
 
     /** How long the emergency path waits for freed space to show up before resuming anyway. */

@@ -34,7 +34,8 @@ class PlaybackStorageGuard(
     private val app: TelTvApp,
     private val playerProvider: () -> Player?,
     private val freeSpaceBytes: () -> Long = { context.filesDir.usableSpace },
-    private val nowMs: () -> Long = System::currentTimeMillis
+    private val nowMs: () -> Long = System::currentTimeMillis,
+    private val cacheManagerFactory: () -> CacheManager = { CacheManager(app.telegramClient::execute, context) }
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -42,6 +43,8 @@ class PlaybackStorageGuard(
     private var lastEmergencyAtMs = 0L
     private var lastPreflightAtMs = 0L
     private var lastMediaItemId: String? = null
+    private var errorRecoveries = 0
+    private var errorRecoveryMediaId: String? = null
 
     fun start() {
         scope.launch {
@@ -74,12 +77,17 @@ class PlaybackStorageGuard(
     private suspend fun handlePlaybackError() {
         if (!CachePrefs(context).autoClearEnabled.first()) return
         val player = playerProvider() ?: return
-        if (player.currentMediaItem == null) return
+        val mediaId = player.currentMediaItem?.mediaId ?: return
         val freeBytes = freeSpaceBytes()
-        val now = nowMs()
-        if (!StorageGuardPolicy.shouldEmergencyOnPlaybackError(freeBytes, lastEmergencyAtMs, now)) return
-        lastEmergencyAtMs = now
-        lastEvictAtMs = now
+        if (mediaId != errorRecoveryMediaId) {
+            errorRecoveryMediaId = mediaId
+            errorRecoveries = 0
+        }
+        if (!StorageGuardPolicy.shouldEmergencyOnPlaybackError(freeBytes, errorRecoveries)) return
+        errorRecoveries++
+        // Tell the polling path an emergency just ran so it does not immediately repeat one.
+        lastEmergencyAtMs = nowMs()
+        lastEvictAtMs = lastEmergencyAtMs
         Timber.w(
             "Playback failed with a full disk (%d bytes free); clearing cache and resuming immediately",
             freeBytes
@@ -234,5 +242,5 @@ class PlaybackStorageGuard(
         }
     }
 
-    private fun cacheManager() = CacheManager(app.telegramClient::execute, context)
+    private fun cacheManager() = cacheManagerFactory()
 }
