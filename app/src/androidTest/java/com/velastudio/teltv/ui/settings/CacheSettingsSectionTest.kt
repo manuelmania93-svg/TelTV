@@ -122,11 +122,18 @@ class CacheSettingsSectionTest {
                 view.layout(0, 0, widthPx, heightPx)
                 val bitmap = android.graphics.Bitmap.createBitmap(widthPx, heightPx, android.graphics.Bitmap.Config.ARGB_8888)
                 view.draw(android.graphics.Canvas(bitmap))
-                val out = java.io.File(
-                    android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
-                    "$name.png"
-                )
-                java.io.FileOutputStream(out).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                // Scoped storage blocks direct file writes to Download for the app process
+                // (EACCES on API 29); MediaStore.Downloads accepts the app's own inserts.
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "$name.png")
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "image/png")
+                }
+                val uri = activity.contentResolver.insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
+                ) ?: throw AssertionError("MediaStore insert failed")
+                activity.contentResolver.openOutputStream(uri)!!.use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
                 root.removeView(view)
             } catch (t: Throwable) {
                 failure = t
