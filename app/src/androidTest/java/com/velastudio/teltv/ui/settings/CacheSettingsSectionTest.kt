@@ -51,7 +51,7 @@ class CacheSettingsSectionTest {
     }
 
     @Test fun freedSpaceNoticeVisibleAfterCleanup() {
-        showSection(1_500_000_000L, System.currentTimeMillis() - 2 * 3_600_000L)
+        showSection(1_610_612_736L, System.currentTimeMillis() - 2 * 3_600_000L)
         compose.onNodeWithText("Last cleanup freed 1.5 GB (2 h ago)").assertIsDisplayed()
         screenshot("teltv-settings-cleanup-notice")
     }
