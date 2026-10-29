@@ -62,12 +62,16 @@ class CacheSettingsSectionTest {
         compose.setContent {
             androidx.tv.material3.MaterialTheme {
                 Box(Modifier.fillMaxSize().background(Color(0xFF101418)), contentAlignment = Alignment.Center) {
+                    // Fit the 1280x720 TV layout INSIDE the actual display: a fixed scale
+                    // overflowed the test display and clipped the panel's left/right edges.
+                    val dm = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics
+                    val fit = minOf(dm.widthPixels / dm.density / 1280f, dm.heightPixels / dm.density / 720f)
                     Box(
                         Modifier
                             .requiredSize(1280.dp, 720.dp)
                             .graphicsLayer {
-                                scaleX = 0.28f
-                                scaleY = 0.28f
+                                scaleX = fit
+                                scaleY = fit
                                 transformOrigin = TransformOrigin(0.5f, 0.5f)
                             }
                     ) {
