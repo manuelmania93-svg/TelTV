@@ -60,6 +60,20 @@ object StorageGuardPolicy {
     /** Playback-start eviction at most this often. */
     const val MIN_PREFLIGHT_INTERVAL_MS = 120_000L
 
+    /** Below this much free space, a playback failure is treated as storage-full. */
+    const val ERROR_TRIGGER_FREE_BYTES = 512L * 1024 * 1024
+
+    /**
+     * Immediate reaction when playback actually fails: the error alone does not prove a full
+     * disk (network stalls look identical from the player), so only free space below
+     * [ERROR_TRIGGER_FREE_BYTES] turns it into the emergency clear-and-resume. Shares the
+     * emergency rate limit so a genuinely unrecoverable file cannot loop.
+     */
+    fun shouldEmergencyOnPlaybackError(freeBytes: Long, lastEmergencyAtMs: Long, nowMs: Long): Boolean {
+        if (freeBytes >= ERROR_TRIGGER_FREE_BYTES) return false
+        return nowMs - lastEmergencyAtMs >= MIN_EMERGENCY_INTERVAL_MS
+    }
+
     /** How long the emergency path waits for freed space to show up before resuming anyway. */
     const val RESUME_WAIT_MS = 15_000L
 

@@ -117,4 +117,38 @@ class StorageGuardPolicyTest {
             )
         )
     }
+
+    @Test
+    fun playbackErrorBelowFloorTriggersImmediateEmergency() {
+        assertEquals(
+            true,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 0L,
+                StorageGuardPolicy.MIN_EMERGENCY_INTERVAL_MS + 1
+            )
+        )
+    }
+
+    @Test
+    fun playbackErrorWithFreeSpaceIsNotTreatedAsStorageFull() {
+        // A network stall looks identical to the player; without a nearly-full disk it is not
+        // a storage emergency and must not wipe the cache.
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES, 0L, 1_000_000L
+            )
+        )
+    }
+
+    @Test
+    fun playbackErrorEmergencySharesTheRateLimit() {
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 0L,
+                StorageGuardPolicy.MIN_EMERGENCY_INTERVAL_MS - 1
+            )
+        )
+    }
 }

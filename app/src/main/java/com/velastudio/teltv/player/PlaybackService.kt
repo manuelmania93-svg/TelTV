@@ -131,6 +131,9 @@ class PlaybackService : MediaSessionService() {
         exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Timber.e(error, "Player error (errorCode=%s)", error.errorCodeName)
+                // A full disk surfaces as a playback error; the guard checks free space and,
+                // if it confirms storage-full, clears the cache and resumes immediately.
+                storageGuard?.onPlaybackError()
             }
         })
         player = exoPlayer

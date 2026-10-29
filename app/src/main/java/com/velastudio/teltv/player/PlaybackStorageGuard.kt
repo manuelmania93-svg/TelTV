@@ -57,6 +57,36 @@ class PlaybackStorageGuard(
         scope.cancel()
     }
 
+    /**
+     * Called from [PlaybackService] when playback actually fails. A full disk surfaces exactly
+     * this way (TDLib can no longer write the next chunk), and the polling loop alone would
+     * leave the player stuck on an error. If free space confirms a full disk, this runs the
+     * same emergency clear-and-resume immediately instead of waiting for the next check;
+     * the position is persisted first and playback resumes from it after re-preparing.
+     */
+    fun onPlaybackError() {
+        scope.launch {
+            runCatching { handlePlaybackError() }
+                .onFailure { Timber.w(it, "Storage-full recovery after playback error failed") }
+        }
+    }
+
+    private suspend fun handlePlaybackError() {
+        if (!CachePrefs(context).autoClearEnabled.first()) return
+        val player = playerProvider() ?: return
+        if (player.currentMediaItem == null) return
+        val freeBytes = freeSpaceBytes()
+        val now = nowMs()
+        if (!StorageGuardPolicy.shouldEmergencyOnPlaybackError(freeBytes, lastEmergencyAtMs, now)) return
+        lastEmergencyAtMs = now
+        lastEvictAtMs = now
+        Timber.w(
+            "Playback failed with a full disk (%d bytes free); clearing cache and resuming immediately",
+            freeBytes
+        )
+        emergencyClearAndResume(player, freeBytes, reprepare = true)
+    }
+
     private suspend fun checkOnce() {
         val player = playerProvider() ?: return
         val mediaItem = player.currentMediaItem ?: return
@@ -105,7 +135,7 @@ class PlaybackStorageGuard(
      * forward from whatever offset it is opened at, so playback continues with a brief rebuffer
      * instead of a permanent "storage full" stall.
      */
-    private suspend fun emergencyClearAndResume(player: Player, freeBytes: Long) {
+    private suspend fun emergencyClearAndResume(player: Player, freeBytes: Long, reprepare: Boolean = false) {
         val mediaItem = player.currentMediaItem ?: return
         val streamUrl = mediaItem.localConfiguration?.uri?.toString() ?: return
         val isTelegram = mediaItem.localConfiguration?.uri?.scheme ==
@@ -146,6 +176,9 @@ class PlaybackStorageGuard(
         }
 
         player.seekTo(positionMs)
+        // After an actual playback error the player sits in STATE_IDLE; a bare play() cannot
+        // recover it - the source must be re-prepared (loads forward from the seek position).
+        if (reprepare) player.prepare()
         if (wasPlaying) player.play()
     }
 
