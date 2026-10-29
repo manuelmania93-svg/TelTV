@@ -99,7 +99,9 @@ class CacheSettingsSectionTest {
             compose.onRoot().performKeyInput { keyDown(Key.DirectionRight); keyUp(Key.DirectionRight) }
             compose.onRoot().performKeyInput { keyDown(Key.DirectionDown); keyUp(Key.DirectionDown) }
             compose.waitForIdle()
-            compose.onNodeWithText("Last cleanup freed 1.5 GB (2 h ago)").assertIsNotFocused()
+            // A plain Text carries no Focused property, so assertIsNotFocused would fail on the
+            // absent property alone. The real intent: no focused node may display the notice text.
+            compose.onNode(hasText("Last cleanup freed 1.5 GB (2 h ago)") and isFocused()).assertDoesNotExist()
         }
         // And the controls are actually reachable by remote (focus did move somewhere real).
         compose.onNodeWithText("Clear Cache Now").assertExists()
