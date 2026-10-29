@@ -2,6 +2,7 @@ package com.velastudio.teltv.ui.settings
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
+import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
@@ -41,6 +42,7 @@ class CacheSettingsSectionTest {
         AutoCloseInputStream(output).use { it.readBytes() }
     }
 
+    @Composable
     private fun section(lastFreed: Long?, lastAt: Long?) = CacheSettingsSection(
         currentSizeBytes = 1_200_000_000L,
         cacheSizeAvailable = true,
