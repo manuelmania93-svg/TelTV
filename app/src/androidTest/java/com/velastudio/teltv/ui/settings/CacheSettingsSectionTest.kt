@@ -83,10 +83,64 @@ class CacheSettingsSectionTest {
         compose.waitForIdle()
     }
 
+
+    /**
+     * Renders the section at its true 1280x720 TV size OFF-SCREEN and saves the pixels.
+     * The test display is a small portrait phone screen, so any on-screen capture either
+     * clips or shrinks the layout; drawing the composed view into a full-size bitmap is
+     * the only capture that shows what a TV actually shows, pixel for pixel.
+     */
+    private fun captureTvLayoutPng(name: String, lastFreed: Long?, lastAt: Long?) {
+        val activity = compose.activity
+        val dm = activity.resources.displayMetrics
+        val widthPx = (1280 * dm.density).toInt()
+        val heightPx = (720 * dm.density).toInt()
+        activity.runOnUiThread {
+            val view = androidx.compose.ui.platform.ComposeView(activity)
+            view.setContent {
+                androidx.tv.material3.MaterialTheme {
+                    Box(Modifier.fillMaxSize().background(Color(0xFF101418))) {
+                        section(lastFreed, lastAt)
+                    }
+                }
+            }
+            activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+                .addView(view, android.view.ViewGroup.LayoutParams(widthPx, heightPx))
+            view.tag = "tv-capture"
+        }
+        compose.waitForIdle()
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var failure: Throwable? = null
+        activity.runOnUiThread {
+            try {
+                val root = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+                val view = root.findViewWithTag<androidx.compose.ui.platform.ComposeView>("tv-capture")
+                view.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(widthPx, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(heightPx, android.view.View.MeasureSpec.EXACTLY)
+                )
+                view.layout(0, 0, widthPx, heightPx)
+                val bitmap = android.graphics.Bitmap.createBitmap(widthPx, heightPx, android.graphics.Bitmap.Config.ARGB_8888)
+                view.draw(android.graphics.Canvas(bitmap))
+                val out = java.io.File(
+                    android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                    "$name.png"
+                )
+                java.io.FileOutputStream(out).use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                root.removeView(view)
+            } catch (t: Throwable) {
+                failure = t
+            }
+            latch.countDown()
+        }
+        if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) throw AssertionError("offscreen TV render timed out")
+        failure?.let { throw AssertionError("offscreen TV render failed", it) }
+    }
+
     @Test fun freedSpaceNoticeVisibleOnTvLayout() {
         showOnTv(1_610_612_736L, System.currentTimeMillis() - 2 * 3_600_000L)
         compose.onNodeWithText("Last cleanup freed 1.5 GB (2 h ago)").assertIsDisplayed()
-        screenshot("teltv-settings-cleanup-notice-tv")
+        captureTvLayoutPng("teltv-settings-cleanup-notice-tv", 1_610_612_736L, System.currentTimeMillis() - 2 * 3_600_000L)
     }
 
     @Test fun freedSpaceNoticeHiddenBeforeFirstCleanup() {
