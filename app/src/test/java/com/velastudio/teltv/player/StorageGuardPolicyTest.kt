@@ -85,4 +85,36 @@ class StorageGuardPolicyTest {
         // branch is unreachable.
         assertEquals(true, critical < soft)
     }
+
+    @Test
+    fun preflightSkipsWhenFreeSpaceIsHealthy() {
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldPreflightEvict(
+                StorageGuardPolicy.PREFLIGHT_FREE_BYTES, 0L, 1_000_000L
+            )
+        )
+    }
+
+    @Test
+    fun preflightEvictsBelowFloorAfterCooldown() {
+        assertEquals(
+            true,
+            StorageGuardPolicy.shouldPreflightEvict(
+                StorageGuardPolicy.PREFLIGHT_FREE_BYTES - 1, 0L,
+                StorageGuardPolicy.MIN_PREFLIGHT_INTERVAL_MS + 1
+            )
+        )
+    }
+
+    @Test
+    fun preflightIsRateLimited() {
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldPreflightEvict(
+                StorageGuardPolicy.PREFLIGHT_FREE_BYTES - 1, 0L,
+                StorageGuardPolicy.MIN_PREFLIGHT_INTERVAL_MS - 1
+            )
+        )
+    }
 }

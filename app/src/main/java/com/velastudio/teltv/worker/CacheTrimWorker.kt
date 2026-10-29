@@ -18,8 +18,33 @@ class CacheTrimWorker(context: Context, params: WorkerParameters) : CoroutineWor
         return runCatching {
             val cacheManager = CacheManager(app.telegramClient::execute, applicationContext)
             val limit = prefs.limitBytes.first()
-            cacheManager.trimToLimit(limit)
-            cacheManager.maybeEmergencyClear(applicationContext.filesDir.usableSpace)
+            val freeBefore = applicationContext.filesDir.usableSpace
+
+            var cleaned = false
+            if (cacheManager.getCurrentSizeBytes() > limit) {
+                cacheManager.trimToLimit(limit)
+                cleaned = true
+            }
+            val freeAfterTrim = applicationContext.filesDir.usableSpace
+            if (freeAfterTrim < CacheManager.EMERGENCY_FREE_SPACE_BYTES) {
+                cacheManager.clearAllNow()
+                cleaned = true
+            } else if (cacheManager.maybeProactiveEvict(freeAfterTrim)) {
+                // Not yet critical, but below the proactive floor: remove day-old media now so
+                // the emergency wipe stays the rare last resort.
+                cleaned = true
+            }
+
+            if (cleaned) {
+                // OptimizeStorage finishes asynchronously inside TDLib; give the freed bytes a
+                // moment to show up before measuring what the cleanup actually recovered.
+                kotlinx.coroutines.delay(2_000)
+                val freed = (applicationContext.filesDir.usableSpace - freeBefore).coerceAtLeast(0L)
+                if (freed > 0L) {
+                    prefs.recordCleanup(freed, System.currentTimeMillis())
+                    Timber.i("Cache cleanup freed %d bytes", freed)
+                }
+            }
         }.fold(
             onSuccess = { Result.success() },
             onFailure = {

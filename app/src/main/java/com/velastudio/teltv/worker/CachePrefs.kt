@@ -30,6 +30,8 @@ class CachePrefs(private val context: Context) {
     companion object {
         val KEY_AUTO_CLEAR_ENABLED = stringPreferencesKey("auto_clear_enabled")
         val KEY_LIMIT_BYTES = longPreferencesKey("auto_clear_limit_bytes")
+        val KEY_LAST_CLEANUP_FREED_BYTES = longPreferencesKey("last_cleanup_freed_bytes")
+        val KEY_LAST_CLEANUP_AT_MS = longPreferencesKey("last_cleanup_at_ms")
     }
 
     /** Defaults to on, matching CacheTrimWorker's prior "!= \"false\"" fallback behavior. */
@@ -47,5 +49,18 @@ class CachePrefs(private val context: Context) {
 
     suspend fun setLimitBytes(bytes: Long) {
         context.cacheDataStore.edit { it[KEY_LIMIT_BYTES] = bytes }
+    }
+
+    /** Bytes freed by the last automatic cleanup that actually removed files; null until one ran. */
+    val lastCleanupFreedBytes: Flow<Long?> = context.cacheDataStore.data.map { it[KEY_LAST_CLEANUP_FREED_BYTES] }
+
+    /** When that cleanup ran (epoch millis). */
+    val lastCleanupAtMs: Flow<Long?> = context.cacheDataStore.data.map { it[KEY_LAST_CLEANUP_AT_MS] }
+
+    suspend fun recordCleanup(freedBytes: Long, atMs: Long) {
+        context.cacheDataStore.edit {
+            it[KEY_LAST_CLEANUP_FREED_BYTES] = freedBytes
+            it[KEY_LAST_CLEANUP_AT_MS] = atMs
+        }
     }
 }

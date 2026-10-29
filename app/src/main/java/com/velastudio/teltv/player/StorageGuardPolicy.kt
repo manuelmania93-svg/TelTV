@@ -51,6 +51,15 @@ object StorageGuardPolicy {
     /** How often the guard re-checks free space. */
     const val CHECK_INTERVAL_MS = 15_000L
 
+    /**
+     * Below this much free space at the start of a new video the guard makes room before the
+     * download ramps up, instead of waiting for the mid-playback [SOFT_FREE_BYTES] tripwire.
+     */
+    const val PREFLIGHT_FREE_BYTES = 2L * 1024 * 1024 * 1024
+
+    /** Playback-start eviction at most this often. */
+    const val MIN_PREFLIGHT_INTERVAL_MS = 120_000L
+
     /** How long the emergency path waits for freed space to show up before resuming anyway. */
     const val RESUME_WAIT_MS = 15_000L
 
@@ -58,6 +67,17 @@ object StorageGuardPolicy {
     const val RECOVERED_FREE_BYTES = 450L * 1024 * 1024
 
     enum class Action { NONE, EVICT_OLD_FILES, EMERGENCY_CLEAR_AND_RESUME }
+
+    /**
+     * Pre-download check at the start of a new video: below [PREFLIGHT_FREE_BYTES] free space
+     * the guard evicts old cached media (same [EVICT_IMMUNITY_SECONDS] protection as the
+     * mid-playback eviction) so a big download does not stall halfway. Rate-limited like the
+     * other actions.
+     */
+    fun shouldPreflightEvict(freeBytes: Long, lastPreflightAtMs: Long, nowMs: Long): Boolean {
+        if (freeBytes >= PREFLIGHT_FREE_BYTES) return false
+        return nowMs - lastPreflightAtMs >= MIN_PREFLIGHT_INTERVAL_MS
+    }
 
     fun decideAction(
         freeBytes: Long,

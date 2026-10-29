@@ -78,4 +78,32 @@ class CacheManagerTest {
     fun negativeTrimLimitIsRejected() = runBlocking {
         CacheManager({ error("No TDLib call expected") }).trimToLimit(-1L)
     }
+
+    @Test
+    fun proactiveEvictionSkipsWhenFreeSpaceIsHealthy() = runBlocking {
+        val calls = mutableListOf<TdApi.Function<*>>()
+        val manager = CacheManager({ request ->
+            calls += request
+            TdApi.Ok()
+        })
+        assertEquals(false, manager.maybeProactiveEvict(CacheManager.PROACTIVE_FREE_SPACE_BYTES))
+        assertTrue(calls.isEmpty())
+    }
+
+    @Test
+    fun proactiveEvictionRemovesDayOldMediaWhenSpaceRunsLow() = runBlocking {
+        var optimize: TdApi.OptimizeStorage? = null
+        val manager = CacheManager({ request ->
+            when (request) {
+                is TdApi.OptimizeStorage -> {
+                    optimize = request
+                    TdApi.Ok()
+                }
+                else -> error("Unexpected request")
+            }
+        })
+        assertEquals(true, manager.maybeProactiveEvict(CacheManager.PROACTIVE_FREE_SPACE_BYTES - 1))
+        assertEquals(CacheManager.PROACTIVE_IMMUNITY_SECONDS, optimize!!.immunityDelay)
+        assertEquals(0L, optimize!!.size)
+    }
 }

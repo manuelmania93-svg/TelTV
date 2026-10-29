@@ -40,6 +40,8 @@ class PlaybackStorageGuard(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var lastEvictAtMs = 0L
     private var lastEmergencyAtMs = 0L
+    private var lastPreflightAtMs = 0L
+    private var lastMediaItemId: String? = null
 
     fun start() {
         scope.launch {
@@ -57,11 +59,26 @@ class PlaybackStorageGuard(
 
     private suspend fun checkOnce() {
         val player = playerProvider() ?: return
-        if (player.currentMediaItem == null) return
+        val mediaItem = player.currentMediaItem ?: return
         if (!CachePrefs(context).autoClearEnabled.first()) return
 
         val freeBytes = freeSpaceBytes()
         val now = nowMs()
+
+        // Pre-download check: a new video just started. If free space is already low, make room
+        // before the download ramps up instead of waiting for the mid-playback tripwires.
+        if (mediaItem.mediaId != lastMediaItemId) {
+            lastMediaItemId = mediaItem.mediaId
+            if (StorageGuardPolicy.shouldPreflightEvict(freeBytes, lastPreflightAtMs, now)) {
+                lastPreflightAtMs = now
+                Timber.i(
+                    "Making room before playback (%d bytes free); evicting cached files older than %ds",
+                    freeBytes, StorageGuardPolicy.EVICT_IMMUNITY_SECONDS
+                )
+                evictAndRecordFreed(freeBytes)
+                return
+            }
+        }
         when (StorageGuardPolicy.decideAction(freeBytes, lastEvictAtMs, lastEmergencyAtMs, now)) {
             StorageGuardPolicy.Action.NONE -> Unit
             StorageGuardPolicy.Action.EVICT_OLD_FILES -> {
@@ -70,9 +87,7 @@ class PlaybackStorageGuard(
                     "Low storage during playback (%d bytes free); evicting cached files older than %ds",
                     freeBytes, StorageGuardPolicy.EVICT_IMMUNITY_SECONDS
                 )
-                withContext(Dispatchers.IO) {
-                    cacheManager().evictAllButRecent(StorageGuardPolicy.EVICT_IMMUNITY_SECONDS)
-                }
+                evictAndRecordFreed(freeBytes)
             }
             StorageGuardPolicy.Action.EMERGENCY_CLEAR_AND_RESUME -> {
                 lastEmergencyAtMs = now
@@ -165,6 +180,25 @@ class PlaybackStorageGuard(
                 finished = durationMs > 0 && positionMs >= durationMs * 0.95
             )
         )
+    }
+
+    /**
+     * Evicts old cached media and, when space actually comes back, records the freed bytes so
+     * Settings can show how much TelTV recovered. OptimizeStorage finishes asynchronously
+     * inside TDLib, so the measurement waits a moment for the freed bytes to show up.
+     */
+    private suspend fun evictAndRecordFreed(freeBytesBefore: Long) {
+        withContext(Dispatchers.IO) {
+            cacheManager().evictAllButRecent(StorageGuardPolicy.EVICT_IMMUNITY_SECONDS)
+        }
+        delay(2_000)
+        val freed = (freeSpaceBytes() - freeBytesBefore).coerceAtLeast(0L)
+        if (freed > 0L) {
+            withContext(Dispatchers.IO) {
+                runCatching { CachePrefs(context).recordCleanup(freed, nowMs()) }
+                    .onFailure { Timber.w(it, "Could not record freed space") }
+            }
+        }
     }
 
     private fun cacheManager() = CacheManager(app.telegramClient::execute, context)

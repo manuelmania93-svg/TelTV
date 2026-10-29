@@ -973,6 +973,8 @@ class MainActivity : ComponentActivity() {
                         // this was local `remember` state that the worker never saw.
                         val autoClearEnabled by cachePrefs.autoClearEnabled.collectAsState(initial = true)
                         val cacheLimitBytes by cachePrefs.limitBytes.collectAsState(initial = com.velastudio.teltv.telegram.CacheManager.DEFAULT_LIMIT_BYTES)
+                        val lastCleanupFreedBytes by cachePrefs.lastCleanupFreedBytes.collectAsState(initial = null)
+                        val lastCleanupAtMs by cachePrefs.lastCleanupAtMs.collectAsState(initial = null)
                         val playbackPrefs = remember { PlaybackPrefs(app) }
                         val skipMs by playbackPrefs.skipIncrementMs.collectAsState(initial = PlaybackPrefs.DEFAULT_SKIP_MS)
                         val fastModeEnabled by playbackPrefs.fastModeEnabled.collectAsState(initial = false)
@@ -1005,6 +1007,8 @@ class MainActivity : ComponentActivity() {
                                 totalStorageBytes = totalStorage,
                                 cacheLimitBytes = cacheLimitBytes,
                                 autoClearEnabled = autoClearEnabled,
+                                lastCleanupFreedBytes = lastCleanupFreedBytes,
+                                lastCleanupAtMs = lastCleanupAtMs,
                                 onToggleAutoClear = { scope.launch { cachePrefs.setAutoClearEnabled(it) } },
                                 onSelectLimit = { scope.launch { cachePrefs.setLimitBytes(it) } },
                                 onClearNow = {

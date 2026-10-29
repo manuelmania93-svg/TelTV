@@ -14,6 +14,12 @@ class CacheManager(
         const val DEFAULT_LIMIT_BYTES = 1024L * 1024 * 1024 // 1 GB default
         const val EMERGENCY_FREE_SPACE_BYTES = 512L * 1024 * 1024
 
+        /** Below this much free space the hourly worker starts making room before it gets critical. */
+        const val PROACTIVE_FREE_SPACE_BYTES = 2L * 1024 * 1024 * 1024
+
+        /** Proactive eviction only removes cached media untouched for at least a day. */
+        const val PROACTIVE_IMMUNITY_SECONDS = 24 * 60 * 60
+
         internal fun telegramLimitFor(totalLimitBytes: Long, appCacheBytes: Long): Long {
             require(totalLimitBytes >= 0L) { "Cache limit must not be negative" }
             require(appCacheBytes >= 0L) { "App cache size must not be negative" }
@@ -96,6 +102,19 @@ class CacheManager(
         if (usableSpaceBytes < EMERGENCY_FREE_SPACE_BYTES) {
             clearAllNow()
         }
+    }
+
+    /**
+     * Frees space before storage gets critical: once the device drops below
+     * [PROACTIVE_FREE_SPACE_BYTES], evict cached media that has not been touched in
+     * [PROACTIVE_IMMUNITY_SECONDS], so the [EMERGENCY_FREE_SPACE_BYTES] wipe stays the rare
+     * last resort. Returns true when an eviction was requested. Only TDLib-cached media files
+     * are removed; login, favorites, watch history and subtitles are never touched.
+     */
+    suspend fun maybeProactiveEvict(freeSpaceBytes: Long): Boolean {
+        if (freeSpaceBytes >= PROACTIVE_FREE_SPACE_BYTES) return false
+        evictAllButRecent(PROACTIVE_IMMUNITY_SECONDS)
+        return true
     }
 
     private fun directorySizeBytes(directory: File): Long {

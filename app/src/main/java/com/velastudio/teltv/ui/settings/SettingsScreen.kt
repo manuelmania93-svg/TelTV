@@ -79,7 +79,9 @@ fun CacheSettingsSection(
     autoClearEnabled: Boolean,
     onToggleAutoClear: (Boolean) -> Unit,
     onSelectLimit: (Long) -> Unit,
-    onClearNow: () -> Unit
+    onClearNow: () -> Unit,
+    lastCleanupFreedBytes: Long? = null,
+    lastCleanupAtMs: Long? = null
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
 
@@ -108,6 +110,16 @@ fun CacheSettingsSection(
                     label = "TV storage free",
                     value = "${formatGigabytes(freeStorageBytes)} / ${formatGigabytes(totalStorageBytes)}",
                     valueColor = Color.White
+                )
+            }
+            if (lastCleanupFreedBytes != null && lastCleanupFreedBytes > 0 && lastCleanupAtMs != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    com.velastudio.teltv.worker.CleanupNotice.format(
+                        lastCleanupFreedBytes, lastCleanupAtMs, System.currentTimeMillis()
+                    ),
+                    color = TelTvMuted,
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
 
