@@ -7,7 +7,9 @@ package com.velastudio.teltv.worker
 object CleanupNotice {
 
     fun format(freedBytes: Long, freedAtMs: Long, nowMs: Long): String {
-        return "Last cleanup freed ${formatSize(freedBytes)} (${formatElapsed(nowMs - freedAtMs)} ago)"
+        val elapsedMs = nowMs - freedAtMs
+        val whenText = if (elapsedMs < 60_000) "just now" else "${formatElapsed(elapsedMs)} ago"
+        return "Last cleanup freed ${formatSize(freedBytes)} ($whenText)"
     }
 
     internal fun formatSize(bytes: Long): String {
