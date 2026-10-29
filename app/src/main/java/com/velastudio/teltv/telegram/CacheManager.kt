@@ -20,6 +20,21 @@ class CacheManager(
         /** Proactive eviction only removes cached media untouched for at least a day. */
         const val PROACTIVE_IMMUNITY_SECONDS = 24 * 60 * 60
 
+        /**
+         * Deletes every entry in the app's cache dir except downloaded subtitles, which are
+         * user data (fetched per video, painful to lose) and never part of any cleanup. Pure
+         * file operation so the protection is unit-testable on the JVM; throws IOException
+         * naming the entry when one cannot be removed, so a half-cleared cache is never
+         * reported as cleared.
+         */
+        internal fun clearAppCacheExceptSubtitles(cacheDir: File) {
+            cacheDir.listFiles()?.forEach { cacheEntry ->
+                if (cacheEntry.name != "subtitles" && !cacheEntry.deleteRecursively()) {
+                    throw IOException("Could not clear app cache entry: ${cacheEntry.name}")
+                }
+            }
+        }
+
         internal fun telegramLimitFor(totalLimitBytes: Long, appCacheBytes: Long): Long {
             require(totalLimitBytes >= 0L) { "Cache limit must not be negative" }
             require(appCacheBytes >= 0L) { "App cache size must not be negative" }
@@ -44,11 +59,7 @@ class CacheManager(
                 false, 50
             )
         )
-        context?.cacheDir?.listFiles()?.forEach { cacheEntry ->
-            if (cacheEntry.name != "subtitles" && !cacheEntry.deleteRecursively()) {
-                throw IOException("Could not clear app cache entry: ${cacheEntry.name}")
-            }
-        }
+        context?.cacheDir?.let(::clearAppCacheExceptSubtitles)
     }
 
     suspend fun trimToLimit(limitBytes: Long) {
