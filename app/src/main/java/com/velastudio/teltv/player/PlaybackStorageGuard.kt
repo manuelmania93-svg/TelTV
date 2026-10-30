@@ -34,12 +34,17 @@ class PlaybackStorageGuard(
     private val app: TelTvApp,
     private val playerProvider: () -> Player?,
     private val freeSpaceBytes: () -> Long = { context.filesDir.usableSpace },
-    private val nowMs: () -> Long = System::currentTimeMillis
+    private val nowMs: () -> Long = System::currentTimeMillis,
+    private val cacheManagerFactory: () -> CacheManager = { CacheManager(app.telegramClient::execute, context) }
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var lastEvictAtMs = 0L
     private var lastEmergencyAtMs = 0L
+    private var lastPreflightAtMs = 0L
+    private var lastMediaItemId: String? = null
+    private var errorRecoveries = 0
+    private var errorRecoveryMediaId: String? = null
 
     fun start() {
         scope.launch {
@@ -55,13 +60,63 @@ class PlaybackStorageGuard(
         scope.cancel()
     }
 
+    /**
+     * Called from [PlaybackService] when playback actually fails. A full disk surfaces exactly
+     * this way (TDLib can no longer write the next chunk), and the polling loop alone would
+     * leave the player stuck on an error. If free space confirms a full disk, this runs the
+     * same emergency clear-and-resume immediately instead of waiting for the next check;
+     * the position is persisted first and playback resumes from it after re-preparing.
+     */
+    fun onPlaybackError() {
+        scope.launch {
+            runCatching { handlePlaybackError() }
+                .onFailure { Timber.w(it, "Storage-full recovery after playback error failed") }
+        }
+    }
+
+    private suspend fun handlePlaybackError() {
+        if (!CachePrefs(context).autoClearEnabled.first()) return
+        val player = playerProvider() ?: return
+        val mediaId = player.currentMediaItem?.mediaId ?: return
+        val freeBytes = freeSpaceBytes()
+        if (mediaId != errorRecoveryMediaId) {
+            errorRecoveryMediaId = mediaId
+            errorRecoveries = 0
+        }
+        if (!StorageGuardPolicy.shouldEmergencyOnPlaybackError(freeBytes, errorRecoveries)) return
+        errorRecoveries++
+        // Tell the polling path an emergency just ran so it does not immediately repeat one.
+        lastEmergencyAtMs = nowMs()
+        lastEvictAtMs = lastEmergencyAtMs
+        Timber.w(
+            "Playback failed with a full disk (%d bytes free); clearing cache and resuming immediately",
+            freeBytes
+        )
+        emergencyClearAndResume(player, freeBytes, reprepare = true)
+    }
+
     private suspend fun checkOnce() {
         val player = playerProvider() ?: return
-        if (player.currentMediaItem == null) return
+        val mediaItem = player.currentMediaItem ?: return
         if (!CachePrefs(context).autoClearEnabled.first()) return
 
         val freeBytes = freeSpaceBytes()
         val now = nowMs()
+
+        // Pre-download check: a new video just started. If free space is already low, make room
+        // before the download ramps up instead of waiting for the mid-playback tripwires.
+        if (mediaItem.mediaId != lastMediaItemId) {
+            lastMediaItemId = mediaItem.mediaId
+            if (StorageGuardPolicy.shouldPreflightEvict(freeBytes, lastPreflightAtMs, now)) {
+                lastPreflightAtMs = now
+                Timber.i(
+                    "Making room before playback (%d bytes free); evicting cached files older than %ds",
+                    freeBytes, StorageGuardPolicy.EVICT_IMMUNITY_SECONDS
+                )
+                evictAndRecordFreed(freeBytes)
+                return
+            }
+        }
         when (StorageGuardPolicy.decideAction(freeBytes, lastEvictAtMs, lastEmergencyAtMs, now)) {
             StorageGuardPolicy.Action.NONE -> Unit
             StorageGuardPolicy.Action.EVICT_OLD_FILES -> {
@@ -70,9 +125,7 @@ class PlaybackStorageGuard(
                     "Low storage during playback (%d bytes free); evicting cached files older than %ds",
                     freeBytes, StorageGuardPolicy.EVICT_IMMUNITY_SECONDS
                 )
-                withContext(Dispatchers.IO) {
-                    cacheManager().evictAllButRecent(StorageGuardPolicy.EVICT_IMMUNITY_SECONDS)
-                }
+                evictAndRecordFreed(freeBytes)
             }
             StorageGuardPolicy.Action.EMERGENCY_CLEAR_AND_RESUME -> {
                 lastEmergencyAtMs = now
@@ -90,7 +143,7 @@ class PlaybackStorageGuard(
      * forward from whatever offset it is opened at, so playback continues with a brief rebuffer
      * instead of a permanent "storage full" stall.
      */
-    private suspend fun emergencyClearAndResume(player: Player, freeBytes: Long) {
+    private suspend fun emergencyClearAndResume(player: Player, freeBytes: Long, reprepare: Boolean = false) {
         val mediaItem = player.currentMediaItem ?: return
         val streamUrl = mediaItem.localConfiguration?.uri?.toString() ?: return
         val isTelegram = mediaItem.localConfiguration?.uri?.scheme ==
@@ -131,6 +184,9 @@ class PlaybackStorageGuard(
         }
 
         player.seekTo(positionMs)
+        // After an actual playback error the player sits in STATE_IDLE; a bare play() cannot
+        // recover it - the source must be re-prepared (loads forward from the seek position).
+        if (reprepare) player.prepare()
         if (wasPlaying) player.play()
     }
 
@@ -167,5 +223,24 @@ class PlaybackStorageGuard(
         )
     }
 
-    private fun cacheManager() = CacheManager(app.telegramClient::execute, context)
+    /**
+     * Evicts old cached media and, when space actually comes back, records the freed bytes so
+     * Settings can show how much TelTV recovered. OptimizeStorage finishes asynchronously
+     * inside TDLib, so the measurement waits a moment for the freed bytes to show up.
+     */
+    private suspend fun evictAndRecordFreed(freeBytesBefore: Long) {
+        withContext(Dispatchers.IO) {
+            cacheManager().evictAllButRecent(StorageGuardPolicy.EVICT_IMMUNITY_SECONDS)
+        }
+        delay(2_000)
+        val freed = (freeSpaceBytes() - freeBytesBefore).coerceAtLeast(0L)
+        if (freed > 0L) {
+            withContext(Dispatchers.IO) {
+                runCatching { CachePrefs(context).recordCleanup(freed, nowMs()) }
+                    .onFailure { Timber.w(it, "Could not record freed space") }
+            }
+        }
+    }
+
+    private fun cacheManager() = cacheManagerFactory()
 }

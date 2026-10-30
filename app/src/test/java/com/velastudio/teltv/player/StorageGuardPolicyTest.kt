@@ -85,4 +85,82 @@ class StorageGuardPolicyTest {
         // branch is unreachable.
         assertEquals(true, critical < soft)
     }
+
+    @Test
+    fun preflightSkipsWhenFreeSpaceIsHealthy() {
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldPreflightEvict(
+                StorageGuardPolicy.PREFLIGHT_FREE_BYTES, 0L, 1_000_000L
+            )
+        )
+    }
+
+    @Test
+    fun preflightEvictsBelowFloorAfterCooldown() {
+        assertEquals(
+            true,
+            StorageGuardPolicy.shouldPreflightEvict(
+                StorageGuardPolicy.PREFLIGHT_FREE_BYTES - 1, 0L,
+                StorageGuardPolicy.MIN_PREFLIGHT_INTERVAL_MS + 1
+            )
+        )
+    }
+
+    @Test
+    fun preflightIsRateLimited() {
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldPreflightEvict(
+                StorageGuardPolicy.PREFLIGHT_FREE_BYTES - 1, 0L,
+                StorageGuardPolicy.MIN_PREFLIGHT_INTERVAL_MS - 1
+            )
+        )
+    }
+
+    @Test
+    fun playbackErrorBelowFloorTriggersImmediateEmergency() {
+        assertEquals(
+            true,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 0
+            )
+        )
+    }
+
+    @Test
+    fun playbackErrorWithFreeSpaceIsNotTreatedAsStorageFull() {
+        // A network stall looks identical to the player; without a nearly-full disk it is not
+        // a storage emergency and must not wipe the cache.
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES, 0
+            )
+        )
+    }
+
+    @Test
+    fun recentEmergencyDoesNotParkThePlayerOnAFullDiskError() {
+        // One recovery already happened for this video and the disk filled again anyway:
+        // blocking now would leave the player stuck on the error, so a second attempt is made.
+        assertEquals(
+            true,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1, 1
+            )
+        )
+    }
+
+    @Test
+    fun recoveryAttemptsAreCappedPerVideo() {
+        // After the cap the error surfaces instead of looping wipes that cannot help.
+        assertEquals(
+            false,
+            StorageGuardPolicy.shouldEmergencyOnPlaybackError(
+                StorageGuardPolicy.ERROR_TRIGGER_FREE_BYTES - 1,
+                StorageGuardPolicy.MAX_ERROR_RECOVERIES
+            )
+        )
+    }
 }
