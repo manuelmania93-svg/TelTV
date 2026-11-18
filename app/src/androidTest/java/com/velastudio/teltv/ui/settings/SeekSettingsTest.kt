@@ -77,6 +77,45 @@ class SeekSettingsTest {
         compose.runOnIdle { assertEquals(120_000L, selected) }
     }
 
+    @Test fun minutePlayerButtonsActivateBothDirections() {
+        var amount by mutableStateOf(60_000L)
+        var backs = 0
+        var forwards = 0
+        compose.setContent {
+            CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f)
+            ) {
+                androidx.tv.material3.MaterialTheme {
+                    com.velastudio.teltv.ui.player.PlaybackControlsOverlay(
+                        title = "Minute skip controls", isPlaying = false,
+                        currentPositionMs = 600_000L, durationMs = 3_600_000L,
+                        skipIncrementMs = amount, visible = true,
+                        onPlayPause = {}, onSkipBack = { backs++ }, onSkipForward = { forwards++ },
+                        onOpenTracks = {}, onCycleAspectRatio = {}, onOpenExternal = null,
+                        autoPlayNext = true, onToggleAutoPlay = {}
+                    )
+                }
+            }
+        }
+        listOf(60_000L, 120_000L, 300_000L).forEachIndexed { index, choice ->
+            compose.runOnIdle { amount = choice }
+            listOf("Skip back", "Skip forward").forEach { direction ->
+                val node = compose.onNodeWithContentDescription("$direction ${SeekSteps.label(choice)}")
+                node.assertIsDisplayed().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+                node.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
+            }
+            compose.runOnIdle {
+                assertEquals(index + 1, backs)
+                assertEquals(index + 1, forwards)
+            }
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        val pfd = InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("screencap -p /sdcard/Download/teltv-minute-player-controls.png")
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
+    }
+
     @Test fun minuteChoicesPersistThroughNewPreferenceInstance() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val prefs = PlaybackPrefs(context)
