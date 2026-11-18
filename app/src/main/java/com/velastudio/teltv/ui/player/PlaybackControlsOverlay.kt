@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.OpenInNew
@@ -148,8 +150,12 @@ fun PlaybackControlsOverlay(
                         Spacer(Modifier.width(32.dp))
                     }
                     ControlButton(
-                        icon = if (skipIncrementMs >= 10_000) Icons.Filled.Replay10 else Icons.Filled.Replay5,
-                        contentDescription = "Skip back",
+                        icon = when {
+                            skipIncrementMs >= 60_000 -> Icons.Filled.FastRewind
+                            skipIncrementMs >= 10_000 -> Icons.Filled.Replay10
+                            else -> Icons.Filled.Replay5
+                        },
+                        contentDescription = "Skip back ${com.velastudio.teltv.player.SeekSteps.label(skipIncrementMs)}",
                         onClick = onSkipBack
                     )
                     Spacer(Modifier.width(32.dp))
@@ -162,8 +168,12 @@ fun PlaybackControlsOverlay(
                     )
                     Spacer(Modifier.width(32.dp))
                     ControlButton(
-                        icon = if (skipIncrementMs >= 10_000) Icons.Filled.Forward10 else Icons.Filled.Forward5,
-                        contentDescription = "Skip forward",
+                        icon = when {
+                            skipIncrementMs >= 60_000 -> Icons.Filled.FastForward
+                            skipIncrementMs >= 10_000 -> Icons.Filled.Forward10
+                            else -> Icons.Filled.Forward5
+                        },
+                        contentDescription = "Skip forward ${com.velastudio.teltv.player.SeekSteps.label(skipIncrementMs)}",
                         onClick = onSkipForward
                     )
                     if (onPlayNext != null) {

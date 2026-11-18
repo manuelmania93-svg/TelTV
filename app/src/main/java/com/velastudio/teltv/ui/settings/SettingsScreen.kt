@@ -284,12 +284,16 @@ fun PlaybackSettingsSection(
             Spacer(Modifier.height(8.dp))
             Text("Remote Skip Amount (Left / Right keys)", color = Color(0xFFB0BEC5))
             Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                SkipChoiceButton("5 seconds", selected = skipIncrementMs == 5_000L) {
-                    onSkipIncrementChanged(5_000L)
-                }
-                SkipChoiceButton("10 seconds", selected = skipIncrementMs == 10_000L) {
-                    onSkipIncrementChanged(10_000L)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                com.velastudio.teltv.player.SeekSteps.choicesMs.chunked(3).forEach { choices ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        choices.forEach { amount ->
+                            SkipChoiceButton(
+                                com.velastudio.teltv.player.SeekSteps.label(amount),
+                                selected = skipIncrementMs == amount
+                            ) { onSkipIncrementChanged(amount) }
+                        }
+                    }
                 }
             }
         }
