@@ -15,7 +15,7 @@ import com.velastudio.teltv.player.SubtitleTiming
 
 private val Context.playbackDataStore by preferencesDataStore(name = "playback_prefs")
 
-/** Lets Settings offer a simple "Skip amount: 5s / 10s" choice, used by the player controls. */
+/** Lets Settings offer shared short and minute skip choices, used by the player controls. */
 class PlaybackPrefs(private val context: Context) {
     companion object {
         val KEY_SKIP_MS = longPreferencesKey("skip_increment_ms")
@@ -27,7 +27,7 @@ class PlaybackPrefs(private val context: Context) {
         val KEY_SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
         val KEY_SUBTITLE_COLOR = stringPreferencesKey("subtitle_color")
         val KEY_SUBTITLE_LANGUAGE = stringPreferencesKey("subtitle_language")
-        const val DEFAULT_SKIP_MS = 10_000L
+        const val DEFAULT_SKIP_MS = com.velastudio.teltv.player.SeekSteps.DEFAULT_MS
         const val DEFAULT_AUTOPLAY = true
     }
 
@@ -73,11 +73,11 @@ class PlaybackPrefs(private val context: Context) {
     }
 
     val skipIncrementMs: Flow<Long> = context.playbackDataStore.data.map {
-        it[KEY_SKIP_MS] ?: DEFAULT_SKIP_MS
+        com.velastudio.teltv.player.SeekSteps.normalize(it[KEY_SKIP_MS] ?: DEFAULT_SKIP_MS)
     }
 
     suspend fun setSkipIncrementMs(ms: Long) {
-        context.playbackDataStore.edit { it[KEY_SKIP_MS] = ms }
+        context.playbackDataStore.edit { it[KEY_SKIP_MS] = com.velastudio.teltv.player.SeekSteps.normalize(ms) }
     }
 
     val fastModeEnabled: Flow<Boolean> = context.playbackDataStore.data.map {

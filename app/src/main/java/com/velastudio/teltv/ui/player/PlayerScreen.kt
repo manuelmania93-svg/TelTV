@@ -716,17 +716,15 @@ fun PlayerScreen(
         val now = System.currentTimeMillis()
         val isRapid = (now - lastSeekTimestamp) < 600
         lastSeekTimestamp = now
-        val stepMs = if (isRapid) 30_000L else skipIncrementMs
+        val stepMs = com.velastudio.teltv.player.SeekSteps.effectiveStepMs(skipIncrementMs, isRapid)
 
         controller?.let {
-            val target = if (forward) {
-                (it.currentPosition + stepMs).coerceAtMost(it.duration.coerceAtLeast(0))
-            } else {
-                (it.currentPosition - stepMs).coerceAtLeast(0)
-            }
+            val target = com.velastudio.teltv.player.SeekSteps.targetMs(
+                it.currentPosition, it.duration, forward, stepMs
+            )
             it.seekTo(target)
             seekingIsForward = forward
-            seekingText = "${if (forward) "+" else "-"}${stepMs / 1000}s"
+            seekingText = "${if (forward) "+" else "-"}${com.velastudio.teltv.player.SeekSteps.badge(stepMs)}"
         }
         controlsVisible = true
     }
