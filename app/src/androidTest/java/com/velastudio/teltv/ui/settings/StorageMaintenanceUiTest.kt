@@ -56,14 +56,16 @@ class StorageMaintenanceUiTest {
             }
         }
         IdleCleanupPolicy.intervals.forEach { amount ->
-            val node = compose.onNodeWithText("$amount hours", substring = true)
+            val label = "$amount hours"
+            val node = compose.onAllNodes((hasText(label) or hasText("✓ $label")) and hasClickAction())[0]
                 .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             node.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
             compose.runOnIdle { assertEquals(amount, selectedHours) }
         }
         IdleCleanupPolicy.retentions.forEach { amount ->
             // 4 hours exists both as interval and retention, so use the final matching node.
-            val nodes = compose.onAllNodesWithText(IdleCleanupPolicy.retentionLabel(amount), substring = true)
+            val label = IdleCleanupPolicy.retentionLabel(amount)
+            val nodes = compose.onAllNodes((hasText(label) or hasText("✓ $label")) and hasClickAction())
             val node = nodes[nodes.fetchSemanticsNodes().lastIndex]
                 .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
             node.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }

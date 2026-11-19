@@ -787,7 +787,8 @@ class TelegramClient(private val context: Context) {
         if (fileId <= 0) return@withContext ""
         val c = client ?: return@withContext ""
         val cached = fileCache[fileId]
-        if (cached?.local?.isDownloadingCompleted == true && !cached.local.path.isNullOrBlank()) {
+        if (cached?.local?.isDownloadingCompleted == true && !cached.local.path.isNullOrBlank() &&
+            java.io.File(cached.local.path).exists()) {
             return@withContext cached.local.path
         }
         suspendCancellableCoroutine { cont ->
