@@ -20,20 +20,16 @@ class CacheTrimWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val limit = prefs.limitBytes.first()
             val freeBefore = applicationContext.filesDir.usableSpace
 
-            var cleaned = false
-            if (cacheManager.getCurrentSizeBytes() > limit) {
-                cacheManager.trimToLimit(limit)
-                cleaned = true
-            }
-            val freeAfterTrim = applicationContext.filesDir.usableSpace
-            if (freeAfterTrim < CacheManager.EMERGENCY_FREE_SPACE_BYTES) {
-                cacheManager.clearAllNow()
-                cleaned = true
-            } else if (cacheManager.maybeProactiveEvict(freeAfterTrim)) {
-                // Not yet critical, but below the proactive floor: remove day-old media now so
-                // the emergency wipe stays the rare last resort.
-                cleaned = true
-            }
+            val now = System.currentTimeMillis()
+            val due = IdleCleanupPolicy.due(now, prefs.lastSweepAt.first(), prefs.sweepHours.first())
+            val pressure = cacheManager.getCurrentSizeBytes() > limit ||
+                freeBefore < CacheManager.PROACTIVE_FREE_SPACE_BYTES
+            val cleaned = if (due || pressure) {
+                cacheManager.sweepReusable(limit, prefs.retentionSeconds.first())
+            } else false
+            if (cleaned) prefs.recordSweep(now)
+            // Busy player/readers/downloads defer the whole background sweep, including
+            // low-space paths. Playback's dedicated emergency save/resume guard is unchanged.
 
             if (cleaned) {
                 // OptimizeStorage finishes asynchronously inside TDLib; give the freed bytes a

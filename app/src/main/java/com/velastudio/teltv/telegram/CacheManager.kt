@@ -62,6 +62,44 @@ class CacheManager(
         context?.cacheDir?.let(::clearAppCacheExceptSubtitles)
     }
 
+    /** Idle maintenance only. Never reset databases or delete media paths directly. */
+    suspend fun clearReusableNow(): Boolean = idleMaintenance {
+        clearAllNow()
+        optimizeThumbnails(0L, 0)
+    }
+
+    /** TTL and size are independent limits. Thumbnail budget is part of the existing total. */
+    suspend fun sweepReusable(limitBytes: Long, retentionSeconds: Long): Boolean = idleMaintenance {
+        require(limitBytes >= 0)
+        val ttl = if (retentionSeconds == Long.MAX_VALUE) Int.MAX_VALUE else
+            retentionSeconds.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
+        val thumbnailsLimit = minOf(60L * 1024 * 1024, limitBytes)
+        val appCache = context?.cacheDir?.let(::directorySizeBytes) ?: 0L
+        telegramSend(TdApi.OptimizeStorage(
+            (limitBytes - appCache - thumbnailsLimit).coerceAtLeast(0L), ttl, Int.MAX_VALUE, 60,
+            arrayOf(), longArrayOf(), longArrayOf(), false, 50
+        ))
+        optimizeThumbnails(thumbnailsLimit, ttl)
+    }
+
+    private suspend fun optimizeThumbnails(limit: Long, ttl: Int) {
+        telegramSend(TdApi.OptimizeStorage(
+            limit, ttl, Int.MAX_VALUE, if (limit == 0L && ttl == 0) 0 else 60,
+            arrayOf<TdApi.FileType>(TdApi.FileTypeThumbnail()),
+            longArrayOf(), longArrayOf(), false, 50
+        ))
+    }
+
+    private suspend fun idleMaintenance(action: suspend () -> Unit): Boolean {
+        val gate = StorageUseGate.shared
+        if (!gate.tryBeginCleanup()) return false
+        // Cancellation must not release the gate while TDLib is still deleting files.
+        // Its request has no cancellable deletion handle. Wait for the response first.
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable + kotlinx.coroutines.Dispatchers.IO) {
+            try { action(); true } finally { gate.endCleanup() }
+        }
+    }
+
     suspend fun trimToLimit(limitBytes: Long) {
         require(limitBytes >= 0L) { "Cache limit must not be negative" }
         if (getCurrentSizeBytes() <= limitBytes) return

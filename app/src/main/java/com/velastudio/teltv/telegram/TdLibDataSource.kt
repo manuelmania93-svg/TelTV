@@ -13,6 +13,7 @@ class TdLibDataSource(
     private val fileId: Int
 ) : BaseDataSource(true) {
 
+    private var storageLease = false
     private var file: RandomAccessFile? = null
     private var bytesRemaining: Long = 0
     private var readPosition: Long = 0
@@ -26,6 +27,9 @@ class TdLibDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
+        StorageUseGate.shared.acquireReader()
+        storageLease = true
+        try {
         val position = dataSpec.position
         readPosition = position
 
@@ -48,6 +52,10 @@ class TdLibDataSource(
         transferInitializing(dataSpec)
         transferStarted(dataSpec)
         return bytesRemaining
+        } catch (failure: Throwable) {
+            close()
+            throw failure
+        }
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
@@ -100,6 +108,10 @@ class TdLibDataSource(
     override fun close() {
         runCatching { file?.close() }
         file = null
+        if (storageLease) {
+            storageLease = false
+            StorageUseGate.shared.releaseReader()
+        }
     }
 
     private fun updateDownloadedBoundary(tdFile: TdApi.File) {
