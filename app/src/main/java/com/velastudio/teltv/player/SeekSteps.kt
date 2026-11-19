@@ -3,13 +3,14 @@ package com.velastudio.teltv.player
 /** Shared skip choices and boundary arithmetic for the remote and on-screen controls. */
 object SeekSteps {
     const val DEFAULT_MS = 10_000L
-    val choicesMs: List<Long> = listOf(5_000L, 10_000L, 60_000L, 120_000L, 300_000L)
+    val choicesMs: List<Long> = listOf(5_000L, 10_000L, 30_000L, 60_000L, 120_000L, 300_000L)
 
     fun normalize(ms: Long): Long = if (ms in choicesMs) ms else DEFAULT_MS
 
     fun label(ms: Long): String = when (normalize(ms)) {
         5_000L -> "5 seconds"
         10_000L -> "10 seconds"
+        30_000L -> "30 seconds"
         60_000L -> "1 minute"
         120_000L -> "2 minutes"
         else -> "5 minutes"

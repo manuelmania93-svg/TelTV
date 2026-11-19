@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Replay30
+import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Subtitles
@@ -152,6 +154,7 @@ fun PlaybackControlsOverlay(
                     ControlButton(
                         icon = when {
                             skipIncrementMs >= 60_000 -> Icons.Filled.FastRewind
+                            skipIncrementMs >= 30_000 -> Icons.Filled.Replay30
                             skipIncrementMs >= 10_000 -> Icons.Filled.Replay10
                             else -> Icons.Filled.Replay5
                         },
@@ -170,6 +173,7 @@ fun PlaybackControlsOverlay(
                     ControlButton(
                         icon = when {
                             skipIncrementMs >= 60_000 -> Icons.Filled.FastForward
+                            skipIncrementMs >= 30_000 -> Icons.Filled.Forward30
                             skipIncrementMs >= 10_000 -> Icons.Filled.Forward10
                             else -> Icons.Filled.Forward5
                         },

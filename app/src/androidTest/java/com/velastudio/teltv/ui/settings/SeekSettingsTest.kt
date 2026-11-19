@@ -64,9 +64,9 @@ class SeekSettingsTest {
             keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
             keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
         }
-        compose.onNodeWithText("1 minute", substring = true).assertIsFocused()
+        compose.onNodeWithText("30 seconds", substring = true).assertIsFocused()
         compose.onRoot().performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
-        compose.runOnIdle { assertEquals(60_000L, selected) }
+        compose.runOnIdle { assertEquals(30_000L, selected) }
         compose.onRoot().performKeyInput { keyDown(Key.DirectionDown); keyUp(Key.DirectionDown) }
         compose.onNodeWithText("5 minutes", substring = true).assertIsFocused()
         compose.onRoot().performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
@@ -75,6 +75,10 @@ class SeekSettingsTest {
         compose.onNodeWithText("2 minutes", substring = true).assertIsFocused()
         compose.onRoot().performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
         compose.runOnIdle { assertEquals(120_000L, selected) }
+        compose.onRoot().performKeyInput { keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft) }
+        compose.onNodeWithText("1 minute", substring = true).assertIsFocused()
+        compose.onRoot().performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
+        compose.runOnIdle { assertEquals(60_000L, selected) }
     }
 
     @Test fun minutePlayerButtonsActivateBothDirections() {
@@ -97,7 +101,7 @@ class SeekSettingsTest {
                 }
             }
         }
-        listOf(60_000L, 120_000L, 300_000L).forEachIndexed { index, choice ->
+        listOf(60_000L, 120_000L, 300_000L, 30_000L).forEachIndexed { index, choice ->
             compose.runOnIdle { amount = choice }
             listOf("Skip back", "Skip forward").forEach { direction ->
                 val node = compose.onNodeWithContentDescription("$direction ${SeekSteps.label(choice)}")
@@ -121,7 +125,7 @@ class SeekSettingsTest {
         val prefs = PlaybackPrefs(context)
         val previous = prefs.skipIncrementMs.first()
         try {
-            listOf(60_000L, 120_000L, 300_000L).forEach { amount ->
+            SeekSteps.choicesMs.forEach { amount ->
                 prefs.setSkipIncrementMs(amount)
                 assertEquals(amount, PlaybackPrefs(context).skipIncrementMs.first())
             }
@@ -130,7 +134,7 @@ class SeekSettingsTest {
 
     @Test fun captureFullTvSkipChoices() {
         compose.setContent {
-            androidx.tv.material3.MaterialTheme { PlaybackSettingsSection(300_000L) {} }
+            androidx.tv.material3.MaterialTheme { PlaybackSettingsSection(30_000L) {} }
         }
         val activity = compose.activity
         val dm = activity.resources.displayMetrics
@@ -141,7 +145,7 @@ class SeekSettingsTest {
             view.setContent {
                 androidx.tv.material3.MaterialTheme {
                     Box(Modifier.fillMaxSize().background(Color(0xFF101418)).padding(24.dp)) {
-                        PlaybackSettingsSection(300_000L) {}
+                        PlaybackSettingsSection(30_000L) {}
                     }
                 }
             }
