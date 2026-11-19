@@ -5,19 +5,21 @@ import org.junit.Test
 
 class SeekStepsTest {
     @Test fun choicesAndDefaultStayCompatible() {
-        assertEquals(listOf(5_000L, 10_000L, 60_000L, 120_000L, 300_000L), SeekSteps.choicesMs)
+        assertEquals(listOf(5_000L, 10_000L, 30_000L, 60_000L, 120_000L, 300_000L), SeekSteps.choicesMs)
         assertEquals(10_000L, SeekSteps.normalize(-1))
-        assertEquals(10_000L, SeekSteps.normalize(30_000))
+        assertEquals(10_000L, SeekSteps.normalize(45_000))
         SeekSteps.choicesMs.forEach { assertEquals(it, SeekSteps.normalize(it)) }
     }
     @Test fun labelsMatchMinuteChoices() {
+        assertEquals("30 seconds", SeekSteps.label(30_000))
+        assertEquals("30s", SeekSteps.badge(30_000))
         assertEquals("1 minute", SeekSteps.label(60_000))
         assertEquals("2 minutes", SeekSteps.label(120_000))
         assertEquals("5 minutes", SeekSteps.label(300_000))
         assertEquals("5 min", SeekSteps.badge(300_000))
     }
     @Test fun repeatNeverShrinksLargeSelectedSteps() {
-        listOf(60_000L, 120_000L, 300_000L).forEach {
+        listOf(30_000L, 60_000L, 120_000L, 300_000L).forEach {
             assertEquals(it, SeekSteps.effectiveStepMs(it, false))
             assertEquals(it, SeekSteps.effectiveStepMs(it, true))
         }
