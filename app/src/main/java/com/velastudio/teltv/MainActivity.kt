@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
 
                 val navController = rememberNavController()
                 val scope = rememberCoroutineScope()
+                val isClearingCache by app.manualCacheClear.isClearing.collectAsState()
                 
                 var crashReport by remember { mutableStateOf(com.velastudio.teltv.util.CrashLogger.lastCrashReport(app)) }
                 if (crashReport != null) {
@@ -139,7 +140,6 @@ class MainActivity : ComponentActivity() {
                         var allChannelsRow by remember { mutableStateOf(HomeRow("Channels", emptyList())) }
                         var folderRowsState by remember { mutableStateOf<List<HomeRow>>(emptyList()) }
                         var isLoadingChannels by remember { mutableStateOf(true) }
-                        var cacheClearedSignal by remember { mutableStateOf(0) }
                         var hasObservedHomeResume by remember { mutableStateOf(false) }
                         val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
 
@@ -261,15 +261,6 @@ class MainActivity : ComponentActivity() {
                             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                         }
 
-                        LaunchedEffect(cacheClearedSignal) {
-                            if (cacheClearedSignal == 0) return@LaunchedEffect
-                            val remaining = runCatching {
-                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).getCurrentSizeBytes()
-                            }.onFailure { Timber.w(it, "Could not read cache size after quick clear") }
-                                .getOrDefault(-1L)
-                            Timber.i("Quick cache clear done; remaining bytes=%d", remaining)
-                        }
-
                         HomeScreen(
                             thumbnailLoader = thumbnailLoader,
                             continueWatching = continueWatching,
@@ -309,12 +300,19 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenSearch = { navController.navigate("search") },
                             onOpenSettings = { navController.navigate("settings") },
+                            isClearingCache = isClearingCache,
                             onQuickClearCache = {
-                                scope.launch {
+                                app.manualCacheClear.tryLaunch(scope) {
                                     runCatching {
                                         com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).clearAllNow()
                                     }.onFailure { Timber.e(it, "Quick cache clear failed") }
-                                        .onSuccess { cacheClearedSignal++ }
+                                        .onSuccess {
+                                            val remaining = runCatching {
+                                                com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).getCurrentSizeBytes()
+                                            }.onFailure { Timber.w(it, "Could not read cache size after quick clear") }
+                                                .getOrDefault(-1L)
+                                            Timber.i("Quick cache clear done; remaining bytes=%d", remaining)
+                                        }
                                 }
                             }
                         )
@@ -1002,6 +1000,7 @@ class MainActivity : ComponentActivity() {
                             item {
                             CacheSettingsSection(
                                 currentSizeBytes = cacheSize,
+                                isClearing = isClearingCache,
                                 cacheSizeAvailable = cacheSizeAvailable,
                                 freeStorageBytes = freeStorage,
                                 totalStorageBytes = totalStorage,
@@ -1012,7 +1011,7 @@ class MainActivity : ComponentActivity() {
                                 onToggleAutoClear = { scope.launch { cachePrefs.setAutoClearEnabled(it) } },
                                 onSelectLimit = { scope.launch { cachePrefs.setLimitBytes(it) } },
                                 onClearNow = {
-                                    scope.launch {
+                                    app.manualCacheClear.tryLaunch(scope) {
                                         runCatching {
                                             com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app).clearAllNow()
                                             cacheSize = com.velastudio.teltv.telegram.CacheManager(app.telegramClient::execute, app)
