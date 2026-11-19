@@ -79,9 +79,11 @@ fun HomeScreen(
     onRemoveFavorite: (mediaId: String) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
-    onQuickClearCache: (() -> Unit)? = null
+    onQuickClearCache: (() -> Unit)? = null,
+    isClearingCache: Boolean = false
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
+    LaunchedEffect(isClearingCache) { if (isClearingCache) showClearConfirm = false }
     var updateInfo by remember { mutableStateOf<com.velastudio.teltv.util.UpdateInfo?>(null) }
     var dismissedVersion by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var isDownloading by remember { mutableStateOf(false) }
@@ -189,13 +191,18 @@ fun HomeScreen(
 
                     if (onQuickClearCache != null) {
                         Button(
-                            onClick = { showClearConfirm = true },
+                            onClick = { if (!isClearingCache) showClearConfirm = true },
+                            enabled = !isClearingCache,
                             colors = ButtonDefaults.colors(
                                 containerColor = Color(0xFF1E2638),
                                 focusedContainerColor = Color(0xFFEF5350)
                             )
                         ) {
-                            Icon(Icons.Filled.DeleteSweep, contentDescription = "Clear cache", tint = Color.White)
+                            Icon(Icons.Filled.DeleteSweep, contentDescription = if (isClearingCache) "Clearing cache" else "Clear cache", tint = Color.White)
+                            if (isClearingCache) {
+                                Spacer(Modifier.width(8.dp))
+                                Text("Clearing...", color = Color.White)
+                            }
                         }
                     }
                 }
@@ -394,10 +401,10 @@ fun HomeScreen(
         )
     }
 
-    if (showClearConfirm && onQuickClearCache != null) {
+    if (showClearConfirm && !isClearingCache && onQuickClearCache != null) {
         ClearCacheConfirmDialog(
             onDismiss = { showClearConfirm = false },
-            onConfirm = onQuickClearCache
+            onConfirm = { if (!isClearingCache) onQuickClearCache() }
         )
     }
 

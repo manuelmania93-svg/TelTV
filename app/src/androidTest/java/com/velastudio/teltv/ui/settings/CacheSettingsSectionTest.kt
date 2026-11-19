@@ -2,7 +2,7 @@ package com.velastudio.teltv.ui.settings
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -43,7 +44,7 @@ class CacheSettingsSectionTest {
     }
 
     @Composable
-    private fun section(lastFreed: Long?, lastAt: Long?) = CacheSettingsSection(
+    private fun section(lastFreed: Long?, lastAt: Long?, clearing: Boolean = false, clear: () -> Unit = {}) = CacheSettingsSection(
         currentSizeBytes = 1_200_000_000L,
         cacheSizeAvailable = true,
         freeStorageBytes = 3_400_000_000L,
@@ -52,7 +53,8 @@ class CacheSettingsSectionTest {
         autoClearEnabled = true,
         onToggleAutoClear = {},
         onSelectLimit = {},
-        onClearNow = {},
+        onClearNow = clear,
+        isClearing = clearing,
         lastCleanupFreedBytes = lastFreed,
         lastCleanupAtMs = lastAt
     )
@@ -90,7 +92,7 @@ class CacheSettingsSectionTest {
      * clips or shrinks the layout; drawing the composed view into a full-size bitmap is
      * the only capture that shows what a TV actually shows, pixel for pixel.
      */
-    private fun captureTvLayoutPng(name: String, lastFreed: Long?, lastAt: Long?) {
+    private fun captureTvLayoutPng(name: String, lastFreed: Long?, lastAt: Long?, clearing: Boolean = false) {
         val activity = compose.activity
         val dm = activity.resources.displayMetrics
         val widthPx = (1280 * dm.density).toInt()
@@ -100,7 +102,7 @@ class CacheSettingsSectionTest {
             view.setContent {
                 androidx.tv.material3.MaterialTheme {
                     Box(Modifier.fillMaxSize().background(Color(0xFF101418))) {
-                        section(lastFreed, lastAt)
+                        section(lastFreed, lastAt, clearing)
                     }
                 }
             }
@@ -142,6 +144,48 @@ class CacheSettingsSectionTest {
         }
         if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) throw AssertionError("offscreen TV render timed out")
         failure?.let { throw AssertionError("offscreen TV render failed", it) }
+    }
+
+    @Test fun manualClearDisablesUntilFinishedThenAllowsRetry() {
+        val clearing = mutableStateOf(false)
+        var requests = 0
+        compose.setContent {
+            androidx.tv.material3.MaterialTheme {
+                section(null, null, clearing.value) { requests++; clearing.value = true }
+            }
+        }
+        compose.onNodeWithText("Clear Cache Now").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithText("Clear Cache?").assertIsDisplayed()
+        compose.onNodeWithText("Clear Cache").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithText("Clearing...").assertIsNotEnabled()
+        compose.onNodeWithText("Clear Cache?").assertDoesNotExist()
+        repeat(8) {
+            compose.onRoot().performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
+        }
+        org.junit.Assert.assertEquals(1, requests)
+        captureTvLayoutPng("teltv-settings-manual-clearing-tv", null, null, true)
+        compose.runOnIdle { clearing.value = false }
+        compose.onNodeWithText("Clear Cache Now").assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithText("Clear Cache").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        org.junit.Assert.assertEquals(2, requests)
+    }
+
+    @Test fun clearStartedElsewhereClosesPendingConfirmation() {
+        val clearing = mutableStateOf(false)
+        compose.setContent { androidx.tv.material3.MaterialTheme { section(null, null, clearing.value) } }
+        compose.onNodeWithText("Clear Cache Now").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithText("Clear Cache?").assertIsDisplayed()
+        compose.runOnIdle { clearing.value = true }
+        compose.onNodeWithText("Clear Cache?").assertDoesNotExist()
+        compose.runOnIdle { clearing.value = false }
+        compose.onNodeWithText("Clear Cache Now").assertIsEnabled()
+        compose.onNodeWithText("Clear Cache?").assertDoesNotExist()
+    }
+
+    @Test fun alreadyBusyCannotOpenConfirmation() {
+        compose.setContent { androidx.tv.material3.MaterialTheme { section(null, null, true) } }
+        compose.onNodeWithText("Clearing...").assertIsNotEnabled()
+        compose.onNodeWithText("Clear Cache?").assertDoesNotExist()
     }
 
     @Test fun freedSpaceNoticeVisibleOnTvLayout() {

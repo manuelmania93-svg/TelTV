@@ -17,6 +17,8 @@ import com.velastudio.teltv.worker.CacheTrimWorker
 import timber.log.Timber
 
 class TelTvApp : Application(), ImageLoaderFactory {
+    val manualCacheClear = com.velastudio.teltv.telegram.ManualCacheClear()
+
     var startupError: String? = null
         private set
 

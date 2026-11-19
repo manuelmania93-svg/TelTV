@@ -81,9 +81,11 @@ fun CacheSettingsSection(
     onSelectLimit: (Long) -> Unit,
     onClearNow: () -> Unit,
     lastCleanupFreedBytes: Long? = null,
-    lastCleanupAtMs: Long? = null
+    lastCleanupAtMs: Long? = null,
+    isClearing: Boolean = false
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
+    LaunchedEffect(isClearing) { if (isClearing) showClearConfirm = false }
 
     Box(
         modifier = Modifier
@@ -143,13 +145,14 @@ fun CacheSettingsSection(
 
             Spacer(Modifier.height(16.dp))
             Button(
-                onClick = { showClearConfirm = true },
+                onClick = { if (!isClearing) showClearConfirm = true },
+                enabled = !isClearing,
                 colors = ButtonDefaults.colors(
                     containerColor = Color(0xFF2D3748),
                     focusedContainerColor = Color(0xFFEF5350)
                 )
             ) {
-                Text("Clear Cache Now", color = Color.White)
+                Text(if (isClearing) "Clearing..." else "Clear Cache Now", color = Color.White)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -167,10 +170,10 @@ fun CacheSettingsSection(
         }
     }
 
-    if (showClearConfirm) {
+    if (showClearConfirm && !isClearing) {
         ClearCacheConfirmDialog(
             onDismiss = { showClearConfirm = false },
-            onConfirm = onClearNow
+            onConfirm = { if (!isClearing) onClearNow() }
         )
     }
 }
