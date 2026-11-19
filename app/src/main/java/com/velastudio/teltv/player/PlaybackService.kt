@@ -32,6 +32,7 @@ import java.util.ArrayList
 @UnstableApi
 class PlaybackService : MediaSessionService() {
 
+    private var storageProtected = false
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
     private var storageGuard: PlaybackStorageGuard? = null
@@ -129,6 +130,16 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val active = playbackState == androidx.media3.common.Player.STATE_BUFFERING ||
+                    playbackState == androidx.media3.common.Player.STATE_READY
+                if (active != storageProtected) {
+                    storageProtected = active
+                    if (active) com.velastudio.teltv.telegram.StorageUseGate.shared.playerOpened()
+                    else com.velastudio.teltv.telegram.StorageUseGate.shared.playerClosed()
+                }
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Timber.e(error, "Player error (errorCode=%s)", error.errorCodeName)
                 // A full disk surfaces as a playback error; the guard checks free space and,
@@ -172,6 +183,10 @@ class PlaybackService : MediaSessionService() {
         mediaSession?.release()
         mediaSession = null
         player = null
+        if (storageProtected) {
+            storageProtected = false
+            com.velastudio.teltv.telegram.StorageUseGate.shared.playerClosed()
+        }
         super.onDestroy()
     }
 }

@@ -164,6 +164,21 @@ class TelegramClient(private val context: Context) {
         }
     }
 
+    private fun sendDownload(c: Client, request: TdApi.DownloadFile, callback: (TdApi.Object) -> Unit) {
+        val gate = StorageUseGate.shared
+        gate.submitDownload(request.fileId) {
+            try {
+                c.send(request) { result ->
+                    gate.downloadReply(request.fileId, (result as? TdApi.File)?.local?.isDownloadingActive == true)
+                    callback(result)
+                }
+            } catch (failure: Throwable) {
+                gate.downloadReply(request.fileId, false)
+                callback(TdApi.Error(500, "Could not start download"))
+            }
+        }
+    }
+
     fun executeAsync(fn: TdApi.Function<*>) {
         client?.send(fn) {}
     }
@@ -237,7 +252,7 @@ class TelegramClient(private val context: Context) {
                 return currentCache
             }
 
-            c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
+            sendDownload(c, TdApi.DownloadFile(fileId, 32, offset, safeLimit, true)) { response ->
                 when (response) {
                     is TdApi.File -> {
                         fileCache[fileId] = response
@@ -423,6 +438,7 @@ class TelegramClient(private val context: Context) {
                     }
                     is TdApi.UpdateFile -> {
                         val f = update.file
+                        StorageUseGate.shared.fileUpdate(f.id, f.local?.isDownloadingActive == true)
                         fileCache[f.id] = f
                         fileListeners[f.id]?.forEach { it(f) }
                     }
@@ -794,7 +810,7 @@ class TelegramClient(private val context: Context) {
                 unregisterFileListener(fileId, listener)
                 // Another visible card can still be waiting for the same TDLib file.
             }
-            c.send(TdApi.DownloadFile(fileId, 16, 0, 0, false)) { res ->
+            sendDownload(c, TdApi.DownloadFile(fileId, 16, 0, 0, false)) { res ->
                 if (res is TdApi.File && res.local?.isDownloadingCompleted == true && !res.local.path.isNullOrBlank()) {
                     finish(res.local.path)
                 } else if (res is TdApi.Error) {
@@ -838,7 +854,7 @@ class TelegramClient(private val context: Context) {
     suspend fun readChunk(fileId: Int, offset: Long, count: Long): ByteArray? = suspendCancellableCoroutine { cont ->
         val c = client ?: return@suspendCancellableCoroutine cont.resume(null)
         // Request chunk download with high priority
-        c.send(TdApi.DownloadFile(fileId, 32, offset, count, false)) { downloadRes ->
+        sendDownload(c, TdApi.DownloadFile(fileId, 32, offset, count, false)) { downloadRes ->
             // Read downloaded part directly into memory
             c.send(TdApi.ReadFilePart(fileId, offset, count)) { readRes ->
                 if (readRes is TdApi.Data && readRes.data.isNotEmpty()) {
@@ -858,7 +874,7 @@ class TelegramClient(private val context: Context) {
         }
         // Cap chunk to max 4MB so it streams on-the-fly instead of downloading full movies
         val safeLimit = if (limit <= 0) 4 * 1024 * 1024L else minOf(limit, 4 * 1024 * 1024L)
-        c.send(TdApi.DownloadFile(fileId, 32, offset, safeLimit, false)) { result ->
+        sendDownload(c, TdApi.DownloadFile(fileId, 32, offset, safeLimit, false)) { result ->
             when (result) {
                 is TdApi.File -> onResult(result)
                 else -> onResult(null)

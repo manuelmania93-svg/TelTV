@@ -31,6 +31,9 @@ class CachePrefs(private val context: Context) {
         val KEY_AUTO_CLEAR_ENABLED = stringPreferencesKey("auto_clear_enabled")
         val KEY_LIMIT_BYTES = longPreferencesKey("auto_clear_limit_bytes")
         val KEY_LAST_CLEANUP_FREED_BYTES = longPreferencesKey("last_cleanup_freed_bytes")
+        val KEY_SWEEP_HOURS = longPreferencesKey("idle_sweep_hours")
+        val KEY_RETENTION_SECONDS = longPreferencesKey("idle_retention_seconds")
+        val KEY_LAST_SWEEP_AT = longPreferencesKey("last_idle_sweep_at_ms")
         val KEY_LAST_CLEANUP_AT_MS = longPreferencesKey("last_cleanup_at_ms")
     }
 
@@ -50,6 +53,17 @@ class CachePrefs(private val context: Context) {
     suspend fun setLimitBytes(bytes: Long) {
         context.cacheDataStore.edit { it[KEY_LIMIT_BYTES] = bytes }
     }
+
+    val sweepHours: Flow<Long> = context.cacheDataStore.data.map {
+        IdleCleanupPolicy.interval(it[KEY_SWEEP_HOURS] ?: IdleCleanupPolicy.DEFAULT_INTERVAL_HOURS)
+    }
+    val retentionSeconds: Flow<Long> = context.cacheDataStore.data.map {
+        IdleCleanupPolicy.retention(it[KEY_RETENTION_SECONDS] ?: IdleCleanupPolicy.DEFAULT_RETENTION_SECONDS)
+    }
+    val lastSweepAt: Flow<Long?> = context.cacheDataStore.data.map { it[KEY_LAST_SWEEP_AT] }
+    suspend fun setSweepHours(value: Long) { context.cacheDataStore.edit { it[KEY_SWEEP_HOURS] = IdleCleanupPolicy.interval(value) } }
+    suspend fun setRetentionSeconds(value: Long) { context.cacheDataStore.edit { it[KEY_RETENTION_SECONDS] = IdleCleanupPolicy.retention(value) } }
+    suspend fun recordSweep(atMs: Long) { context.cacheDataStore.edit { it[KEY_LAST_SWEEP_AT] = atMs } }
 
     /** Bytes freed by the last automatic cleanup that actually removed files; null until one ran. */
     val lastCleanupFreedBytes: Flow<Long?> = context.cacheDataStore.data.map { it[KEY_LAST_CLEANUP_FREED_BYTES] }

@@ -42,7 +42,7 @@ fun ClearCacheConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "This deletes all downloaded video files from this device. Nothing on Telegram is deleted.",
+                    "This removes reusable downloaded media and thumbnails when idle. They download again when needed. Login, databases, favorites, history and subtitles stay. Nothing on Telegram is deleted.",
                     color = Color(0xFFB0BEC5),
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -163,7 +163,7 @@ fun CacheSettingsSection(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Downloaded subtitles are kept during cache clearing so playback is not interrupted.",
+                "Clear Cache removes reusable media and thumbnails only when idle. Pictures/videos reload when needed; login, databases, favorites, history and subtitles stay.",
                 color = TelTvMuted,
                 style = MaterialTheme.typography.bodySmall
             )
@@ -331,7 +331,7 @@ fun AppInfoSection() {
 }
 
 @Composable
-private fun SkipChoiceButton(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun SkipChoiceButton(label: String, selected: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         colors = ButtonDefaults.colors(

@@ -1,6 +1,7 @@
 package com.velastudio.teltv.telegram
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import java.io.File
 import org.junit.Assert.assertThrows
 import org.drinkless.tdlib.TdApi
@@ -143,5 +144,60 @@ class CacheManagerTest {
             cacheDir.setWritable(true)
             cacheDir.deleteRecursively()
         }
+    }
+
+    @Test fun manualClearAddsOnlyExplicitThumbnailPassAndKeepsDbRequestsOut() = runBlocking {
+        val calls = mutableListOf<TdApi.Function<*>>()
+        val manager = CacheManager({ request -> calls += request; TdApi.Ok() })
+        assertTrue(manager.clearReusableNow())
+        assertEquals(2, calls.size)
+        val base = calls[0] as TdApi.OptimizeStorage
+        val thumbs = calls[1] as TdApi.OptimizeStorage
+        assertEquals(0, base.fileTypes.size)
+        assertEquals(1, thumbs.fileTypes.size)
+        assertTrue(thumbs.fileTypes.single() is TdApi.FileTypeThumbnail)
+        assertEquals(0L, thumbs.size)
+        assertEquals(0, thumbs.ttl)
+        assertEquals(0, thumbs.immunityDelay)
+    }
+
+    @Test fun idleSweepReservesThumbnailBudgetAndAppliesTtlToBothPasses() = runBlocking {
+        val calls = mutableListOf<TdApi.OptimizeStorage>()
+        val manager = CacheManager({ request -> calls += request as TdApi.OptimizeStorage; TdApi.Ok() })
+        assertTrue(manager.sweepReusable(1_000_000_000, 14_400))
+        assertEquals(2, calls.size)
+        assertEquals(1_000_000_000L, calls.sumOf { it.size })
+        calls.forEach { assertEquals(14_400, it.ttl); assertEquals(60, it.immunityDelay) }
+        assertTrue(calls[1].fileTypes.single() is TdApi.FileTypeThumbnail)
+    }
+
+    @Test fun neverRetentionUsesSizeOnlyAndBusyPlayerCallsNothing() = runBlocking {
+        val calls = mutableListOf<TdApi.OptimizeStorage>()
+        val manager = CacheManager({ request -> calls += request as TdApi.OptimizeStorage; TdApi.Ok() })
+        StorageUseGate.shared.playerOpened()
+        try { assertEquals(false, manager.sweepReusable(1000, Long.MAX_VALUE)); assertTrue(calls.isEmpty()) }
+        finally { StorageUseGate.shared.playerClosed() }
+        assertTrue(manager.sweepReusable(1000, Long.MAX_VALUE))
+        calls.forEach { assertEquals(Int.MAX_VALUE, it.ttl) }
+    }
+
+    @Test fun maintenanceFailureStillReleasesGate() = runBlocking {
+        val bad = CacheManager({ throw java.io.IOException("fake failure") })
+        try { bad.clearReusableNow(); org.junit.Assert.fail("Should fail") }
+        catch (_: java.io.IOException) { }
+        assertTrue(CacheManager({ TdApi.Ok() }).clearReusableNow())
+    }
+
+    @Test fun cancellationDoesNotReleaseGateBeforeTdlibReply() = runBlocking {
+        val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val response = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val manager = CacheManager({ started.complete(Unit); response.await(); TdApi.Ok() })
+        val job = launch { manager.clearReusableNow() }
+        started.await()
+        job.cancel()
+        assertEquals(false, CacheManager({ TdApi.Ok() }).clearReusableNow())
+        response.complete(Unit)
+        job.join()
+        assertTrue(CacheManager({ TdApi.Ok() }).clearReusableNow())
     }
 }
