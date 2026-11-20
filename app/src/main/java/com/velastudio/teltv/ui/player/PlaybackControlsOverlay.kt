@@ -102,12 +102,14 @@ fun PlaybackControlsOverlay(
                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
                         style = MaterialTheme.typography.titleMedium, color = Color.White)
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (onCycleSkipStep != null) Button(onClick = onCycleSkipStep) {
-                            Text("Skip: ${com.velastudio.teltv.player.SeekSteps.badge(skipIncrementMs)}")
-                        }
-                        Button(onClick = onOpenPlaybackSpeed) {
-                            Text("Playback: ${PlaybackSpeedPolicy.label(playbackSpeed)}")
-                        }
+                        if (onCycleSkipStep != null) PlayerPillButton(
+                            text = "Skip: ${com.velastudio.teltv.player.SeekSteps.badge(skipIncrementMs)}",
+                            onClick = onCycleSkipStep
+                        )
+                        PlayerPillButton(
+                            text = "Playback: ${PlaybackSpeedPolicy.label(playbackSpeed)}",
+                            onClick = onOpenPlaybackSpeed
+                        )
                         ControlButton(
                             icon = Icons.Filled.AspectRatio,
                             contentDescription = "Aspect Ratio",
@@ -214,6 +216,17 @@ fun PlaybackControlsOverlay(
                 }
             }
         }
+    }
+}
+
+/** Compact text pill for the player overlay; the default TV button is sized for settings screens. */
+@Composable
+private fun PlayerPillButton(text: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelMedium)
     }
 }
 
