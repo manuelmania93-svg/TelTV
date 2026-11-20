@@ -958,6 +958,13 @@ fun PlayerScreen(
             onCycleAspectRatio = ::cycleAspectRatio,
             onOpenExternal = if (PlaybackPolicy.canOpenExternally(resolvedUri())) ::openInExternalPlayer else null,
             autoPlayNext = autoPlayNext,
+            onCycleSkipStep = {
+                val next = com.velastudio.teltv.player.SeekSteps.next(skipIncrementMs)
+                coroutineScope.launch { prefs.setSkipIncrementMs(next) }
+                controlsVisible = true
+                seekingText = "Skip: ${com.velastudio.teltv.player.SeekSteps.badge(next)}"
+                seekingIsForward = true
+            },
             playPauseModifier = Modifier.focusRequester(playPauseFocusRequester),
             onToggleAutoPlay = {
                 val newState = !autoPlayNext

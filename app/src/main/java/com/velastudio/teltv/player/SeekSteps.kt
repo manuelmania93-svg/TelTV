@@ -23,6 +23,12 @@ object SeekSteps {
         else -> "${ms / 1_000}s"
     }
 
+    /** Next skip choice for the player quick-cycler, wrapping from the largest back to the smallest. */
+    fun next(ms: Long): Long {
+        val index = choicesMs.indexOf(normalize(ms))
+        return choicesMs[(index + 1) % choicesMs.size]
+    }
+
     /** Preserve short-step acceleration, but never shrink the selected minute step. */
     fun effectiveStepMs(selectedMs: Long, rapid: Boolean): Long =
         if (rapid) maxOf(30_000L, normalize(selectedMs)) else normalize(selectedMs)
