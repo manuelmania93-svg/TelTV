@@ -18,6 +18,17 @@ class SeekStepsTest {
         assertEquals("5 minutes", SeekSteps.label(300_000))
         assertEquals("5 min", SeekSteps.badge(300_000))
     }
+    @Test fun nextCyclesThroughEveryChoiceAndWraps() {
+        SeekSteps.choicesMs.forEachIndexed { index, choice ->
+            assertEquals(SeekSteps.choicesMs[(index + 1) % SeekSteps.choicesMs.size], SeekSteps.next(choice))
+        }
+        assertEquals(5_000L, SeekSteps.next(300_000L))
+    }
+    @Test fun nextNormalizesUnknownValuesBeforeCycling() {
+        assertEquals(30_000L, SeekSteps.next(45_000L))
+        assertEquals(30_000L, SeekSteps.next(-1L))
+        assertEquals(30_000L, SeekSteps.next(SeekSteps.DEFAULT_MS))
+    }
     @Test fun repeatNeverShrinksLargeSelectedSteps() {
         listOf(30_000L, 60_000L, 120_000L, 300_000L).forEach {
             assertEquals(it, SeekSteps.effectiveStepMs(it, false))

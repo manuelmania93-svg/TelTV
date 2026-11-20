@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -64,6 +65,7 @@ fun PlaybackControlsOverlay(
     onOpenExternal: (() -> Unit)?,
     autoPlayNext: Boolean,
     onToggleAutoPlay: () -> Unit,
+    onCycleSkipStep: (() -> Unit)? = null,
     playbackSpeed: Float = PlaybackSpeedPolicy.DEFAULT,
     onOpenPlaybackSpeed: () -> Unit = {},
     isFavorite: Boolean = false,
@@ -95,10 +97,14 @@ fun PlaybackControlsOverlay(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(cleanTitle, modifier = Modifier.weight(1f).padding(end = 16.dp),
-                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    Text(cleanTitle, modifier = Modifier.weight(1f).padding(end = 16.dp)
+                            .basicMarquee(iterations = Int.MAX_VALUE),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
                         style = MaterialTheme.typography.titleMedium, color = Color.White)
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (onCycleSkipStep != null) Button(onClick = onCycleSkipStep) {
+                            Text("Skip: ${com.velastudio.teltv.player.SeekSteps.badge(skipIncrementMs)}")
+                        }
                         Button(onClick = onOpenPlaybackSpeed) {
                             Text("Playback: ${PlaybackSpeedPolicy.label(playbackSpeed)}")
                         }
