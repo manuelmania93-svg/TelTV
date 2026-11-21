@@ -115,7 +115,11 @@ class PlayerSkipChooserTest {
         compose.runOnIdle { assertEquals(300_000L, amount) }
 
         // Reopen and DPAD up to 10 seconds to prove repeated choice works both directions.
-        compose.onNodeWithText("Skip: 5 min").performClick()
+        // Reopen with the same focus + DPAD-center sequence that opened it the first
+        // time: a semantics performClick on the TV pill does not reach its onClick.
+        val pill5 = compose.onNodeWithText("Skip: 5 min")
+        pill5.assertIsDisplayed().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        pill5.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
         compose.waitUntil(5000) {
             compose.onAllNodesWithText("Skip interval").fetchSemanticsNodes().isNotEmpty()
         }
