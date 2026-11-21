@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
 
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
-class PlayerSeekStepCycleTest {
+class PlayerSkipChooserTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Before fun landscape() {
@@ -37,8 +37,9 @@ class PlayerSeekStepCycleTest {
         ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
     }
 
-    @Test fun cycleButtonWalksEveryStepAndSkipButtonsFollow() {
-        var amount by mutableStateOf(10_000L)
+    @Test fun skipButtonOpensChooserAndPickedStepApplies() {
+        var amount by mutableStateOf(60_000L)
+        var chooserOpen by mutableStateOf(false)
         val longTitle = "Staffel 04 Episode 03 - Kein Empfang - Als ich gross war - " +
             "Der gierige sehr lange Dateiname der sonst abgeschnitten wird und niemand lesen kann"
         compose.setContent {
@@ -49,32 +50,56 @@ class PlayerSeekStepCycleTest {
                     PlaybackControlsOverlay(
                         title = longTitle, isPlaying = true,
                         currentPositionMs = 2_179_000L, durationMs = 0L,
-                        skipIncrementMs = amount, visible = true,
+                        skipIncrementMs = amount, visible = !chooserOpen,
                         onPlayPause = {}, onSkipBack = {}, onSkipForward = {},
                         onOpenTracks = {}, onCycleAspectRatio = {}, onOpenExternal = null,
                         autoPlayNext = true, onToggleAutoPlay = {},
-                        onCycleSkipStep = { amount = SeekSteps.next(amount) }
+                        onOpenSkipChooser = { chooserOpen = true }
                     )
+                    if (chooserOpen) {
+                        SkipIntervalDialog(
+                            selectedMs = amount,
+                            onSelect = { ms -> amount = ms; chooserOpen = false },
+                            onDismiss = { chooserOpen = false }
+                        )
+                    }
                 }
             }
         }
         compose.onNodeWithText(longTitle, substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Skip: 10s").assertIsDisplayed()
+        compose.onNodeWithText("Skip: 1 min").assertIsDisplayed()
         screenshot("teltv-marquee-title")
 
-        val badgeOrder = listOf("30s", "1 min", "2 min", "5 min", "5s", "10s")
-        val msOrder = listOf(30_000L, 60_000L, 120_000L, 300_000L, 5_000L, 10_000L)
-        badgeOrder.forEachIndexed { index, badge ->
-            val node = compose.onNodeWithText(
-                "Skip: ${SeekSteps.badge(msOrder[(index + msOrder.size - 1) % msOrder.size])}"
-            )
-            node.assertIsDisplayed().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            node.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
-            compose.onNodeWithText("Skip: $badge").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Skip forward ${SeekSteps.label(msOrder[index])}").assertExists()
-            compose.onNodeWithContentDescription("Skip back ${SeekSteps.label(msOrder[index])}").assertExists()
+        // Open the chooser: every step listed once, current step marked and focused.
+        val pill = compose.onNodeWithText("Skip: 1 min")
+        pill.assertIsDisplayed().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        pill.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Skip interval").assertIsDisplayed()
+        SeekSteps.choicesMs.forEach { ms ->
+            val expected = (if (ms == 60_000L) "Selected: " else "") + SeekSteps.label(ms)
+            compose.onNodeWithText(expected).assertIsDisplayed()
         }
+        screenshot("teltv-skip-chooser-open")
+
+        // Pick 5 minutes: dialog closes, pill and skip buttons follow immediately.
+        compose.onNodeWithText("5 minutes").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Skip interval").assertDoesNotExist()
+        compose.onNodeWithText("Skip: 5 min").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Skip forward 5 minutes").assertExists()
+        compose.onNodeWithContentDescription("Skip back 5 minutes").assertExists()
+        compose.runOnIdle { assertEquals(300_000L, amount) }
+
+        // Reopen and pick 10 seconds to prove repeated choice works both directions.
+        compose.onNodeWithText("Skip: 5 min").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Selected: 5 minutes").assertIsDisplayed()
+        compose.onNodeWithText("10 seconds").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Skip: 10s").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Skip forward 10 seconds").assertExists()
         compose.runOnIdle { assertEquals(10_000L, amount) }
-        screenshot("teltv-seek-step-cycle")
+        screenshot("teltv-skip-chooser-picked")
     }
 }
