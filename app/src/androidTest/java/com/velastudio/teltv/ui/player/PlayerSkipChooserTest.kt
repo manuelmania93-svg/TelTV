@@ -37,6 +37,14 @@ class PlayerSkipChooserTest {
         ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
     }
 
+    private fun awaitFocused(text: String) {
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithText(text).fetchSemanticsNodes().any {
+                it.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Focused) { false }
+            }
+        }
+    }
+
     @Test fun skipButtonOpensChooserAndPickedStepApplies() {
         var amount by mutableStateOf(60_000L)
         var chooserOpen by mutableStateOf(false)
@@ -76,9 +84,11 @@ class PlayerSkipChooserTest {
         val pill = compose.onNodeWithText("Skip: 1 min")
         pill.assertIsDisplayed().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         pill.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
-        compose.waitForIdle()
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithText("Skip interval").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Skip interval").assertIsDisplayed()
-        compose.onNodeWithText("Selected: 1 minute").assertIsFocused()
+        awaitFocused("Selected: 1 minute")
         SeekSteps.choicesMs.forEach { ms ->
             val expected = (if (ms == 60_000L) "Selected: " else "") + SeekSteps.label(ms)
             compose.onNodeWithText(expected).assertExists()
@@ -91,7 +101,8 @@ class PlayerSkipChooserTest {
                 keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
             }
         }
-        compose.onNodeWithText("5 minutes").assertIsFocused().assertIsDisplayed()
+        awaitFocused("5 minutes")
+        compose.onNodeWithText("5 minutes").assertIsDisplayed()
         screenshot("teltv-skip-chooser-five-min")
         compose.onNodeWithText("5 minutes").performKeyInput {
             keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
@@ -105,14 +116,17 @@ class PlayerSkipChooserTest {
 
         // Reopen and DPAD up to 10 seconds to prove repeated choice works both directions.
         compose.onNodeWithText("Skip: 5 min").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithText("Selected: 5 minutes").assertIsFocused()
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithText("Skip interval").fetchSemanticsNodes().isNotEmpty()
+        }
+        awaitFocused("Selected: 5 minutes")
         repeat(4) {
             compose.onNodeWithText("Skip interval").performKeyInput {
                 keyDown(Key.DirectionUp); keyUp(Key.DirectionUp)
             }
         }
-        compose.onNodeWithText("10 seconds").assertIsFocused().assertIsDisplayed()
+        awaitFocused("10 seconds")
+        compose.onNodeWithText("10 seconds").assertIsDisplayed()
         compose.onNodeWithText("10 seconds").performKeyInput {
             keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
         }
