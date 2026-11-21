@@ -70,20 +70,32 @@ class PlayerSkipChooserTest {
         compose.onNodeWithText("Skip: 1 min").assertIsDisplayed()
         screenshot("teltv-marquee-title")
 
-        // Open the chooser: every step listed once, current step marked and focused.
+        // Open the chooser: title shown, current step marked and focused, every step listed.
+        // Options can sit below the dialog's scroll viewport, so existence is asserted here;
+        // visibility is asserted only after DPAD-scrolling to the option (TV interaction).
         val pill = compose.onNodeWithText("Skip: 1 min")
         pill.assertIsDisplayed().performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         pill.performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
         compose.waitForIdle()
         compose.onNodeWithText("Skip interval").assertIsDisplayed()
+        compose.onNodeWithText("Selected: 1 minute").assertIsFocused()
         SeekSteps.choicesMs.forEach { ms ->
             val expected = (if (ms == 60_000L) "Selected: " else "") + SeekSteps.label(ms)
-            compose.onNodeWithText(expected).assertIsDisplayed()
+            compose.onNodeWithText(expected).assertExists()
         }
         screenshot("teltv-skip-chooser-open")
 
-        // Pick 5 minutes: dialog closes, pill and skip buttons follow immediately.
-        compose.onNodeWithText("5 minutes").performClick()
+        // DPAD down twice from the selected 1 minute lands on 5 minutes; select it.
+        repeat(2) {
+            compose.onNodeWithText("Skip interval").performKeyInput {
+                keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+            }
+        }
+        compose.onNodeWithText("5 minutes").assertIsFocused().assertIsDisplayed()
+        screenshot("teltv-skip-chooser-five-min")
+        compose.onNodeWithText("5 minutes").performKeyInput {
+            keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
+        }
         compose.waitForIdle()
         compose.onNodeWithText("Skip interval").assertDoesNotExist()
         compose.onNodeWithText("Skip: 5 min").assertIsDisplayed()
@@ -91,11 +103,19 @@ class PlayerSkipChooserTest {
         compose.onNodeWithContentDescription("Skip back 5 minutes").assertExists()
         compose.runOnIdle { assertEquals(300_000L, amount) }
 
-        // Reopen and pick 10 seconds to prove repeated choice works both directions.
+        // Reopen and DPAD up to 10 seconds to prove repeated choice works both directions.
         compose.onNodeWithText("Skip: 5 min").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Selected: 5 minutes").assertIsDisplayed()
-        compose.onNodeWithText("10 seconds").performClick()
+        compose.onNodeWithText("Selected: 5 minutes").assertIsFocused()
+        repeat(4) {
+            compose.onNodeWithText("Skip interval").performKeyInput {
+                keyDown(Key.DirectionUp); keyUp(Key.DirectionUp)
+            }
+        }
+        compose.onNodeWithText("10 seconds").assertIsFocused().assertIsDisplayed()
+        compose.onNodeWithText("10 seconds").performKeyInput {
+            keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter)
+        }
         compose.waitForIdle()
         compose.onNodeWithText("Skip: 10s").assertIsDisplayed()
         compose.onNodeWithContentDescription("Skip forward 10 seconds").assertExists()
