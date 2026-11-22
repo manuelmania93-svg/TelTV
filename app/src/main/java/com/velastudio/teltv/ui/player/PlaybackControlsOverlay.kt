@@ -65,7 +65,7 @@ fun PlaybackControlsOverlay(
     onOpenExternal: (() -> Unit)?,
     autoPlayNext: Boolean,
     onToggleAutoPlay: () -> Unit,
-    onCycleSkipStep: (() -> Unit)? = null,
+    onOpenSkipChooser: (() -> Unit)? = null,
     playbackSpeed: Float = PlaybackSpeedPolicy.DEFAULT,
     onOpenPlaybackSpeed: () -> Unit = {},
     isFavorite: Boolean = false,
@@ -102,9 +102,9 @@ fun PlaybackControlsOverlay(
                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
                         style = MaterialTheme.typography.titleMedium, color = Color.White)
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (onCycleSkipStep != null) PlayerPillButton(
+                        if (onOpenSkipChooser != null) PlayerPillButton(
                             text = "Skip: ${com.velastudio.teltv.player.SeekSteps.badge(skipIncrementMs)}",
-                            onClick = onCycleSkipStep
+                            onClick = onOpenSkipChooser
                         )
                         PlayerPillButton(
                             text = "Playback: ${PlaybackSpeedPolicy.label(playbackSpeed)}",

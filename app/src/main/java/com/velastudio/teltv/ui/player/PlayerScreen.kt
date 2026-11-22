@@ -119,6 +119,7 @@ fun PlayerScreen(
     var playerErrorMessage by remember { mutableStateOf<String?>(null) }
     var showTrackSelector by remember(fileId, directUri) { mutableStateOf(false) }
     var showPlaybackSpeed by remember(fileId, directUri) { mutableStateOf(false) }
+    var showSkipChooser by remember(fileId, directUri) { mutableStateOf(false) }
     // Playback rate is not the subtitle timing scale. Reset only for a different video.
     var playbackSpeed by remember(fileId, directUri) { mutableStateOf(PlaybackSpeedPolicy.DEFAULT) }
     var showAutoPlayOverlay by remember { mutableStateOf(false) }
@@ -698,8 +699,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(controlsVisible, isPlaying, showTrackSelector, showPlaybackSpeed) {
-        if (controlsVisible && isPlaying && !showTrackSelector && !showPlaybackSpeed && !showAutoPlayOverlay) {
+    LaunchedEffect(controlsVisible, isPlaying, showTrackSelector, showPlaybackSpeed, showSkipChooser) {
+        if (controlsVisible && isPlaying && !showTrackSelector && !showPlaybackSpeed && !showSkipChooser && !showAutoPlayOverlay) {
             delay(CONTROLS_AUTO_HIDE_MS)
             controlsVisible = false
         }
@@ -920,7 +921,7 @@ fun PlayerScreen(
             currentPositionMs = currentPositionMs,
             durationMs = durationMs,
             skipIncrementMs = skipIncrementMs,
-            visible = controlsVisible && !showTrackSelector && !showPlaybackSpeed && !showAutoPlayOverlay,
+            visible = controlsVisible && !showTrackSelector && !showPlaybackSpeed && !showSkipChooser && !showAutoPlayOverlay,
             onPlayPause = ::togglePlayPause,
             onSkipBack = { seekRelative(forward = false) },
             onSkipForward = { seekRelative(forward = true) },
@@ -958,13 +959,7 @@ fun PlayerScreen(
             onCycleAspectRatio = ::cycleAspectRatio,
             onOpenExternal = if (PlaybackPolicy.canOpenExternally(resolvedUri())) ::openInExternalPlayer else null,
             autoPlayNext = autoPlayNext,
-            onCycleSkipStep = {
-                val next = com.velastudio.teltv.player.SeekSteps.next(skipIncrementMs)
-                coroutineScope.launch { prefs.setSkipIncrementMs(next) }
-                controlsVisible = true
-                seekingText = "Skip: ${com.velastudio.teltv.player.SeekSteps.badge(next)}"
-                seekingIsForward = true
-            },
+            onOpenSkipChooser = { showSkipChooser = true },
             playPauseModifier = Modifier.focusRequester(playPauseFocusRequester),
             onToggleAutoPlay = {
                 val newState = !autoPlayNext
@@ -982,6 +977,25 @@ fun PlayerScreen(
 
         if (isBuffering && playerErrorMessage == null) {
             BufferingIndicator()
+        }
+
+        if (showSkipChooser) {
+            SkipIntervalDialog(
+                selectedMs = skipIncrementMs,
+                onSelect = { ms ->
+                    coroutineScope.launch { prefs.setSkipIncrementMs(ms) }
+                    showSkipChooser = false
+                    controlsVisible = true
+                    seekingText = "Skip: ${com.velastudio.teltv.player.SeekSteps.badge(ms)}"
+                    seekingIsForward = true
+                    runCatching { playPauseFocusRequester.requestFocus() }
+                },
+                onDismiss = {
+                    showSkipChooser = false
+                    controlsVisible = true
+                    runCatching { playPauseFocusRequester.requestFocus() }
+                }
+            )
         }
 
         if (showPlaybackSpeed) {
